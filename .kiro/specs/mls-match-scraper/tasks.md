@@ -59,7 +59,7 @@
   - Write unit tests for filter application logic
   - _Requirements: 3.1, 3.3, 3.5, 5.3_
 
-- [ ] 8. Implement match data extraction from MLS website
+- [x] 8. Implement match data extraction from MLS website
   - Create HTML parsing logic to extract match information from results table
   - Implement data mapping from HTML elements to Match dataclass
   - Add handling for different match statuses (scheduled, in_progress, completed)
@@ -67,7 +67,7 @@
   - Write unit tests with mock HTML responses
   - _Requirements: 1.2, 1.3, 5.3_
 
-- [ ] 9. Create core MLS scraper orchestration
+- [x] 9. Create core MLS scraper orchestration
   - Implement MLSScraper class that coordinates all scraping operations
   - Add method to execute full scraping workflow (filters → calendar → extraction)
   - Implement error handling and retry logic for scraping failures

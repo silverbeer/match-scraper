@@ -1,0 +1,70 @@
+#!/bin/bash
+# 
+# MLS Scraper CLI Wrapper
+# 
+# This script provides convenient shortcuts for common MLS scraper operations.
+# Usage: ./scripts/mls [command] [options]
+#
+
+# Change to project directory
+cd "$(dirname "$0")/.."
+
+# Common shortcuts
+case "$1" in
+    "games"|"g")
+        shift
+        uv run mls-scraper scrape "$@"
+        ;;
+    "upcoming"|"u")
+        shift
+        uv run mls-scraper upcoming "$@"
+        ;;
+    "interactive"|"i")
+        uv run mls-scraper interactive
+        ;;
+    "demo"|"d")
+        uv run mls-scraper demo
+        ;;
+    "test-quiet"|"tq")
+        uv run mls-scraper test-quiet
+        ;;
+    "config"|"c")
+        uv run mls-scraper config
+        ;;
+    "debug"|"dbg")
+        shift
+        uv run mls-scraper debug "$@"
+        ;;
+    "inspect"|"ins")
+        shift
+        uv run mls-scraper inspect "$@"
+        ;;
+    "help"|"h"|"--help"|"-h")
+        echo "⚽ MLS Scraper CLI Shortcuts"
+        echo ""
+        echo "Usage: ./scripts/mls [command] [options]"
+        echo ""
+        echo "Commands:"
+        echo "  games, g      - Scrape and show games (same as 'scrape')"
+        echo "  upcoming, u   - Show upcoming games"
+        echo "  interactive, i - Interactive mode"
+        echo "  demo, d       - Demo with sample data"
+        echo "  test-quiet, tq - Test quiet mode output"
+        echo "  config, c     - Show configuration options"
+        echo "  debug, dbg    - Debug scraper step by step"
+        echo "  inspect, ins  - Open browser for manual inspection"
+        echo "  help, h       - Show this help"
+        echo ""
+        echo "Examples:"
+        echo "  ./scripts/mls games -a U16 -d Southwest"
+        echo "  ./scripts/mls upcoming -l 5"
+        echo "  ./scripts/mls games --verbose  # Show detailed logs"
+        echo "  ./scripts/mls interactive"
+        echo ""
+        echo "For full options, use: uv run mls-scraper --help"
+        ;;
+    *)
+        # Default to scrape command
+        uv run mls-scraper scrape "$@"
+        ;;
+esac
