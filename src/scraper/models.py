@@ -5,9 +5,9 @@ Contains Pydantic models for match data, metrics, and validation methods.
 
 import re
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
 
 
 class Match(BaseModel):
@@ -15,51 +15,67 @@ class Match(BaseModel):
 
     Attributes:
         match_id: Unique identifier for the match
+        match_datetime: Date and time of the match
+        location: Venue/location where match is played
+        competition: Competition name
         home_team: Name of the home team
         away_team: Name of the away team
-        match_date: Date and time of the match
-        match_time: Optional time string (e.g., "3:00 PM")
-        venue: Optional venue name where match is played
-        age_group: Age group category (e.g., "U14")
-        division: Division name (e.g., "Northeast")
-        competition: Optional competition name
-        status: Match status ("scheduled", "in_progress", "completed")
         home_score: Optional home team score (for completed matches)
         away_score: Optional away team score (for completed matches)
+        match_status: Calculated status based on datetime and scores
     """
 
     match_id: str = Field(
         ..., min_length=1, description="Unique identifier for the match"
     )
+    match_datetime: datetime = Field(..., description="Date and time of the match")
+    location: Optional[str] = Field(None, description="Venue/location where match is played")
+    competition: Optional[str] = Field(None, description="Competition name")
     home_team: str = Field(..., min_length=1, description="Name of the home team")
     away_team: str = Field(..., min_length=1, description="Name of the away team")
-    match_date: datetime = Field(..., description="Date and time of the match")
-    match_time: Optional[str] = Field(None, description="Time string (e.g., '3:00 PM')")
-    venue: Optional[str] = Field(None, description="Venue name where match is played")
-    age_group: Literal["U13", "U14", "U15", "U16", "U17", "U18", "U19"] = Field(
-        ..., description="Age group category"
-    )
-    division: str = Field(..., min_length=1, description="Division name")
-    competition: Optional[str] = Field(None, description="Competition name")
-    status: Literal["scheduled", "in_progress", "completed"] = Field(
-        ..., description="Match status"
-    )
-    home_score: Optional[int] = Field(None, ge=0, description="Home team score")
-    away_score: Optional[int] = Field(None, ge=0, description="Away team score")
+    home_score: Optional[Union[int, str]] = Field(None, description="Home team score or 'TBD'")
+    away_score: Optional[Union[int, str]] = Field(None, description="Away team score or 'TBD'")
 
-    @field_validator("match_time")
+    @computed_field
+    @property
+    def match_status(self) -> Literal["scheduled", "completed", "TBD"]:
+        """Calculate match status based on datetime and scores.
+
+        Rules:
+        - If match_datetime is in the past and both scores exist: "completed"
+        - If match_datetime is in the past and TBD detected in scores: "TBD"
+        - If match_datetime is in the future: "scheduled"
+        """
+        now = datetime.now(self.match_datetime.tzinfo) if self.match_datetime.tzinfo else datetime.now()
+
+        if self.match_datetime > now:
+            return "scheduled"
+
+        # Match is in the past
+        if (self.home_score is not None and self.away_score is not None and
+            isinstance(self.home_score, int) and isinstance(self.away_score, int)):
+            return "completed"
+
+        # Check for TBD in scores
+        if (str(self.home_score).upper() == "TBD" or str(self.away_score).upper() == "TBD" or
+            self.home_score is None or self.away_score is None):
+            return "TBD"
+
+        return "completed"
+
+    @field_validator("home_score", "away_score")
     @classmethod
-    def validate_match_time(cls, v: Optional[str]) -> Optional[str]:
-        """Validate match_time format."""
+    def validate_score(cls, v: Optional[Union[int, str]]) -> Optional[Union[int, str]]:
+        """Validate score field - can be int, 'TBD', or None."""
         if v is None:
             return v
-
-        time_pattern = r"^(1[0-2]|0?[1-9]):[0-5][0-9]\s?(AM|PM)$"
-        if not re.match(time_pattern, v, re.IGNORECASE):
-            raise ValueError(
-                f"Invalid match_time format: {v}. Expected format: 'H:MM AM/PM'"
-            )
-        return v
+        if isinstance(v, int) and v >= 0:
+            return v
+        if isinstance(v, str) and v.upper() == "TBD":
+            return v.upper()
+        if isinstance(v, str) and v.isdigit():
+            return int(v)
+        raise ValueError(f"Score must be a non-negative integer or 'TBD', got: {v}")
 
     @model_validator(mode="after")
     def validate_teams_different(self) -> "Match":
@@ -68,26 +84,14 @@ class Match(BaseModel):
             raise ValueError("home_team and away_team cannot be the same")
         return self
 
-    @model_validator(mode="after")
-    def validate_score_consistency(self) -> "Match":
-        """Validate score consistency with match status."""
-        if self.status == "completed":
-            if self.home_score is None or self.away_score is None:
-                raise ValueError(
-                    "Completed matches must have both home_score and away_score"
-                )
-        elif self.status == "scheduled":
-            if self.home_score is not None or self.away_score is not None:
-                raise ValueError("Scheduled matches cannot have scores")
-        return self
-
     def has_score(self) -> bool:
         """Check if the match has score information.
 
         Returns:
-            bool: True if both home and away scores are available
+            bool: True if both home and away scores are available and not TBD
         """
-        return self.home_score is not None and self.away_score is not None
+        return (self.home_score is not None and self.away_score is not None and
+                isinstance(self.home_score, int) and isinstance(self.away_score, int))
 
     def is_completed(self) -> bool:
         """Check if the match is completed.
@@ -95,7 +99,7 @@ class Match(BaseModel):
         Returns:
             bool: True if match status is completed
         """
-        return self.status == "completed"
+        return self.match_status == "completed"
 
     def get_score_string(self) -> Optional[str]:
         """Get formatted score string.

@@ -22,15 +22,11 @@ class TestPydanticIntegration:
 
         match = Match(
             match_id="12345",
+            match_datetime=datetime(2024, 1, 15, 14, 30),
+            location="Stadium A",
+            competition="MLS Next",
             home_team="Team A",
             away_team="Team B",
-            match_date=datetime(2024, 1, 15, 14, 30),
-            match_time="2:30 PM",
-            venue="Stadium A",
-            age_group="U14",
-            division="Northeast",
-            competition="MLS Next",
-            status="scheduled",
         )
 
         with patch.object(logger._logger, "info") as mock_info:
@@ -77,12 +73,10 @@ class TestPydanticIntegration:
         """Test that Match models can be serialized to JSON."""
         match = Match(
             match_id="12345",
+            match_datetime=datetime(2024, 1, 15, 14, 30),
+            competition="MLS Next",
             home_team="Team A",
             away_team="Team B",
-            match_date=datetime(2024, 1, 15, 14, 30),
-            age_group="U14",
-            division="Northeast",
-            status="completed",
             home_score=2,
             away_score=1,
         )
@@ -94,8 +88,7 @@ class TestPydanticIntegration:
         assert parsed["match_id"] == "12345"
         assert parsed["home_team"] == "Team A"
         assert parsed["away_team"] == "Team B"
-        assert parsed["age_group"] == "U14"
-        assert parsed["status"] == "completed"
+        assert parsed["match_status"] == "completed"
         assert parsed["home_score"] == 2
         assert parsed["away_score"] == 1
 
@@ -125,12 +118,10 @@ class TestPydanticIntegration:
         """Test that custom serializer handles Pydantic models correctly."""
         match = Match(
             match_id="12345",
+            match_datetime=datetime(2024, 1, 15, 14, 30),
+            competition="MLS Next",
             home_team="Team A",
             away_team="Team B",
-            match_date=datetime(2024, 1, 15, 14, 30),
-            age_group="U14",
-            division="Northeast",
-            status="scheduled",
         )
 
         # Test the custom serializer directly
@@ -140,7 +131,7 @@ class TestPydanticIntegration:
         assert isinstance(serialized, dict)
         assert serialized["match_id"] == "12345"
         assert serialized["home_team"] == "Team A"
-        assert serialized["age_group"] == "U14"
+        assert serialized["competition"] == "MLS Next"
 
     def test_datetime_serialization_with_custom_serializer(self):
         """Test that custom serializer still handles datetime objects."""

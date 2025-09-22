@@ -41,7 +41,7 @@ app = typer.Typer(
 # Configuration defaults
 DEFAULT_AGE_GROUP = "U14"
 DEFAULT_DIVISION = "Northeast"
-DEFAULT_DAYS = 7
+DEFAULT_DAYS = 3  # Look ahead 3 days for upcoming matches
 
 # Valid options
 VALID_AGE_GROUPS = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
@@ -93,15 +93,17 @@ def create_config(
     competition: str = "",
 ) -> ScrapingConfig:
     """Create scraping configuration from CLI parameters."""
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
+    # Date range logic: start from yesterday, end at today + days
+    today = date.today()
+    start_date = today - timedelta(days=1)  # Subtract 1 day from current date
+    end_date = today + timedelta(days=days)  # Add specified days to current date
     
     return ScrapingConfig(
         age_group=age_group,
         club=club,
         competition=competition,
         division=division,
-        look_back_days=days,
+        look_back_days=days,  # Keep for backwards compatibility
         start_date=start_date,
         end_date=end_date,
         missing_table_api_url=os.getenv("MISSING_TABLE_API_URL", "https://api.missing-table.com"),
@@ -158,26 +160,57 @@ def display_matches_table(matches: list[Match]):
     table.add_column("Venue", style="blue", min_width=15)
     
     # Sort matches by date
-    sorted_matches = sorted(matches, key=lambda m: m.match_date if m.match_date else date.min)
+    from datetime import datetime
+    sorted_matches = sorted(matches, key=lambda m: m.match_datetime if m.match_datetime else datetime.min)
     
     for match in sorted_matches:
-        # Format date
-        match_date = match.match_date.strftime("%m/%d/%Y") if match.match_date else "Unknown"
+        # Format date - handle None dates more robustly
+        try:
+            if match.match_datetime:
+                match_date = match.match_datetime.strftime("%m/%d/%Y")
+            else:
+                match_date = "Unknown"
+        except (AttributeError, ValueError):
+            match_date = "Unknown"
         
         # Format time
-        match_time = match.match_time or "TBD"
+        # Extract time from datetime
+        try:
+            match_time = match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "TBD"
+        except (AttributeError, ValueError):
+            match_time = "TBD"
         
         # Format score/status
-        if match.status == "completed" and match.has_score():
-            score_status = f"[green]{match.get_score_string()}[/green]"
-        elif match.status == "in_progress":
-            score_text = match.get_score_string() or "0-0"
-            score_status = f"[yellow]🔄 {score_text}[/yellow]"
-        else:  # scheduled
-            score_status = "[dim]⏰ Scheduled[/dim]"
+        if match.has_score():
+            score_text = match.get_score_string()
+            if match.match_status == "completed":
+                score_status = f"[green]{score_text}[/green]"
+            elif match.match_status == "in_progress":
+                score_status = f"[yellow]🔄 {score_text}[/yellow]"
+            else:
+                # Show score even for "scheduled" matches if they have one
+                score_status = f"[cyan]{score_text}[/cyan]"
+        else:
+            # No score available - check if it's TBD vs upcoming
+            if match.match_status == "in_progress":
+                score_status = "[yellow]🔄 Live[/yellow]"
+            elif match.match_status == "scheduled":
+                # For past/current dates, show TBD; for future dates, show Scheduled
+                try:
+                    today = date.today()
+                    match_date_obj = match.match_datetime.date() if match.match_datetime else today
+                    if match_date_obj <= today:
+                        score_status = "[orange1]TBD[/orange1]"
+                    else:
+                        score_status = "[dim]⏰ Scheduled[/dim]"
+                except (AttributeError, ValueError):
+                    # Fallback if date handling fails
+                    score_status = "[orange1]TBD[/orange1]"
+            else:
+                score_status = "[dim]⏰ Scheduled[/dim]"
         
         # Format venue
-        venue = match.venue or "TBD"
+        venue = match.location or "TBD"
         if len(venue) > 20:
             venue = venue[:17] + "..."
         
@@ -190,7 +223,20 @@ def display_matches_table(matches: list[Match]):
             venue
         )
     
-    console.print(Panel(table, title=f"⚽ Matches Found ({len(matches)})", border_style="green"))
+    try:
+        console.print(Panel(table, title=f"⚽ Matches Found ({len(matches)})", border_style="green"))
+    except Exception as e:
+        # Fallback to simple text output if Rich rendering fails
+        console.print(f"\n⚽ Matches Found ({len(matches)}):")
+        console.print("=" * 50)
+        for match in sorted_matches:
+            date_str = match.match_datetime.strftime("%m/%d") if match.match_datetime else "TBD"
+            time_str = match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "TBD"
+            score_str = ""
+            if match.has_score():
+                score_str = f" ({match.get_score_string()})"
+            console.print(f"✅ {date_str} {time_str} {match.home_team} vs {match.away_team}{score_str}")
+        console.print("=" * 50)
 
 
 def display_statistics(matches: list[Match]):
@@ -200,11 +246,11 @@ def display_statistics(matches: list[Match]):
     
     # Calculate statistics
     total_matches = len(matches)
-    scheduled_matches = len([m for m in matches if m.status == "scheduled"])
-    completed_matches = len([m for m in matches if m.status == "completed"])
-    in_progress_matches = len([m for m in matches if m.status == "in_progress"])
+    scheduled_matches = len([m for m in matches if m.match_status == "scheduled"])
+    completed_matches = len([m for m in matches if m.match_status == "completed"])
+    in_progress_matches = len([m for m in matches if m.match_status == "in_progress"])
     matches_with_scores = len([m for m in matches if m.has_score()])
-    matches_with_venues = len([m for m in matches if m.venue])
+    matches_with_venues = len([m for m in matches if m.location])
     unique_teams = len(set([m.home_team for m in matches] + [m.away_team for m in matches]))
     
     # Create statistics table
@@ -227,19 +273,23 @@ def display_statistics(matches: list[Match]):
 
 def display_upcoming_games(matches: list[Match], limit: int = 5):
     """Display upcoming games in a special format."""
-    upcoming = [m for m in matches if m.status == "scheduled"]
+    from datetime import date
+    today = date.today()
+    
+    # Filter for truly upcoming games (future scheduled games)
+    upcoming = [m for m in matches if m.match_status == "scheduled" and m.match_datetime and m.match_datetime.date() > today]
     if not upcoming:
         return
     
     # Sort by date
-    upcoming.sort(key=lambda m: m.match_date if m.match_date else date.max)
+    upcoming.sort(key=lambda m: m.match_datetime if m.match_datetime else date.max)
     
     console.print(f"\n[bold cyan]🔮 Next {min(limit, len(upcoming))} Upcoming Games:[/bold cyan]")
     
     for i, match in enumerate(upcoming[:limit], 1):
-        match_date = match.match_date.strftime("%A, %B %d") if match.match_date else "Date TBD"
-        match_time = match.match_time or "Time TBD"
-        venue = match.venue or "Venue TBD"
+        match_date = match.match_datetime.strftime("%A, %B %d") if match.match_datetime else "Date TBD"
+        match_time = match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Time TBD"
+        venue = match.location or "Venue TBD"
         
         game_text = f"[bold]{i}.[/bold] [green]{match.home_team}[/green] vs [red]{match.away_team}[/red]"
         details_text = f"   📅 {match_date} at {match_time}"
@@ -252,7 +302,7 @@ def display_upcoming_games(matches: list[Match], limit: int = 5):
             console.print()
 
 
-async def run_scraper(config: ScrapingConfig, verbose: bool = False) -> list[Match]:
+async def run_scraper(config: ScrapingConfig, verbose: bool = False, headless: bool = True) -> list[Match]:
     """Run the scraper with progress indication."""
     import warnings
     import logging
@@ -280,7 +330,7 @@ async def run_scraper(config: ScrapingConfig, verbose: bool = False) -> list[Mat
         task1 = progress.add_task("🌐 Initializing browser...", total=None)
         
         try:
-            scraper = MLSScraper(config)
+            scraper = MLSScraper(config, headless=headless)
             
             progress.update(task1, description="🔍 Scraping matches...")
             matches = await scraper.scrape_matches()
@@ -301,21 +351,22 @@ async def run_scraper(config: ScrapingConfig, verbose: bool = False) -> list[Mat
 def scrape(
     age_group: Annotated[str, typer.Option("--age-group", "-a", help="Age group to scrape")] = DEFAULT_AGE_GROUP,
     division: Annotated[str, typer.Option("--division", "-d", help="Division to scrape")] = DEFAULT_DIVISION,
-    days: Annotated[int, typer.Option("--days", "-n", help="Number of days to look back")] = DEFAULT_DAYS,
+    days: Annotated[int, typer.Option("--days", "-n", help="Number of days to look ahead for upcoming matches")] = DEFAULT_DAYS,
     club: Annotated[str, typer.Option("--club", "-c", help="Filter by specific club")] = "",
     competition: Annotated[str, typer.Option("--competition", "-comp", help="Filter by specific competition")] = "",
     upcoming_only: Annotated[bool, typer.Option("--upcoming", "-u", help="Show only upcoming games")] = False,
     stats: Annotated[bool, typer.Option("--stats", "-s", help="Show detailed statistics")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Minimal output")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed logs and full error traces")] = False,
-    limit: Annotated[int, typer.Option("--limit", "-l", help="Maximum number of matches to display")] = 1,
+    limit: Annotated[int, typer.Option("--limit", "-l", help="Maximum number of matches to display")] = 0,
+    headless: Annotated[bool, typer.Option("--headless/--no-headless", help="Run browser in headless mode")] = True,
 ):
     """
     ⚽ Scrape MLS match data and display in beautiful format.
     
     This command scrapes match data from the MLS website and displays it
     in a nicely formatted table with colors and statistics. By default,
-    shows only 1 match for quick checks - use --limit to show more.
+    shows all matches found - use --limit to restrict the number shown.
     """
     setup_environment(verbose)
     
@@ -342,26 +393,27 @@ def scrape(
     
     try:
         # Run scraper
-        matches = asyncio.run(run_scraper(config, verbose))
+        matches = asyncio.run(run_scraper(config, verbose, headless))
         
         # Filter for upcoming only if requested
         if upcoming_only:
-            matches = [m for m in matches if m.status == "scheduled"]
+            matches = [m for m in matches if m.match_status == "scheduled"]
         
         # Track original count before limiting
         original_count = len(matches)
         
         # Apply limit (sort by date first to get most relevant matches)
-        if matches and limit > 0:
-            matches.sort(key=lambda m: m.match_date if m.match_date else date.min)
-            matches = matches[:limit]
+        if matches:
+            matches.sort(key=lambda m: m.match_datetime if m.match_datetime else date.min)
+            if limit > 0:
+                matches = matches[:limit]
         
         if quiet:
             # Minimal output for scripting
             for match in matches:
-                status = "✅" if match.status == "completed" else "⏰" if match.status == "scheduled" else "🔄"
+                status = "✅" if match.match_status == "completed" else "⏰" if match.match_status == "scheduled" else "🔄"
                 score = f" ({match.get_score_string()})" if match.has_score() else ""
-                date_str = match.match_date.strftime("%m/%d") if match.match_date else "TBD"
+                date_str = match.match_datetime.strftime("%m/%d") if match.match_datetime else "TBD"
                 print(f"{status} {date_str} {match.home_team} vs {match.away_team}{score}")
             return  # Exit early for quiet mode
         else:
@@ -396,7 +448,7 @@ def scrape(
 def upcoming(
     age_group: Annotated[str, typer.Option("--age-group", "-a", help="Age group to scrape")] = DEFAULT_AGE_GROUP,
     division: Annotated[str, typer.Option("--division", "-d", help="Division to scrape")] = DEFAULT_DIVISION,
-    days: Annotated[int, typer.Option("--days", "-n", help="Number of days to look ahead")] = 14,
+    days: Annotated[int, typer.Option("--days", "-n", help="Number of days to look ahead")] = DEFAULT_DAYS,
     limit: Annotated[int, typer.Option("--limit", "-l", help="Maximum number of games to show")] = 10,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed logs and full error traces")] = False,
 ):
@@ -414,23 +466,27 @@ def upcoming(
     
     try:
         matches = asyncio.run(run_scraper(config, verbose))
-        upcoming_matches = [m for m in matches if m.status == "scheduled"]
+        upcoming_matches = [m for m in matches if m.match_status == "scheduled"]
         
         if not upcoming_matches:
             console.print("[yellow]No upcoming games found in the next {} days.[/yellow]".format(days))
             return
         
         # Sort by date
-        upcoming_matches.sort(key=lambda m: m.match_date if m.match_date else date.max)
+        upcoming_matches.sort(key=lambda m: m.match_datetime if m.match_datetime else date.max)
         
         for i, match in enumerate(upcoming_matches[:limit], 1):
-            match_date = match.match_date.strftime("%a %m/%d") if match.match_date else "TBD"
-            match_time = match.match_time or "TBD"
+            match_date = match.match_datetime.strftime("%a %m/%d") if match.match_datetime else "TBD"
+            # Extract time from datetime
+        try:
+            match_time = match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "TBD"
+        except (AttributeError, ValueError):
+            match_time = "TBD"
             
             console.print(f"[bold cyan]{i:2d}.[/bold cyan] [green]{match.home_team}[/green] vs [red]{match.away_team}[/red]")
             console.print(f"     📅 {match_date} at {match_time}")
-            if match.venue:
-                console.print(f"     🏟️  {match.venue}")
+            if match.location:
+                console.print(f"     🏟️  {match.location}")
             console.print()
     
     except Exception as e:
@@ -546,9 +602,9 @@ def test_quiet():
     
     # Simulate quiet mode output
     for match in sample_matches:
-        status = "✅" if match.status == "completed" else "⏰" if match.status == "scheduled" else "🔄"
+        status = "✅" if match.match_status == "completed" else "⏰" if match.match_status == "scheduled" else "🔄"
         score = f" ({match.get_score_string()})" if match.has_score() else ""
-        date_str = match.match_date.strftime("%m/%d") if match.match_date else "TBD"
+        date_str = match.match_datetime.strftime("%m/%d") if match.match_datetime else "TBD"
         console.print(f"{status} {date_str} {match.home_team} vs {match.away_team}{score}", style="white")
     
     console.print("[dim]" + "="*50 + "[/dim]")
@@ -972,7 +1028,7 @@ async def test_extraction(headless: bool, timeout: int):
             
             if matches:
                 console.print(f"      Sample match: {matches[0].home_team} vs {matches[0].away_team}")
-                console.print(f"      Match status: {matches[0].status}")
+                console.print(f"      Match status: {matches[0].match_status}")
             else:
                 console.print("      ⚠️  No matches extracted - check page structure")
         
@@ -1258,11 +1314,11 @@ def config():
     
     # Examples
     examples = [
-        ("Quick check (1 match)", "mls-scraper scrape"),
-        ("Show 5 matches", "mls-scraper scrape -l 5"),
-        ("Specific age/division", "mls-scraper scrape -a U16 -d Southwest -l 3"),
-        ("Last 14 days with stats", "mls-scraper scrape -n 14 --stats -l 10"),
-        ("Upcoming games only", "mls-scraper scrape --upcoming -l 5"),
+        ("Show all matches found", "mls-scraper scrape"),
+        ("Limit to 5 matches", "mls-scraper scrape -l 5"),
+        ("Specific age/division", "mls-scraper scrape -a U16 -d Southwest"),
+        ("Last 14 days with stats", "mls-scraper scrape -n 14 --stats"),
+        ("Upcoming games only", "mls-scraper scrape --upcoming"),
         ("Quick upcoming check", "mls-scraper upcoming"),
         ("Interactive mode", "mls-scraper interactive"),
         ("Quiet output for scripts", "mls-scraper scrape --quiet"),

@@ -46,14 +46,16 @@ class MLSScraper:
     RETRY_DELAY_BASE = 1.0  # Base delay in seconds
     RETRY_BACKOFF_MULTIPLIER = 2.0
 
-    def __init__(self, config: ScrapingConfig):
+    def __init__(self, config: ScrapingConfig, headless: bool = True):
         """
         Initialize MLS scraper with configuration.
 
         Args:
             config: Scraping configuration containing filters and settings
+            headless: Whether to run browser in headless mode (default: True)
         """
         self.config = config
+        self.headless = headless
         self.browser_manager: Optional[BrowserManager] = None
         self.execution_metrics = ScrapingMetrics(
             games_scheduled=0,
@@ -169,7 +171,7 @@ class MLSScraper:
 
                 # Configure browser for Lambda environment
                 browser_config = BrowserConfig(
-                    headless=True,
+                    headless=self.headless,
                     timeout=30000,  # 30 seconds
                     viewport_width=1280,
                     viewport_height=720,
@@ -421,7 +423,7 @@ class MLSScraper:
                     )
 
                 # Update metrics based on extracted matches
-                games_scheduled = len([m for m in matches if m.status == "scheduled"])
+                games_scheduled = len([m for m in matches if m.match_status == "scheduled"])
                 games_scored = len([m for m in matches if m.has_score()])
 
                 self.execution_metrics.games_scheduled = games_scheduled
@@ -542,9 +544,10 @@ class MLSScraper:
             )
 
             # Group matches by status for better organization
-            scheduled_matches = [m for m in matches if m.status == "scheduled"]
-            completed_matches = [m for m in matches if m.status == "completed"]
-            in_progress_matches = [m for m in matches if m.status == "in_progress"]
+            scheduled_matches = [m for m in matches if m.match_status == "scheduled"]
+            completed_matches = [m for m in matches if m.match_status == "completed"]
+            tbd_matches = [m for m in matches if m.match_status == "TBD"]
+            in_progress_matches = [m for m in matches if m.match_status == "in_progress"]
 
             # Log scheduled matches
             if scheduled_matches:
@@ -554,11 +557,9 @@ class MLSScraper:
                         f"SCHEDULED #{i}: {match.home_team} vs {match.away_team}",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_date.date()) if match.match_date else "Unknown",
-                            "time": match.match_time or "Unknown",
-                            "venue": match.venue or "Unknown",
-                            "division": match.division,
-                            "age_group": match.age_group,
+                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                         },
                     )
@@ -572,11 +573,26 @@ class MLSScraper:
                         f"COMPLETED #{i}: {match.home_team} vs {match.away_team} - {score_info}",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_date.date()) if match.match_date else "Unknown",
-                            "time": match.match_time or "Unknown",
-                            "venue": match.venue or "Unknown",
-                            "division": match.division,
-                            "age_group": match.age_group,
+                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "venue": match.location or "Unknown",
+                            "competition": match.competition or "Unknown",
+                            "home_score": match.home_score,
+                            "away_score": match.away_score,
+                        },
+                    )
+
+            # Log TBD matches
+            if tbd_matches:
+                logger.info(f"=== TBD MATCHES ({len(tbd_matches)}) ===")
+                for i, match in enumerate(tbd_matches, 1):
+                    logger.info(
+                        f"TBD #{i}: {match.home_team} vs {match.away_team} - TBD",
+                        extra={
+                            "match_id": match.match_id,
+                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                             "home_score": match.home_score,
                             "away_score": match.away_score,
@@ -592,11 +608,9 @@ class MLSScraper:
                         f"IN-PROGRESS #{i}: {match.home_team} vs {match.away_team} - {score_info}",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_date.date()) if match.match_date else "Unknown",
-                            "time": match.match_time or "Unknown",
-                            "venue": match.venue or "Unknown",
-                            "division": match.division,
-                            "age_group": match.age_group,
+                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                             "home_score": match.home_score,
                             "away_score": match.away_score,
@@ -610,10 +624,11 @@ class MLSScraper:
                     "total_matches": len(matches),
                     "scheduled_matches": len(scheduled_matches),
                     "completed_matches": len(completed_matches),
+                    "tbd_matches": len(tbd_matches),
                     "in_progress_matches": len(in_progress_matches),
                     "matches_with_scores": len([m for m in matches if m.has_score()]),
-                    "matches_with_venues": len([m for m in matches if m.venue]),
-                    "matches_with_times": len([m for m in matches if m.match_time]),
+                    "matches_with_venues": len([m for m in matches if m.location]),
+                    "matches_with_times": len([m for m in matches if m.match_datetime]),
                     "unique_teams": len(set([m.home_team for m in matches] + [m.away_team for m in matches])),
                 },
             )
@@ -669,8 +684,8 @@ async def example_scraper_usage():
 
         for match in matches[:5]:  # Show first 5 matches
             print(f"  {match.home_team} vs {match.away_team}")
-            print(f"    Date: {match.match_date}")
-            print(f"    Status: {match.status}")
+            print(f"    Date: {match.match_datetime}")
+            print(f"    Status: {match.match_status}")
             if match.has_score():
                 print(f"    Score: {match.get_score_string()}")
             print()
