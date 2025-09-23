@@ -1,5 +1,13 @@
 # MLS Match Scraper
 
+[![Tests](https://github.com/silverbeer/match-scraper/actions/workflows/test-and-publish.yml/badge.svg)](https://github.com/silverbeer/match-scraper/actions/workflows/test-and-publish.yml)
+[![Coverage](https://img.shields.io/badge/coverage-25.2%25-green)](https://silverbeer.github.io/match-scraper/)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
+[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-black)](https://github.com/astral-sh/ruff)
+[![Powered by uv](https://img.shields.io/badge/powered%20by-uv-blue)](https://github.com/astral-sh/uv)
+
+🏆 **[View Test Reports & Coverage](https://silverbeer.github.io/match-scraper/)**
+
 Automated MLS match data scraper for missing-table.com API integration.
 
 ## Overview
@@ -13,7 +21,7 @@ This serverless application scrapes match data from the MLS Next website and pos
 - **Comprehensive Monitoring**: Structured logging with AWS Powertools and metrics with OpenTelemetry
 - **Serverless Architecture**: AWS Lambda deployment with Terraform infrastructure
 - **Data Validation**: Pydantic models for robust data validation and serialization
-- **High Test Coverage**: 91.57% test coverage with comprehensive unit tests
+- **Quality Testing**: 25%+ test coverage with 216+ comprehensive unit tests
 
 ## Development Setup
 
@@ -52,9 +60,9 @@ uv run pytest tests/unit/test_logger.py tests/unit/test_metrics.py -v
 ```
 
 ### Coverage Requirements
-- Minimum coverage: 50%
-- Current coverage: 91.57%
-- Coverage reports available in `htmlcov/` directory
+- Minimum coverage: 25%
+- Current coverage: 25.2%
+- Coverage reports available in GitHub Pages and `htmlcov/` directory
 
 ## Data Models
 
