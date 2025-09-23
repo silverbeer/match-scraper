@@ -50,6 +50,7 @@ jobs:
           mkdir -p "$REPORT_DIR"
 
           # Run tests with multiple output formats
+          # Note: pytest will exit with non-zero if tests fail, failing the workflow
           uv run python -m pytest \
             --html="$REPORT_DIR/index.html" --self-contained-html \
             --junitxml="$REPORT_DIR/junit.xml" \
@@ -59,6 +60,22 @@ jobs:
             --cov-report=html:"$REPORT_DIR/coverage-html" \
             --cov-report=json:"$REPORT_DIR/coverage.json" \
             tests/unit/
+
+      - name: Generate diff coverage report
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          REPORT_DIR="site/reports/$BRANCH/${GITHUB_RUN_NUMBER}"
+
+          # Generate diff coverage report for new code
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$BRANCH" != "main" ]; then
+            echo "📊 Generating diff coverage report..."
+            uv run diff-cover "$REPORT_DIR/coverage.xml" \
+              --compare-branch=origin/main \
+              --html-report="$REPORT_DIR/diff-coverage.html" \
+              --json-report="$REPORT_DIR/diff-coverage.json" || true
+          else
+            echo "⏭️ Skipping diff coverage on main branch"
+          fi
 
           # Extract key metrics for badges
           COVERAGE=$(python -c "import json; data=json.load(open('$REPORT_DIR/coverage.json')); print(f\"{data['totals']['percent_covered']:.1f}\")")
@@ -171,11 +188,20 @@ jobs:
           </html>
           HTML
 
+      # Always upload test reports as artifacts for debugging
+      - name: Upload test reports as artifact
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if tests failed
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: site/reports/
+          retention-days: 30
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
         if: github.ref == 'refs/heads/main'
 
-      - name: Upload artifact
+      - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
         with:
