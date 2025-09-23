@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/silverbeer/match-scraper/actions/workflows/test-and-publish.yml/badge.svg)](https://github.com/silverbeer/match-scraper/actions/workflows/test-and-publish.yml)
 [![Coverage](https://img.shields.io/badge/coverage-25.2%25-green)](https://silverbeer.github.io/match-scraper/)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://python.org)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-black)](https://github.com/astral-sh/ruff)
 [![Powered by uv](https://img.shields.io/badge/powered%20by-uv-blue)](https://github.com/astral-sh/uv)
 
