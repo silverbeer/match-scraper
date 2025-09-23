@@ -27,8 +27,8 @@ from src.scraper.match_extraction import MLSMatchExtractor
 # Set up simple console logging for the script
 logging.basicConfig(
     level=logging.WARNING,  # Only show warnings and errors
-    format='%(levelname)s: %(message)s',
-    handlers=[logging.StreamHandler()]
+    format="%(levelname)s: %(message)s",
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,14 @@ TEST_TIMEOUT = 30000
 class TestScrapingConfig:
     """Simple configuration class for e2e testing."""
 
-    def __init__(self, age_group: str, division: str, look_back_days: int, club: str = "", competition: str = ""):
+    def __init__(
+        self,
+        age_group: str,
+        division: str,
+        look_back_days: int,
+        club: str = "",
+        competition: str = "",
+    ):
         self.age_group = age_group
         self.division = division
         self.look_back_days = look_back_days
@@ -56,6 +63,7 @@ async def check_playwright_installation():
     """Check if Playwright browsers are installed."""
     try:
         from playwright.async_api import async_playwright
+
         async with async_playwright() as p:
             # Try to get browser path - this will fail if not installed
             _ = p.chromium.executable_path  # Check if executable exists
@@ -66,9 +74,9 @@ async def check_playwright_installation():
 
 def print_setup_instructions():
     """Print setup instructions for common issues."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🔧 SETUP REQUIRED")
-    print("="*60)
+    print("=" * 60)
     print("It looks like Playwright browsers are not installed.")
     print("\nTo fix this, run:")
     print("  uv run playwright install")
@@ -76,7 +84,7 @@ def print_setup_instructions():
     print("  uv run playwright install chromium")
     print("\nThen try running the test again:")
     print("  uv run run-e2e-test --visible")
-    print("="*60)
+    print("=" * 60)
 
 
 async def run_full_extraction_test(
@@ -96,9 +104,9 @@ async def run_full_extraction_test(
         division: Division to filter by
         look_back_days: Number of days to look back for matches
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 STARTING MATCH EXTRACTION E2E TEST")
-    print("="*60)
+    print("=" * 60)
     print("Configuration:")
     print(f"  • Visible browser: {visible}")
     print(f"  • Slow mode: {slow_mode}ms")
@@ -138,8 +146,12 @@ async def run_full_extraction_test(
                     response = await page.goto(TEST_MLS_URL, wait_until="networkidle")
 
                     if not response or not response.ok:
-                        print(f"❌ Failed to navigate to MLS website: {response.status if response else 'No response'}")
-                        print("   This could be due to network issues or the website being down.")
+                        print(
+                            f"❌ Failed to navigate to MLS website: {response.status if response else 'No response'}"
+                        )
+                        print(
+                            "   This could be due to network issues or the website being down."
+                        )
                         return False
 
                     print("✅ Successfully navigated to MLS website")
@@ -159,21 +171,33 @@ async def run_full_extraction_test(
 
                     # Discover available options
                     print("   Discovering available filter options...")
-                    available_options = await filter_applicator.discover_available_options()
+                    available_options = (
+                        await filter_applicator.discover_available_options()
+                    )
 
-                    print(f"   • Age groups: {len(available_options.get('age_group', []))}")
+                    print(
+                        f"   • Age groups: {len(available_options.get('age_group', []))}"
+                    )
                     print(f"   • Clubs: {len(available_options.get('club', []))}")
-                    print(f"   • Competitions: {len(available_options.get('competition', []))}")
-                    print(f"   • Divisions: {len(available_options.get('division', []))}")
+                    print(
+                        f"   • Competitions: {len(available_options.get('competition', []))}"
+                    )
+                    print(
+                        f"   • Divisions: {len(available_options.get('division', []))}"
+                    )
 
                     # Apply filters
                     print("   Applying filters...")
-                    filters_applied = await filter_applicator.apply_all_filters(scraping_config)
+                    filters_applied = await filter_applicator.apply_all_filters(
+                        scraping_config
+                    )
 
                     if filters_applied:
                         print("✅ Filters applied successfully")
                     else:
-                        print("⚠️  Some filters may not have been applied (this is often normal)")
+                        print(
+                            "⚠️  Some filters may not have been applied (this is often normal)"
+                        )
 
                 except Exception as e:
                     print(f"⚠️  Filter application had issues: {str(e)}")
@@ -185,25 +209,33 @@ async def run_full_extraction_test(
                 # Step 3: Set date range
                 print("\n📅 Step 3: Setting date range...")
                 try:
-                    calendar_interactor = MLSCalendarInteractor(page, timeout=TEST_TIMEOUT)
+                    calendar_interactor = MLSCalendarInteractor(
+                        page, timeout=TEST_TIMEOUT
+                    )
 
                     end_date = date.today()
                     start_date = end_date - timedelta(days=look_back_days)
 
                     print(f"   Date range: {start_date} to {end_date}")
 
-                    date_filter_applied = await calendar_interactor.set_date_range_filter(
-                        start_date, end_date
+                    date_filter_applied = (
+                        await calendar_interactor.set_date_range_filter(
+                            start_date, end_date
+                        )
                     )
 
                     if date_filter_applied:
                         print("✅ Date range filter applied successfully")
                     else:
-                        print("⚠️  Date range filter may not be available (continuing anyway)")
+                        print(
+                            "⚠️  Date range filter may not be available (continuing anyway)"
+                        )
 
                 except Exception as e:
                     print(f"⚠️  Date filter application failed: {str(e)}")
-                    print("   This is often normal - many sites don't have date filters")
+                    print(
+                        "   This is often normal - many sites don't have date filters"
+                    )
 
                 if slow_mode > 0:
                     await asyncio.sleep(slow_mode / 1000)
@@ -232,12 +264,14 @@ async def run_full_extraction_test(
 
                 # Keep browser open for inspection if visible
                 if visible and matches:
-                    print("\n👀 Browser will remain open for 10 seconds for inspection...")
+                    print(
+                        "\n👀 Browser will remain open for 10 seconds for inspection..."
+                    )
                     await asyncio.sleep(10)
 
-                print("\n" + "="*60)
+                print("\n" + "=" * 60)
                 print("🎉 E2E TEST COMPLETED SUCCESSFULLY!")
-                print("="*60)
+                print("=" * 60)
                 return True
 
     except Exception as e:
@@ -262,9 +296,9 @@ async def run_full_extraction_test(
 
 async def display_match_results(matches, config):
     """Display detailed match results."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📊 MATCH EXTRACTION RESULTS")
-    print("="*60)
+    print("=" * 60)
     print(f"Configuration: {config.age_group}, {config.division}")
     print(f"Total matches found: {len(matches)}")
 
@@ -287,12 +321,12 @@ async def display_match_results(matches, config):
     print(f"  🔴 In Progress: {len(in_progress_matches)}")
 
     # Display sample matches
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("🏆 SAMPLE MATCHES")
-    print("-"*40)
+    print("-" * 40)
 
     for i, match in enumerate(matches[:5]):  # Show first 5 matches
-        print(f"\nMatch {i+1}:")
+        print(f"\nMatch {i + 1}:")
         print(f"  🆚 {match.home_team} vs {match.away_team}")
         print(f"  📅 {match.match_date.strftime('%Y-%m-%d %H:%M')}")
         print(f"  📊 Status: {match.status}")
@@ -305,27 +339,41 @@ async def display_match_results(matches, config):
         print(f"\n... and {len(matches) - 5} more matches")
 
     # Validate match data quality
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("✅ DATA QUALITY CHECK")
-    print("-"*40)
+    print("-" * 40)
 
     # Check for required fields
     matches_with_teams = sum(1 for m in matches if m.home_team and m.away_team)
     matches_with_dates = sum(1 for m in matches if m.match_date)
     matches_with_scores = sum(1 for m in matches if m.has_score())
 
-    print(f"Team names: {matches_with_teams}/{len(matches)} ({matches_with_teams/len(matches)*100:.1f}%)")
-    print(f"Match dates: {matches_with_dates}/{len(matches)} ({matches_with_dates/len(matches)*100:.1f}%)")
-    print(f"Score data: {matches_with_scores}/{len(matches)} ({matches_with_scores/len(matches)*100:.1f}%)")
+    print(
+        f"Team names: {matches_with_teams}/{len(matches)} ({matches_with_teams / len(matches) * 100:.1f}%)"
+    )
+    print(
+        f"Match dates: {matches_with_dates}/{len(matches)} ({matches_with_dates / len(matches) * 100:.1f}%)"
+    )
+    print(
+        f"Score data: {matches_with_scores}/{len(matches)} ({matches_with_scores / len(matches) * 100:.1f}%)"
+    )
 
     # Check for data consistency
     if completed_matches:
-        completed_with_scores = sum(1 for m in matches if m.status == "completed" and m.has_score())
-        print(f"Completed matches with scores: {completed_with_scores}/{len(completed_matches)} ({completed_with_scores/len(completed_matches)*100:.1f}%)")
+        completed_with_scores = sum(
+            1 for m in matches if m.status == "completed" and m.has_score()
+        )
+        print(
+            f"Completed matches with scores: {completed_with_scores}/{len(completed_matches)} ({completed_with_scores / len(completed_matches) * 100:.1f}%)"
+        )
 
     if scheduled_matches:
-        scheduled_without_scores = sum(1 for m in matches if m.status == "scheduled" and not m.has_score())
-        print(f"Scheduled matches without scores: {scheduled_without_scores}/{len(scheduled_matches)} ({scheduled_without_scores/len(scheduled_matches)*100:.1f}%)")
+        scheduled_without_scores = sum(
+            1 for m in matches if m.status == "scheduled" and not m.has_score()
+        )
+        print(
+            f"Scheduled matches without scores: {scheduled_without_scores}/{len(scheduled_matches)} ({scheduled_without_scores / len(scheduled_matches) * 100:.1f}%)"
+        )
 
     # Overall quality assessment
     quality_score = (matches_with_teams + matches_with_dates) / (2 * len(matches)) * 100
@@ -339,16 +387,16 @@ async def display_match_results(matches, config):
 
 async def run_debug_test():
     """Run a step-by-step debug test with user interaction."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🐛 STARTING DEBUG MODE")
-    print("="*60)
+    print("=" * 60)
     print("This will run step-by-step with pauses for manual inspection")
     print("Press Ctrl+C at any time to exit")
     print()
 
     browser_config = BrowserConfig(
         headless=False,  # Always visible for debug
-        timeout=60000,   # Longer timeout
+        timeout=60000,  # Longer timeout
         viewport_width=1920,
         viewport_height=1080,
     )
@@ -370,7 +418,9 @@ async def run_debug_test():
             input("Press Enter to navigate to MLS website...")
 
             response = await page.goto(TEST_MLS_URL, wait_until="networkidle")
-            logger.info(f"Navigation response: {response.status if response else 'None'}")
+            logger.info(
+                f"Navigation response: {response.status if response else 'None'}"
+            )
 
             input("Press Enter to continue to filter discovery...")
 
@@ -410,9 +460,9 @@ async def run_debug_test():
 
 async def run_performance_test():
     """Run a performance test to measure extraction speed."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("⚡ STARTING PERFORMANCE TEST")
-    print("="*60)
+    print("=" * 60)
 
     import time
 
@@ -429,7 +479,9 @@ async def run_performance_test():
 
     async with get_browser_manager(browser_config) as browser_manager:
         for i, config in enumerate(test_configs):
-            logger.info(f"\n--- Performance Test {i+1}: {config.age_group}, {config.division} ---")
+            logger.info(
+                f"\n--- Performance Test {i + 1}: {config.age_group}, {config.division} ---"
+            )
 
             start_time = time.time()
 
@@ -454,7 +506,9 @@ async def run_performance_test():
 
                 print(f"  Extracted {len(matches)} matches in {duration:.2f} seconds")
                 if matches:
-                    print(f"  Performance: {len(matches)/duration:.2f} matches/second")
+                    print(
+                        f"  Performance: {len(matches) / duration:.2f} matches/second"
+                    )
 
     print("🎉 PERFORMANCE TEST COMPLETE")
     return True
@@ -471,16 +525,28 @@ Examples:
   uv run run-e2e-test --visible --slow 2000       # Run with slow motion
   uv run run-e2e-test --debug                      # Step-by-step debug mode
   uv run run-e2e-test --performance                # Performance benchmarks
-        """
+        """,
     )
-    parser.add_argument("--visible", action="store_true", help="Run with visible browser")
+    parser.add_argument(
+        "--visible", action="store_true", help="Run with visible browser"
+    )
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode with step-by-step execution")
-    parser.add_argument("--performance", action="store_true", help="Run performance test")
-    parser.add_argument("--slow", type=int, default=0, help="Slow mode delay in milliseconds")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Run in debug mode with step-by-step execution",
+    )
+    parser.add_argument(
+        "--performance", action="store_true", help="Run performance test"
+    )
+    parser.add_argument(
+        "--slow", type=int, default=0, help="Slow mode delay in milliseconds"
+    )
     parser.add_argument("--age-group", default="U14", help="Age group to test")
     parser.add_argument("--division", default="Northeast", help="Division to test")
-    parser.add_argument("--look-back-days", type=int, default=30, help="Days to look back for matches")
+    parser.add_argument(
+        "--look-back-days", type=int, default=30, help="Days to look back for matches"
+    )
 
     args = parser.parse_args()
 
@@ -499,13 +565,15 @@ Examples:
         else:
             # Default to full extraction test
             visible = args.visible or not args.headless
-            success = asyncio.run(run_full_extraction_test(
-                visible=visible,
-                slow_mode=args.slow,
-                age_group=args.age_group,
-                division=args.division,
-                look_back_days=args.look_back_days,
-            ))
+            success = asyncio.run(
+                run_full_extraction_test(
+                    visible=visible,
+                    slow_mode=args.slow,
+                    age_group=args.age_group,
+                    division=args.division,
+                    look_back_days=args.look_back_days,
+                )
+            )
 
         # Exit with appropriate code
         sys.exit(0 if success else 1)

@@ -211,10 +211,11 @@ class TestMetricsRecording:
 
     def setup_method(self):
         """Set up test fixtures."""
-        with patch("src.utils.metrics.OTLPMetricExporter"), patch(
-            "src.utils.metrics.PeriodicExportingMetricReader"
-        ), patch("src.utils.metrics.MeterProvider"), patch(
-            "src.utils.metrics.metrics.set_meter_provider"
+        with (
+            patch("src.utils.metrics.OTLPMetricExporter"),
+            patch("src.utils.metrics.PeriodicExportingMetricReader"),
+            patch("src.utils.metrics.MeterProvider"),
+            patch("src.utils.metrics.metrics.set_meter_provider"),
         ):
             self.metrics = MLSScraperMetrics()
 

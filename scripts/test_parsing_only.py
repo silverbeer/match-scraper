@@ -8,14 +8,12 @@ to verify that the extraction algorithms are working correctly.
 
 import os
 import sys
-from datetime import datetime
 
 # Add project root to path for imports
-project_root = os.path.join(os.path.dirname(__file__), '..')
+project_root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, project_root)
 
-from src.scraper.match_extraction import MLSMatchExtractor
-from src.scraper.models import Match
+from src.scraper.match_extraction import MLSMatchExtractor  # noqa: E402
 
 
 def create_sample_html_table():
@@ -85,9 +83,9 @@ def test_date_parsing():
     """Test date parsing functionality."""
     print("🗓️  Testing Date Parsing")
     print("-" * 30)
-    
+
     extractor = MLSMatchExtractor(None)  # No page needed for parsing tests
-    
+
     test_cases = [
         ("12/19/2024", "3:00 PM"),
         ("2024-12-19", "15:00"),
@@ -95,7 +93,7 @@ def test_date_parsing():
         ("Dec 19, 2024", "10:30 AM"),
         ("12/19/24", ""),
     ]
-    
+
     for date_str, time_str in test_cases:
         try:
             parsed_date = extractor._parse_match_datetime(date_str, time_str)
@@ -111,9 +109,9 @@ def test_score_parsing():
     """Test score and status parsing functionality."""
     print("\n⚽ Testing Score Parsing")
     print("-" * 30)
-    
+
     extractor = MLSMatchExtractor(None)
-    
+
     test_cases = [
         ("2 - 1", "completed"),
         ("0-3", "final"),
@@ -122,11 +120,15 @@ def test_score_parsing():
         ("TBD", "upcoming"),
         ("Live: 1-0", "in progress"),
     ]
-    
+
     for score_text, status_text in test_cases:
         try:
-            home_score, away_score, status = extractor._parse_score_and_status(score_text, status_text)
-            print(f"   ✅ '{score_text}' + '{status_text}' → {home_score}-{away_score} ({status})")
+            home_score, away_score, status = extractor._parse_score_and_status(
+                score_text, status_text
+            )
+            print(
+                f"   ✅ '{score_text}' + '{status_text}' → {home_score}-{away_score} ({status})"
+            )
         except Exception as e:
             print(f"   💥 '{score_text}' + '{status_text}' → Error: {e}")
 
@@ -135,15 +137,15 @@ def test_text_parsing():
     """Test parsing match data from raw text."""
     print("\n📝 Testing Text Parsing")
     print("-" * 30)
-    
+
     extractor = MLSMatchExtractor(None)
-    
+
     test_cases = [
         "12/19/2024 3:00 PM FC Dallas Youth Houston Dynamo Academy 2-1 Toyota Stadium",
         "Dec 20, 2024 Austin FC Academy vs San Antonio FC Youth 10:00 AM",
         "Real Salt Lake Academy Colorado Rapids Youth 0-3 Final",
     ]
-    
+
     for text in test_cases:
         try:
             parsed_data = extractor._parse_row_text(text)
@@ -158,28 +160,28 @@ async def test_match_creation():
     """Test creating Match objects from parsed data."""
     print("\n🏗️  Testing Match Creation")
     print("-" * 30)
-    
+
     extractor = MLSMatchExtractor(None)
-    
+
     test_data = {
         "date": "12/19/2024",
-        "time": "3:00 PM", 
+        "time": "3:00 PM",
         "home_team": "FC Dallas Youth",
         "away_team": "Houston Dynamo Academy",
         "score": "2 - 1",
         "venue": "Toyota Stadium",
-        "status": "completed"
+        "status": "completed",
     }
-    
+
     try:
         match = await extractor._create_match_from_data(
-            test_data, 
+            test_data,
             index=0,
             age_group="U14",
             division="Southwest",
-            competition="MLS Next"
+            competition="MLS Next",
         )
-        
+
         if match:
             print(f"   ✅ Created match: {match.home_team} vs {match.away_team}")
             print(f"      ID: {match.match_id}")
@@ -189,24 +191,24 @@ async def test_match_creation():
             print(f"      Venue: {match.venue}")
         else:
             print("   ❌ Failed to create match object")
-            
+
     except Exception as e:
         print(f"   💥 Error creating match: {e}")
 
 
 async def main():
     """Main function to run parsing tests."""
-    
+
     print("🧪 MLS Match Parsing - Unit Testing Tool")
     print("This tool tests the parsing logic without browser automation")
     print("=" * 60)
-    
+
     # Test individual parsing functions
     test_date_parsing()
-    test_score_parsing() 
+    test_score_parsing()
     test_text_parsing()
     await test_match_creation()
-    
+
     print("\n" + "=" * 60)
     print("✅ Parsing tests completed!")
     print("\nNext steps:")
@@ -217,4 +219,5 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

@@ -11,18 +11,18 @@ import sys
 from datetime import date, timedelta
 
 # Add project root to path for imports
-project_root = os.path.join(os.path.dirname(__file__), '..')
+project_root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, project_root)
 
-from src.scraper.config import ScrapingConfig, load_config, validate_config
-from src.scraper.mls_scraper import MLSScraper
+from src.scraper.config import ScrapingConfig, validate_config  # noqa: E402
+from src.scraper.mls_scraper import MLSScraper  # noqa: E402
 
 
 def test_configuration():
     """Test configuration loading and validation."""
     print("⚙️  Testing Configuration")
     print("-" * 30)
-    
+
     # Test manual configuration
     try:
         config = ScrapingConfig(
@@ -37,18 +37,18 @@ def test_configuration():
             missing_table_api_key="test-key",
             log_level="INFO",
         )
-        
-        print(f"   ✅ Manual config created successfully")
+
+        print("   ✅ Manual config created successfully")
         print(f"      Age Group: {config.age_group}")
         print(f"      Division: {config.division}")
         print(f"      Date Range: {config.start_date} to {config.end_date}")
-        
+
         # Test validation
         validate_config(config)
-        print(f"   ✅ Configuration validation passed")
-        
+        print("   ✅ Configuration validation passed")
+
         return config
-        
+
     except Exception as e:
         print(f"   ❌ Configuration error: {e}")
         return None
@@ -58,20 +58,24 @@ def test_scraper_initialization(config):
     """Test scraper initialization without running."""
     print("\n🤖 Testing Scraper Initialization")
     print("-" * 30)
-    
+
     try:
         scraper = MLSScraper(config)
-        print(f"   ✅ MLSScraper created successfully")
-        
+        print("   ✅ MLSScraper created successfully")
+
         # Test metrics initialization
         metrics = scraper.get_execution_metrics()
-        print(f"   ✅ Metrics initialized: {metrics.games_scheduled} scheduled, {metrics.games_scored} scored")
-        
+        print(
+            f"   ✅ Metrics initialized: {metrics.games_scheduled} scheduled, {metrics.games_scored} scored"
+        )
+
         # Test configuration access
-        print(f"   ✅ Config accessible: {scraper.config.age_group} {scraper.config.division}")
-        
+        print(
+            f"   ✅ Config accessible: {scraper.config.age_group} {scraper.config.division}"
+        )
+
         return scraper
-        
+
     except Exception as e:
         print(f"   ❌ Scraper initialization error: {e}")
         return None
@@ -81,14 +85,14 @@ def test_dependencies():
     """Test that all required dependencies are available."""
     print("\n📦 Testing Dependencies")
     print("-" * 30)
-    
+
     dependencies = [
         ("playwright", "Playwright for browser automation"),
         ("pydantic", "Pydantic for data validation"),
         ("opentelemetry", "OpenTelemetry for metrics"),
         ("aws_lambda_powertools", "AWS Lambda Powertools for logging"),
     ]
-    
+
     for module_name, description in dependencies:
         try:
             __import__(module_name)
@@ -101,28 +105,23 @@ def test_environment():
     """Test environment setup."""
     print("\n🌍 Testing Environment")
     print("-" * 30)
-    
+
     # Check required directories
-    directories = [
-        "src/scraper",
-        "tests/integration", 
-        "tests/unit",
-        "scripts"
-    ]
-    
+    directories = ["src/scraper", "tests/integration", "tests/unit", "scripts"]
+
     for directory in directories:
         if os.path.exists(directory):
             print(f"   ✅ Directory exists: {directory}")
         else:
             print(f"   ❌ Directory missing: {directory}")
-    
+
     # Check environment variables (optional)
     env_vars = [
         ("LOG_LEVEL", "INFO"),
         ("MISSING_TABLE_API_URL", None),
         ("MISSING_TABLE_API_KEY", None),
     ]
-    
+
     for var_name, default in env_vars:
         value = os.getenv(var_name, default)
         if value:
@@ -133,24 +132,24 @@ def test_environment():
 
 def main():
     """Main function to run dry run tests."""
-    
+
     print("🧪 MLS Match Scraper - Dry Run Test")
     print("This tool verifies setup without running browser automation")
     print("=" * 60)
-    
+
     # Set test environment variables
     os.environ.setdefault("LOG_LEVEL", "INFO")
     os.environ.setdefault("MISSING_TABLE_API_URL", "https://api.missing-table.com")
     os.environ.setdefault("MISSING_TABLE_API_KEY", "test-key")
-    
+
     # Run tests
     test_dependencies()
     test_environment()
-    
+
     config = test_configuration()
     if config:
         scraper = test_scraper_initialization(config)
-        
+
         if scraper:
             print("\n" + "=" * 60)
             print("✅ Dry run completed successfully!")

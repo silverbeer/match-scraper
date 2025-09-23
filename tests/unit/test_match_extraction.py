@@ -34,17 +34,14 @@ class TestMLSMatchExtractor:
     async def test_extract_matches_success(self, match_extractor, mock_page):
         """Test successful match extraction."""
         # Mock the extraction workflow
-        with patch.object(
-            match_extractor, "_wait_for_results"
-        ) as mock_wait, patch.object(
-            match_extractor, "_check_no_results"
-        ) as mock_check_no_results, patch.object(
-            match_extractor, "_extract_from_table"
-        ) as mock_extract_table:
-            
+        with (
+            patch.object(match_extractor, "_wait_for_results") as mock_wait,
+            patch.object(match_extractor, "_check_no_results") as mock_check_no_results,
+            patch.object(match_extractor, "_extract_from_table") as mock_extract_table,
+        ):
             mock_wait.return_value = True
             mock_check_no_results.return_value = False
-            
+
             # Mock successful table extraction
             mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -53,7 +50,7 @@ class TestMLSMatchExtractor:
                 match_date=datetime(2024, 12, 19, 15, 0),
                 age_group="U14",
                 division="Northeast",
-                status="scheduled"
+                status="scheduled",
             )
             mock_extract_table.return_value = [mock_match]
 
@@ -66,9 +63,7 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_extract_matches_no_results(self, match_extractor, mock_page):
         """Test extraction when no results found."""
-        with patch.object(
-            match_extractor, "_wait_for_results"
-        ) as mock_wait:
+        with patch.object(match_extractor, "_wait_for_results") as mock_wait:
             mock_wait.return_value = False
 
             result = await match_extractor.extract_matches("U14", "Northeast")
@@ -78,12 +73,10 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_extract_matches_empty_results(self, match_extractor, mock_page):
         """Test extraction when page shows no results message."""
-        with patch.object(
-            match_extractor, "_wait_for_results"
-        ) as mock_wait, patch.object(
-            match_extractor, "_check_no_results"
-        ) as mock_check_no_results:
-            
+        with (
+            patch.object(match_extractor, "_wait_for_results") as mock_wait,
+            patch.object(match_extractor, "_check_no_results") as mock_check_no_results,
+        ):
             mock_wait.return_value = True
             mock_check_no_results.return_value = True
 
@@ -92,22 +85,20 @@ class TestMLSMatchExtractor:
             assert result == []
 
     @pytest.mark.asyncio
-    async def test_extract_matches_table_fails_fallback_to_cards(self, match_extractor, mock_page):
+    async def test_extract_matches_table_fails_fallback_to_cards(
+        self, match_extractor, mock_page
+    ):
         """Test fallback to card extraction when table extraction fails."""
-        with patch.object(
-            match_extractor, "_wait_for_results"
-        ) as mock_wait, patch.object(
-            match_extractor, "_check_no_results"
-        ) as mock_check_no_results, patch.object(
-            match_extractor, "_extract_from_table"
-        ) as mock_extract_table, patch.object(
-            match_extractor, "_extract_from_cards"
-        ) as mock_extract_cards:
-            
+        with (
+            patch.object(match_extractor, "_wait_for_results") as mock_wait,
+            patch.object(match_extractor, "_check_no_results") as mock_check_no_results,
+            patch.object(match_extractor, "_extract_from_table") as mock_extract_table,
+            patch.object(match_extractor, "_extract_from_cards") as mock_extract_cards,
+        ):
             mock_wait.return_value = True
             mock_check_no_results.return_value = False
             mock_extract_table.return_value = []  # Table extraction fails
-            
+
             # Mock successful card extraction
             mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -116,7 +107,7 @@ class TestMLSMatchExtractor:
                 match_date=datetime(2024, 12, 19, 15, 0),
                 age_group="U14",
                 division="Northeast",
-                status="scheduled"
+                status="scheduled",
             )
             mock_extract_cards.return_value = [mock_match]
 
@@ -129,9 +120,7 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_extract_matches_exception(self, match_extractor, mock_page):
         """Test exception handling in match extraction."""
-        with patch.object(
-            match_extractor, "_wait_for_results"
-        ) as mock_wait:
+        with patch.object(match_extractor, "_wait_for_results") as mock_wait:
             mock_wait.side_effect = Exception("Network error")
 
             with pytest.raises(MatchExtractionError, match="Failed to extract matches"):
@@ -140,9 +129,7 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_wait_for_results_success(self, match_extractor, mock_page):
         """Test successful waiting for results."""
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
 
             result = await match_extractor._wait_for_results()
@@ -152,9 +139,7 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_wait_for_results_not_found(self, match_extractor, mock_page):
         """Test waiting for results when none found."""
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = False
 
             result = await match_extractor._wait_for_results()
@@ -164,9 +149,7 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_check_no_results_found(self, match_extractor, mock_page):
         """Test detection of no results message."""
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
 
             result = await match_extractor._check_no_results()
@@ -176,9 +159,7 @@ class TestMLSMatchExtractor:
     @pytest.mark.asyncio
     async def test_check_no_results_not_found(self, match_extractor, mock_page):
         """Test when no results message not found."""
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = False
 
             result = await match_extractor._check_no_results()
@@ -192,17 +173,17 @@ class TestMLSMatchExtractor:
         mock_table = AsyncMock()
         mock_row = AsyncMock()
         mock_table.query_selector_all.return_value = [mock_row]
-        
+
         mock_page.query_selector.return_value = mock_table
 
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            match_extractor, "_extract_match_from_row"
-        ) as mock_extract_row:
-            
+        with (
+            patch.object(match_extractor.interactor, "wait_for_element") as mock_wait,
+            patch.object(
+                match_extractor, "_extract_match_from_row"
+            ) as mock_extract_row,
+        ):
             mock_wait.return_value = True
-            
+
             # Mock successful match extraction from row
             mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -211,7 +192,7 @@ class TestMLSMatchExtractor:
                 match_date=datetime(2024, 12, 19, 15, 0),
                 age_group="U14",
                 division="Northeast",
-                status="scheduled"
+                status="scheduled",
             )
             mock_extract_row.return_value = mock_match
 
@@ -225,9 +206,7 @@ class TestMLSMatchExtractor:
         """Test table extraction when no table found."""
         mock_page.query_selector.return_value = None
 
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = False
 
             result = await match_extractor._extract_from_table("U14", "Northeast", None)
@@ -244,7 +223,6 @@ class TestMLSMatchExtractor:
         with patch.object(
             match_extractor, "_extract_match_from_card"
         ) as mock_extract_card:
-            
             # Mock successful match extraction from card
             mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -253,7 +231,7 @@ class TestMLSMatchExtractor:
                 match_date=datetime(2024, 12, 19, 15, 0),
                 age_group="U14",
                 division="Northeast",
-                status="scheduled"
+                status="scheduled",
             )
             mock_extract_card.return_value = mock_match
 
@@ -277,14 +255,14 @@ class TestMLSMatchExtractor:
         # Mock row element with cells
         mock_row = AsyncMock()
         mock_cells = [AsyncMock() for _ in range(5)]
-        
+
         # Mock cell content
         mock_cells[0].text_content.return_value = "12/19/2024"  # date
-        mock_cells[1].text_content.return_value = "3:00 PM"     # time
-        mock_cells[2].text_content.return_value = "Team A"      # home
-        mock_cells[3].text_content.return_value = "Team B"      # away
-        mock_cells[4].text_content.return_value = "2 - 1"       # score
-        
+        mock_cells[1].text_content.return_value = "3:00 PM"  # time
+        mock_cells[2].text_content.return_value = "Team A"  # home
+        mock_cells[3].text_content.return_value = "Team B"  # away
+        mock_cells[4].text_content.return_value = "2 - 1"  # score
+
         mock_row.query_selector_all.return_value = mock_cells
         mock_row.query_selector.return_value = None  # No specific selectors found
 
@@ -300,10 +278,15 @@ class TestMLSMatchExtractor:
         assert result.status == "completed"
 
     @pytest.mark.asyncio
-    async def test_extract_match_from_row_insufficient_cells(self, match_extractor, mock_page):
+    async def test_extract_match_from_row_insufficient_cells(
+        self, match_extractor, mock_page
+    ):
         """Test row extraction with insufficient cells."""
         mock_row = AsyncMock()
-        mock_row.query_selector_all.return_value = [AsyncMock(), AsyncMock()]  # Only 2 cells
+        mock_row.query_selector_all.return_value = [
+            AsyncMock(),
+            AsyncMock(),
+        ]  # Only 2 cells
 
         result = await match_extractor._extract_match_from_row(
             mock_row, 0, "U14", "Northeast", None
@@ -315,20 +298,20 @@ class TestMLSMatchExtractor:
     async def test_extract_match_from_card_success(self, match_extractor, mock_page):
         """Test successful match extraction from card."""
         mock_card = AsyncMock()
-        
+
         # Mock card elements
         mock_date_elem = AsyncMock()
         mock_date_elem.text_content.return_value = "12/19/2024"
-        
+
         mock_home_elem = AsyncMock()
         mock_home_elem.text_content.return_value = "Team A"
-        
+
         mock_away_elem = AsyncMock()
         mock_away_elem.text_content.return_value = "Team B"
-        
+
         mock_score_elem = AsyncMock()
         mock_score_elem.text_content.return_value = "vs"
-        
+
         # Mock query_selector to return elements for specific selectors
         def mock_query_selector(selector):
             if ".date" in selector or ".match-date" in selector:
@@ -340,7 +323,7 @@ class TestMLSMatchExtractor:
             elif ".score" in selector or ".result" in selector:
                 return mock_score_elem
             return None
-            
+
         mock_card.query_selector.side_effect = mock_query_selector
 
         result = await match_extractor._extract_match_from_card(
@@ -376,9 +359,9 @@ class TestMLSMatchExtractor:
     def test_parse_row_text(self, match_extractor):
         """Test parsing match data from row text."""
         text = "12/19/2024 3:00 PM Team A Team B 2 - 1 Stadium A"
-        
+
         result = match_extractor._parse_row_text(text)
-        
+
         assert "12/19/2024" in result["date"]
         assert "3:00 PM" in result["time"]
         assert "2 - 1" in result["score"]
@@ -387,7 +370,7 @@ class TestMLSMatchExtractor:
         """Test successful datetime parsing."""
         # Test MM/DD/YYYY format
         result = match_extractor._parse_match_datetime("12/19/2024", "3:00 PM")
-        
+
         assert result is not None
         assert result.year == 2024
         assert result.month == 12
@@ -424,7 +407,7 @@ class TestMLSMatchExtractor:
         home_score, away_score, status = match_extractor._parse_score_and_status(
             "2 - 1", "completed"
         )
-        
+
         assert home_score == 2
         assert away_score == 1
         assert status == "completed"
@@ -434,7 +417,7 @@ class TestMLSMatchExtractor:
         home_score, away_score, status = match_extractor._parse_score_and_status(
             "vs", "scheduled"
         )
-        
+
         assert home_score is None
         assert away_score is None
         assert status == "scheduled"
@@ -444,7 +427,7 @@ class TestMLSMatchExtractor:
         home_score, away_score, status = match_extractor._parse_score_and_status(
             "1 - 0", "live"
         )
-        
+
         assert home_score == 1
         assert away_score == 0
         assert status == "in_progress"
@@ -454,7 +437,7 @@ class TestMLSMatchExtractor:
         home_score, away_score, status = match_extractor._parse_score_and_status(
             "3 - 2", ""
         )
-        
+
         assert home_score == 3
         assert away_score == 2
         assert status == "completed"  # Should infer completed from score
@@ -469,7 +452,7 @@ class TestMLSMatchExtractor:
             "away_team": "Team B",
             "score": "2 - 1",
             "venue": "Stadium A",
-            "status": "completed"
+            "status": "completed",
         }
 
         result = await match_extractor._create_match_from_data(
@@ -488,7 +471,9 @@ class TestMLSMatchExtractor:
         assert result.venue == "Stadium A"
 
     @pytest.mark.asyncio
-    async def test_create_match_from_data_missing_teams(self, match_extractor, mock_page):
+    async def test_create_match_from_data_missing_teams(
+        self, match_extractor, mock_page
+    ):
         """Test Match creation with missing team data."""
         data = {
             "date": "12/19/2024",
@@ -504,7 +489,9 @@ class TestMLSMatchExtractor:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_create_match_from_data_invalid_date(self, match_extractor, mock_page):
+    async def test_create_match_from_data_invalid_date(
+        self, match_extractor, mock_page
+    ):
         """Test Match creation with invalid date."""
         data = {
             "date": "invalid date",
@@ -557,7 +544,9 @@ class TestMatchExtractionErrorHandling:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_extract_from_cell_positions_exception(self, match_extractor, mock_page):
+    async def test_extract_from_cell_positions_exception(
+        self, match_extractor, mock_page
+    ):
         """Test exception handling in cell position extraction."""
         mock_cells = [AsyncMock()]
         mock_cells[0].text_content.side_effect = Exception("Text error")
@@ -626,22 +615,20 @@ class TestMatchExtractionIntegration:
         mock_table = AsyncMock()
         mock_row = AsyncMock()
         mock_cells = [AsyncMock() for _ in range(5)]
-        
+
         # Set up cell content
         mock_cells[0].text_content.return_value = "12/19/2024"
         mock_cells[1].text_content.return_value = "3:00 PM"
         mock_cells[2].text_content.return_value = "Team A"
         mock_cells[3].text_content.return_value = "Team B"
         mock_cells[4].text_content.return_value = "vs"
-        
+
         mock_row.query_selector_all.return_value = mock_cells
         mock_row.query_selector.return_value = None
         mock_table.query_selector_all.return_value = [mock_row]
         mock_page.query_selector.return_value = mock_table
 
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
 
             result = await match_extractor.extract_matches("U14", "Northeast")
@@ -658,29 +645,33 @@ class TestMatchExtractionIntegration:
         mock_card = AsyncMock()
         mock_page.query_selector.return_value = None  # No table found
         mock_page.query_selector_all.return_value = [mock_card]
-        
+
         # Mock card text content
-        mock_card.text_content.return_value = "12/19/2024 3:00 PM Team A vs Team B Stadium A"
+        mock_card.text_content.return_value = (
+            "12/19/2024 3:00 PM Team A vs Team B Stadium A"
+        )
         mock_card.query_selector.return_value = None  # No specific selectors
 
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
 
             result = await match_extractor.extract_matches("U14", "Northeast")
 
             assert len(result) == 1
             assert result[0].home_team == "Team"  # Parsed from text
-            assert result[0].away_team == "A"     # Parsed from text (not perfect but functional)
+            assert (
+                result[0].away_team == "A"
+            )  # Parsed from text (not perfect but functional)
 
     @pytest.mark.asyncio
-    async def test_extraction_with_mixed_match_statuses(self, match_extractor, mock_page):
+    async def test_extraction_with_mixed_match_statuses(
+        self, match_extractor, mock_page
+    ):
         """Test extraction with matches in different statuses."""
         # Mock multiple rows with different statuses
         mock_table = AsyncMock()
         mock_rows = [AsyncMock() for _ in range(3)]
-        
+
         # Row 1: Scheduled match
         mock_cells_1 = [AsyncMock() for _ in range(5)]
         mock_cells_1[0].text_content.return_value = "12/19/2024"
@@ -690,7 +681,7 @@ class TestMatchExtractionIntegration:
         mock_cells_1[4].text_content.return_value = "vs"
         mock_rows[0].query_selector_all.return_value = mock_cells_1
         mock_rows[0].query_selector.return_value = None
-        
+
         # Row 2: Completed match
         mock_cells_2 = [AsyncMock() for _ in range(5)]
         mock_cells_2[0].text_content.return_value = "12/18/2024"
@@ -700,7 +691,7 @@ class TestMatchExtractionIntegration:
         mock_cells_2[4].text_content.return_value = "2 - 1"
         mock_rows[1].query_selector_all.return_value = mock_cells_2
         mock_rows[1].query_selector.return_value = None
-        
+
         # Row 3: In-progress match
         mock_cells_3 = [AsyncMock() for _ in range(6)]
         mock_cells_3[0].text_content.return_value = "12/19/2024"
@@ -711,30 +702,28 @@ class TestMatchExtractionIntegration:
         mock_cells_3[5].text_content.return_value = "live"
         mock_rows[2].query_selector_all.return_value = mock_cells_3
         mock_rows[2].query_selector.return_value = None
-        
+
         mock_table.query_selector_all.return_value = mock_rows
         mock_page.query_selector.return_value = mock_table
 
-        with patch.object(
-            match_extractor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
 
             result = await match_extractor.extract_matches("U14", "Northeast")
 
             assert len(result) == 3
-            
+
             # Check scheduled match
             scheduled_match = next(m for m in result if m.status == "scheduled")
             assert scheduled_match.home_team == "Team A"
             assert scheduled_match.home_score is None
-            
+
             # Check completed match
             completed_match = next(m for m in result if m.status == "completed")
             assert completed_match.home_team == "Team C"
             assert completed_match.home_score == 2
             assert completed_match.away_score == 1
-            
+
             # Check in-progress match
             in_progress_match = next(m for m in result if m.status == "in_progress")
             assert in_progress_match.home_team == "Team E"

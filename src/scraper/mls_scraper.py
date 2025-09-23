@@ -16,7 +16,7 @@ from .browser import BrowserConfig, BrowserManager, PageNavigator
 from .calendar_interaction import CalendarInteractionError, MLSCalendarInteractor
 from .config import ScrapingConfig
 from .filter_application import FilterApplicationError, MLSFilterApplicator
-from .match_extraction import MatchExtractionError, MLSMatchExtractor
+from .match_extraction import MLSMatchExtractor
 from .models import Match, ScrapingMetrics
 
 logger = get_logger()
@@ -247,7 +247,7 @@ class MLSScraper:
             MLSScraperError: If navigation fails after all retries
         """
         from .consent_handler import MLSConsentHandler
-        
+
         navigator = PageNavigator(page, max_retries=self.MAX_RETRIES)
 
         logger.info("Navigating to MLS Next website", extra={"url": self.MLS_NEXT_URL})
@@ -263,16 +263,16 @@ class MLSScraper:
         # Handle cookie consent banner
         logger.info("Handling cookie consent banner")
         consent_handler = MLSConsentHandler(page)
-        
+
         consent_handled = await consent_handler.handle_consent_banner()
         if not consent_handled:
             logger.warning("Cookie consent handling failed, continuing anyway")
-        
+
         # Wait for page to be ready after consent
         page_ready = await consent_handler.wait_for_page_ready()
         if not page_ready:
             logger.warning("Page readiness check failed, continuing anyway")
-        
+
         logger.info("Navigation and consent handling completed")
 
     async def _apply_filters_with_retry(self, page) -> None:
@@ -423,7 +423,9 @@ class MLSScraper:
                     )
 
                 # Update metrics based on extracted matches
-                games_scheduled = len([m for m in matches if m.match_status == "scheduled"])
+                games_scheduled = len(
+                    [m for m in matches if m.match_status == "scheduled"]
+                )
                 games_scored = len([m for m in matches if m.has_score()])
 
                 self.execution_metrics.games_scheduled = games_scheduled
@@ -547,7 +549,9 @@ class MLSScraper:
             scheduled_matches = [m for m in matches if m.match_status == "scheduled"]
             completed_matches = [m for m in matches if m.match_status == "completed"]
             tbd_matches = [m for m in matches if m.match_status == "TBD"]
-            in_progress_matches = [m for m in matches if m.match_status == "in_progress"]
+            in_progress_matches = [
+                m for m in matches if m.match_status == "in_progress"
+            ]
 
             # Log scheduled matches
             if scheduled_matches:
@@ -557,8 +561,12 @@ class MLSScraper:
                         f"SCHEDULED #{i}: {match.home_team} vs {match.away_team}",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
-                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "date": str(match.match_datetime.date())
+                            if match.match_datetime
+                            else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p")
+                            if match.match_datetime
+                            else "Unknown",
                             "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                         },
@@ -573,8 +581,12 @@ class MLSScraper:
                         f"COMPLETED #{i}: {match.home_team} vs {match.away_team} - {score_info}",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
-                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "date": str(match.match_datetime.date())
+                            if match.match_datetime
+                            else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p")
+                            if match.match_datetime
+                            else "Unknown",
                             "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                             "home_score": match.home_score,
@@ -590,8 +602,12 @@ class MLSScraper:
                         f"TBD #{i}: {match.home_team} vs {match.away_team} - TBD",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
-                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "date": str(match.match_datetime.date())
+                            if match.match_datetime
+                            else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p")
+                            if match.match_datetime
+                            else "Unknown",
                             "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                             "home_score": match.home_score,
@@ -608,8 +624,12 @@ class MLSScraper:
                         f"IN-PROGRESS #{i}: {match.home_team} vs {match.away_team} - {score_info}",
                         extra={
                             "match_id": match.match_id,
-                            "date": str(match.match_datetime.date()) if match.match_datetime else "Unknown",
-                            "time": match.match_datetime.strftime("%I:%M %p") if match.match_datetime else "Unknown",
+                            "date": str(match.match_datetime.date())
+                            if match.match_datetime
+                            else "Unknown",
+                            "time": match.match_datetime.strftime("%I:%M %p")
+                            if match.match_datetime
+                            else "Unknown",
                             "venue": match.location or "Unknown",
                             "competition": match.competition or "Unknown",
                             "home_score": match.home_score,
@@ -629,7 +649,12 @@ class MLSScraper:
                     "matches_with_scores": len([m for m in matches if m.has_score()]),
                     "matches_with_venues": len([m for m in matches if m.location]),
                     "matches_with_times": len([m for m in matches if m.match_datetime]),
-                    "unique_teams": len(set([m.home_team for m in matches] + [m.away_team for m in matches])),
+                    "unique_teams": len(
+                        set(
+                            [m.home_team for m in matches]
+                            + [m.away_team for m in matches]
+                        )
+                    ),
                 },
             )
 
@@ -649,7 +674,7 @@ class MLSScraper:
         Returns:
             Delay in seconds
         """
-        return self.RETRY_DELAY_BASE * (self.RETRY_BACKOFF_MULTIPLIER ** attempt)
+        return self.RETRY_DELAY_BASE * (self.RETRY_BACKOFF_MULTIPLIER**attempt)
 
     def get_execution_metrics(self) -> ScrapingMetrics:
         """
@@ -679,7 +704,7 @@ async def example_scraper_usage():
         scraper = MLSScraper(config)
         matches = await scraper.scrape_matches()
 
-        print(f"Scraping completed successfully!")
+        print("Scraping completed successfully!")
         print(f"Found {len(matches)} matches:")
 
         for match in matches[:5]:  # Show first 5 matches
@@ -692,7 +717,7 @@ async def example_scraper_usage():
 
         # Show execution metrics
         metrics = scraper.get_execution_metrics()
-        print(f"Execution Metrics:")
+        print("Execution Metrics:")
         print(f"  Games Scheduled: {metrics.games_scheduled}")
         print(f"  Games Scored: {metrics.games_scored}")
         print(f"  Duration: {metrics.execution_duration_ms}ms")

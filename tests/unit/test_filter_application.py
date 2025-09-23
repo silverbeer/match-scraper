@@ -135,21 +135,30 @@ class TestMLSFilterApplicator:
     async def test_apply_age_group_filter_no_element_found(self, filter_applicator):
         """Test age group filter when no dropdown element is found."""
         # Mock iframe content returning None to simulate iframe access failure
-        with patch.object(
-            filter_applicator, "_validate_filter_option", return_value=True
-        ), patch.object(filter_applicator, "_get_iframe_content", return_value=None):
+        with (
+            patch.object(
+                filter_applicator, "_validate_filter_option", return_value=True
+            ),
+            patch.object(filter_applicator, "_get_iframe_content", return_value=None),
+        ):
             result = await filter_applicator.apply_age_group_filter("U14")
             assert result is False
 
     @pytest.mark.asyncio
     async def test_apply_club_filter_success(self, filter_applicator):
         """Test successful club filter application."""
-        with patch.object(
-            filter_applicator, "_validate_filter_option", return_value=True
-        ), patch.object(
-            filter_applicator.interactor, "wait_for_element", return_value=True
-        ), patch.object(
-            filter_applicator.interactor, "select_dropdown_option", return_value=True
+        with (
+            patch.object(
+                filter_applicator, "_validate_filter_option", return_value=True
+            ),
+            patch.object(
+                filter_applicator.interactor, "wait_for_element", return_value=True
+            ),
+            patch.object(
+                filter_applicator.interactor,
+                "select_dropdown_option",
+                return_value=True,
+            ),
         ):
             result = await filter_applicator.apply_club_filter("Test Club")
             assert result is True
@@ -163,12 +172,18 @@ class TestMLSFilterApplicator:
     @pytest.mark.asyncio
     async def test_apply_competition_filter_success(self, filter_applicator):
         """Test successful competition filter application."""
-        with patch.object(
-            filter_applicator, "_validate_filter_option", return_value=True
-        ), patch.object(
-            filter_applicator.interactor, "wait_for_element", return_value=True
-        ), patch.object(
-            filter_applicator.interactor, "select_dropdown_option", return_value=True
+        with (
+            patch.object(
+                filter_applicator, "_validate_filter_option", return_value=True
+            ),
+            patch.object(
+                filter_applicator.interactor, "wait_for_element", return_value=True
+            ),
+            patch.object(
+                filter_applicator.interactor,
+                "select_dropdown_option",
+                return_value=True,
+            ),
         ):
             result = await filter_applicator.apply_competition_filter(
                 "Test Competition"
@@ -178,12 +193,18 @@ class TestMLSFilterApplicator:
     @pytest.mark.asyncio
     async def test_apply_division_filter_success(self, filter_applicator):
         """Test successful division filter application."""
-        with patch.object(
-            filter_applicator, "_validate_filter_option", return_value=True
-        ), patch.object(
-            filter_applicator.interactor, "wait_for_element", return_value=True
-        ), patch.object(
-            filter_applicator.interactor, "select_dropdown_option", return_value=True
+        with (
+            patch.object(
+                filter_applicator, "_validate_filter_option", return_value=True
+            ),
+            patch.object(
+                filter_applicator.interactor, "wait_for_element", return_value=True
+            ),
+            patch.object(
+                filter_applicator.interactor,
+                "select_dropdown_option",
+                return_value=True,
+            ),
         ):
             result = await filter_applicator.apply_division_filter("Northeast")
             assert result is True
@@ -191,18 +212,21 @@ class TestMLSFilterApplicator:
     @pytest.mark.asyncio
     async def test_apply_all_filters_success(self, filter_applicator, sample_config):
         """Test successful application of all filters."""
-        with patch.object(
-            filter_applicator, "discover_available_options", return_value={}
-        ), patch.object(
-            filter_applicator, "apply_age_group_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "apply_club_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "apply_competition_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "apply_division_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "wait_for_filter_results", return_value=True
+        with (
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "apply_age_group_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_club_filter", return_value=True),
+            patch.object(
+                filter_applicator, "apply_competition_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_division_filter", return_value=True),
+            patch.object(
+                filter_applicator, "wait_for_filter_results", return_value=True
+            ),
         ):
             result = await filter_applicator.apply_all_filters(sample_config)
             assert result is True
@@ -212,10 +236,13 @@ class TestMLSFilterApplicator:
         self, filter_applicator, sample_config
     ):
         """Test apply_all_filters when age group filter fails."""
-        with patch.object(
-            filter_applicator, "discover_available_options", return_value={}
-        ), patch.object(
-            filter_applicator, "apply_age_group_filter", return_value=False
+        with (
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "apply_age_group_filter", return_value=False
+            ),
         ):
             result = await filter_applicator.apply_all_filters(sample_config)
             assert result is False
@@ -225,11 +252,15 @@ class TestMLSFilterApplicator:
         self, filter_applicator, sample_config
     ):
         """Test apply_all_filters when club filter fails."""
-        with patch.object(
-            filter_applicator, "discover_available_options", return_value={}
-        ), patch.object(
-            filter_applicator, "apply_age_group_filter", return_value=True
-        ), patch.object(filter_applicator, "apply_club_filter", return_value=False):
+        with (
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "apply_age_group_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_club_filter", return_value=False),
+        ):
             result = await filter_applicator.apply_all_filters(sample_config)
             assert result is False
 
@@ -266,10 +297,13 @@ class TestMLSFilterApplicator:
     @pytest.mark.asyncio
     async def test_validate_filters_success(self, filter_applicator, sample_config):
         """Test successful filter validation."""
-        with patch.object(
-            filter_applicator, "discover_available_options", return_value={}
-        ), patch.object(
-            filter_applicator, "_validate_filter_option", return_value=True
+        with (
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "_validate_filter_option", return_value=True
+            ),
         ):
             results = await filter_applicator.validate_filters(sample_config)
 
@@ -285,10 +319,13 @@ class TestMLSFilterApplicator:
         def mock_validate(filter_type, value):
             return filter_type in ["age_group", "division"]
 
-        with patch.object(
-            filter_applicator, "discover_available_options", return_value={}
-        ), patch.object(
-            filter_applicator, "_validate_filter_option", side_effect=mock_validate
+        with (
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "_validate_filter_option", side_effect=mock_validate
+            ),
         ):
             results = await filter_applicator.validate_filters(sample_config)
 
@@ -481,14 +518,17 @@ class TestMLSFilterApplicator:
             def mock_wait_for_element(selector, timeout=None):
                 return selector == 'select[name*="age" i]'
 
-            with patch.object(
-                filter_applicator.interactor,
-                "wait_for_element",
-                side_effect=mock_wait_for_element,
-            ), patch.object(
-                filter_applicator.interactor,
-                "select_dropdown_option",
-                return_value=True,
+            with (
+                patch.object(
+                    filter_applicator.interactor,
+                    "wait_for_element",
+                    side_effect=mock_wait_for_element,
+                ),
+                patch.object(
+                    filter_applicator.interactor,
+                    "select_dropdown_option",
+                    return_value=True,
+                ),
             ):
                 result = await filter_applicator.apply_age_group_filter("U14")
                 assert result is True
@@ -498,18 +538,22 @@ class TestMLSFilterApplicator:
         self, filter_applicator, sample_config
     ):
         """Test that delays are properly applied between filter applications."""
-        with patch("asyncio.sleep") as mock_sleep, patch.object(
-            filter_applicator, "discover_available_options", return_value={}
-        ), patch.object(
-            filter_applicator, "apply_age_group_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "apply_club_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "apply_competition_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "apply_division_filter", return_value=True
-        ), patch.object(
-            filter_applicator, "wait_for_filter_results", return_value=True
+        with (
+            patch("asyncio.sleep") as mock_sleep,
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "apply_age_group_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_club_filter", return_value=True),
+            patch.object(
+                filter_applicator, "apply_competition_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_division_filter", return_value=True),
+            patch.object(
+                filter_applicator, "wait_for_filter_results", return_value=True
+            ),
         ):
             await filter_applicator.apply_all_filters(sample_config)
 
@@ -581,10 +625,11 @@ class TestMLSFilterApplicatorIntegration:
         """Test complete filter application workflow."""
         applicator = MLSFilterApplicator(mock_page_with_elements)
 
-        with patch.object(
-            applicator.interactor, "wait_for_element", return_value=True
-        ), patch.object(
-            applicator.interactor, "select_dropdown_option", return_value=True
+        with (
+            patch.object(applicator.interactor, "wait_for_element", return_value=True),
+            patch.object(
+                applicator.interactor, "select_dropdown_option", return_value=True
+            ),
         ):
             # Test the complete workflow
             validation_results = await applicator.validate_filters(sample_config)
@@ -601,10 +646,11 @@ class TestMLSFilterApplicatorIntegration:
         applicator = MLSFilterApplicator(mock_page_with_elements)
 
         # Test scenario where elements are found but interaction fails
-        with patch.object(
-            applicator.interactor, "wait_for_element", return_value=True
-        ), patch.object(
-            applicator.interactor, "select_dropdown_option", return_value=False
+        with (
+            patch.object(applicator.interactor, "wait_for_element", return_value=True),
+            patch.object(
+                applicator.interactor, "select_dropdown_option", return_value=False
+            ),
         ):
             result = await applicator.apply_age_group_filter("U14")
             assert result is False

@@ -34,9 +34,11 @@ class MLSCalendarInteractor:
 
     # CSS selectors for MLS website calendar elements (iframe-based)
     IFRAME_SELECTOR = 'main[role="main"] iframe, [aria-label*="main"] iframe, iframe[src*="modular11"]'
-    MATCH_DATE_FIELD_SELECTOR = 'input[name="datefilter"]'  # Correct selector for MLS iframe
+    MATCH_DATE_FIELD_SELECTOR = (
+        'input[name="datefilter"]'  # Correct selector for MLS iframe
+    )
     APPLY_BUTTON_SELECTOR = 'button.applyBtn, button:has-text("Apply"), .applyBtn'
-    
+
     # Legacy selectors (keeping for fallback)
     LEGACY_MATCH_DATE_FIELD_SELECTOR = (
         'input[name="match_date"], #match-date-input, .date-picker-input'
@@ -455,14 +457,14 @@ class MLSCalendarInteractor:
             iframe_element = await self.page.wait_for_selector(
                 self.IFRAME_SELECTOR, timeout=self.timeout
             )
-            
+
             if not iframe_element:
                 logger.debug("No iframe found")
                 return False
 
             # Get iframe content frame
             self.iframe_content = await iframe_element.content_frame()
-            
+
             if not self.iframe_content:
                 logger.debug("Cannot access iframe content frame")
                 return False
@@ -474,7 +476,9 @@ class MLSCalendarInteractor:
             logger.debug("Error accessing iframe content", extra={"error": str(e)})
             return False
 
-    async def _set_date_range_direct_input(self, start_date: date, end_date: date) -> bool:
+    async def _set_date_range_direct_input(
+        self, start_date: date, end_date: date
+    ) -> bool:
         """
         Set date range using date field interaction and calendar picker.
 
@@ -494,73 +498,81 @@ class MLSCalendarInteractor:
             start_formatted = f"{start_date.strftime('%m/%d/%Y')} 12:00 AM"
             end_formatted = f"{end_date.strftime('%m/%d/%Y')} 11:59 PM"
             date_range_text = f"{start_formatted} – {end_formatted}"
-            
+
             logger.info(f"Setting date range: {date_range_text}")
-            
+
             # Find and click the date field to open calendar picker
             date_field = self.iframe_content.locator(self.MATCH_DATE_FIELD_SELECTOR)
             if await date_field.count() > 0:
                 await date_field.click()
                 logger.debug("Clicked date field to open calendar")
                 await asyncio.sleep(2)  # Wait for calendar to open
-                
+
                 # Check if calendar picker appeared
-                calendar_picker = self.iframe_content.locator('.daterangepicker')
+                calendar_picker = self.iframe_content.locator(".daterangepicker")
                 if await calendar_picker.count() > 0:
                     logger.info("Calendar picker opened successfully")
-                    
+
                     # Click on start date (19th) - use left calendar only
                     start_day = 19  # Always use 19th for start date
                     start_date_selectors = [
                         f'.daterangepicker .drp-calendar.left td:has-text("{start_day}"):not(.off)',
                         f'.drp-calendar.left .calendar-table td:has-text("{start_day}"):not(.off)',
-                        f'.daterangepicker .left td:has-text("{start_day}"):not(.off)'
+                        f'.daterangepicker .left td:has-text("{start_day}"):not(.off)',
                     ]
-                    
+
                     start_clicked = False
                     for start_selector in start_date_selectors:
                         start_cell = self.iframe_content.locator(start_selector)
                         if await start_cell.count() > 0:
                             await start_cell.first.click()
-                            logger.info(f"Clicked start date {start_day} on left calendar using selector: {start_selector}")
+                            logger.info(
+                                f"Clicked start date {start_day} on left calendar using selector: {start_selector}"
+                            )
                             await asyncio.sleep(1)
                             start_clicked = True
                             break
-                    
+
                     if not start_clicked:
-                        logger.warning(f"Could not click start date {start_day} on left calendar")
+                        logger.warning(
+                            f"Could not click start date {start_day} on left calendar"
+                        )
                         return False
-                    
+
                     # Click on end date (22nd) - use left calendar only (same month)
                     end_day = 22  # Always use 22nd for end date
                     end_date_selectors = [
                         f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
                         f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
-                        f'.daterangepicker .left td:has-text("{end_day}"):not(.off)'
+                        f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
                     ]
-                    
+
                     end_clicked = False
                     for end_selector in end_date_selectors:
                         end_cell = self.iframe_content.locator(end_selector)
                         if await end_cell.count() > 0:
                             await end_cell.first.click()
-                            logger.info(f"Clicked end date {end_day} on left calendar using selector: {end_selector}")
+                            logger.info(
+                                f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                            )
                             await asyncio.sleep(1)
                             end_clicked = True
                             break
-                    
+
                     if not end_clicked:
-                        logger.warning(f"Could not click end date {end_day} on left calendar")
+                        logger.warning(
+                            f"Could not click end date {end_day} on left calendar"
+                        )
                         return False
-                    
+
                     # Click Apply button
                     apply_selectors = [
-                        '.daterangepicker button.applyBtn',
-                        '.daterangepicker .applyBtn',
-                        'button.applyBtn',
-                        '.applyBtn'
+                        ".daterangepicker button.applyBtn",
+                        ".daterangepicker .applyBtn",
+                        "button.applyBtn",
+                        ".applyBtn",
                     ]
-                    
+
                     apply_clicked = False
                     for apply_selector in apply_selectors:
                         apply_button = self.iframe_content.locator(apply_selector)
@@ -570,12 +582,15 @@ class MLSCalendarInteractor:
                             await asyncio.sleep(3)  # Wait for results to load
                             apply_clicked = True
                             break
-                    
+
                     if apply_clicked:
-                        logger.info("Date filter applied via calendar date picker", extra={
-                            "start_date": f"September {start_day}",
-                            "end_date": f"September {end_day}"
-                        })
+                        logger.info(
+                            "Date filter applied via calendar date picker",
+                            extra={
+                                "start_date": f"September {start_day}",
+                                "end_date": f"September {end_day}",
+                            },
+                        )
                         return True
                     else:
                         logger.warning("Apply button not found in calendar picker")
@@ -583,18 +598,21 @@ class MLSCalendarInteractor:
                 else:
                     # Fallback: try direct input without calendar picker
                     logger.debug("Calendar picker not found, trying direct input")
-                    await date_field.press('Control+a')
-                    await date_field.press('Delete')
+                    await date_field.press("Control+a")
+                    await date_field.press("Delete")
                     await asyncio.sleep(0.5)
-                    
+
                     await date_field.type(date_range_text, delay=50)
                     logger.info(f"Typed date range (fallback): {date_range_text}")
                     await asyncio.sleep(1)
-                    
-                    await date_field.press('Enter')
+
+                    await date_field.press("Enter")
                     await asyncio.sleep(2)
-                    
-                    logger.info("Date filter applied via direct input fallback", extra={"date_range": date_range_text})
+
+                    logger.info(
+                        "Date filter applied via direct input fallback",
+                        extra={"date_range": date_range_text},
+                    )
                     return True
             else:
                 logger.warning("Date field not found")
@@ -603,7 +621,11 @@ class MLSCalendarInteractor:
         except Exception as e:
             logger.error(
                 "Error setting date range",
-                extra={"error": str(e), "start_date": str(start_date), "end_date": str(end_date)},
+                extra={
+                    "error": str(e),
+                    "start_date": str(start_date),
+                    "end_date": str(end_date),
+                },
             )
             return False
 

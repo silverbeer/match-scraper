@@ -138,11 +138,11 @@ async def apply_age_group_filter(iframe_content, age_group):
         'label:has-text("Age Group") + div .dropdown-toggle'
     )
     await age_dropdown.click()
-    
+
     # Click the specific age group option
     option = await iframe_content.get_by_role("option", name=age_group)
     await option.click()
-    
+
     # Wait for selection to apply
     await asyncio.sleep(1)
 
@@ -153,13 +153,13 @@ async def apply_club_filter(iframe_content, club_name):
         'div.bootstrap-select:has(.bs-searchbox) .dropdown-toggle'
     )
     await club_dropdown.click()
-    
+
     # Use search if available
     search_box = await iframe_content.query_selector('.bs-searchbox input')
     if search_box:
         await search_box.fill(club_name)
         await asyncio.sleep(0.5)  # Wait for search results
-    
+
     # Click the option
     option = await iframe_content.get_by_role("option", name=club_name)
     await option.click()
@@ -169,7 +169,7 @@ async def apply_date_filter(iframe_content, start_date, end_date):
     date_input = await iframe_content.query_selector('input[name="datefilter"]')
     date_range = f"{start_date} - {end_date}"
     await date_input.fill(date_range)
-    
+
     # Trigger change event
     await date_input.press('Enter')
 ```
@@ -184,7 +184,7 @@ async def apply_age_group_direct(iframe_content, age_group_value):
 
 ### Value Mappings for Age Groups
 - U13 = "21"
-- U14 = "22" 
+- U14 = "22"
 - U15 = "33"
 - U16 = "14"
 - U17 = "15"
@@ -199,7 +199,7 @@ The iframe supports role-based selectors for accessibility:
 await iframe_content.get_by_role("button", name="Age Group U13").click()
 await iframe_content.get_by_role("option", name="U14").click()
 
-# Club options  
+# Club options
 await iframe_content.get_by_role("option", name="Southern States Soccer Club").click()
 
 # Date picker
