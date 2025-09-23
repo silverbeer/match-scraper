@@ -2,9 +2,7 @@ name: Tests and Coverage
 
 on:
   push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
 
 permissions:
   contents: read
