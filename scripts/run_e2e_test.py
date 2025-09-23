@@ -18,17 +18,11 @@ import logging
 import os
 import sys
 from datetime import date, timedelta
-from pathlib import Path
 
-# Ensure we can import from the src package
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from src.scraper.browser import BrowserConfig, get_browser_manager  # noqa: E402
-from src.scraper.calendar_interaction import MLSCalendarInteractor  # noqa: E402
-from src.scraper.filter_application import MLSFilterApplicator  # noqa: E402
-from src.scraper.match_extraction import MLSMatchExtractor  # noqa: E402
+from src.scraper.browser import BrowserConfig, get_browser_manager
+from src.scraper.calendar_interaction import MLSCalendarInteractor
+from src.scraper.filter_application import MLSFilterApplicator
+from src.scraper.match_extraction import MLSMatchExtractor
 
 # Set up simple console logging for the script
 logging.basicConfig(
