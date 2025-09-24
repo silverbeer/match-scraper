@@ -578,27 +578,43 @@ class TestMLSFilterApplicator:
     @pytest.mark.asyncio
     async def test_multiple_selector_fallback(self, filter_applicator):
         """Test that multiple selectors are tried in order."""
-        with patch.object(
-            filter_applicator, "_validate_filter_option", return_value=True
-        ):
-            # Mock first selector failing, second succeeding
-            def mock_wait_for_element(selector, timeout=None):
-                return selector == 'select[name*="age" i]'
+        # Setup proper iframe content mock
+        mock_iframe_content = AsyncMock()
+        mock_select = AsyncMock()
 
-            with (
-                patch.object(
-                    filter_applicator.interactor,
-                    "wait_for_element",
-                    side_effect=mock_wait_for_element,
-                ),
-                patch.object(
-                    filter_applicator.interactor,
-                    "select_dropdown_option",
-                    return_value=True,
-                ),
-            ):
-                result = await filter_applicator.apply_age_group_filter("U14")
-                assert result is True
+        async def async_count():
+            return 1
+
+        async def async_select_option(value):
+            return None
+
+        mock_select.count = async_count
+        mock_select.select_option = async_select_option
+
+        # Mock locator to return our select mock
+        mock_iframe_content.locator = lambda selector: mock_select
+
+        with (
+            patch.object(
+                filter_applicator, "_get_iframe_content", return_value=mock_iframe_content
+            ),
+            patch.object(
+                filter_applicator, "_validate_filter_option", return_value=True
+            ),
+            # Mock first selector failing, second succeeding
+            patch.object(
+                filter_applicator.interactor,
+                "wait_for_element",
+                side_effect=lambda selector, timeout=None: selector == 'select[name*="age" i]',
+            ),
+            patch.object(
+                filter_applicator.interactor,
+                "select_dropdown_option",
+                return_value=True,
+            ),
+        ):
+            result = await filter_applicator.apply_age_group_filter("U14")
+            assert result is True
 
     @pytest.mark.asyncio
     async def test_filter_application_with_delays(
@@ -624,9 +640,12 @@ class TestMLSFilterApplicator:
         ):
             await filter_applicator.apply_all_filters(sample_config)
 
-            # Should have 3 sleep calls (between the 4 filter applications)
-            assert mock_sleep.call_count == 3
-            mock_sleep.assert_called_with(0.5)
+            # Should have 5 sleep calls:
+            # 1. Iframe loading wait (5 seconds)
+            # 2-5. One after each filter application (1 second each)
+            assert mock_sleep.call_count == 5
+            # The last call should be 1 second (after filter application)
+            mock_sleep.assert_called_with(1)
 
 
 class TestFilterApplicationError:
@@ -692,7 +711,26 @@ class TestMLSFilterApplicatorIntegration:
         """Test complete filter application workflow."""
         applicator = MLSFilterApplicator(mock_page_with_elements)
 
+        # Setup proper iframe content mock
+        mock_iframe_content = AsyncMock()
+        mock_select = AsyncMock()
+
+        async def async_count():
+            return 1
+
+        async def async_select_option(value):
+            return None
+
+        mock_select.count = async_count
+        mock_select.select_option = async_select_option
+
+        # Mock locator to return our select mock
+        mock_iframe_content.locator = lambda selector: mock_select
+
         with (
+            patch.object(
+                applicator, "_get_iframe_content", return_value=mock_iframe_content
+            ),
             patch.object(applicator.interactor, "wait_for_element", return_value=True),
             patch.object(
                 applicator.interactor, "select_dropdown_option", return_value=True
