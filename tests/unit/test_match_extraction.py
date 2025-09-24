@@ -47,10 +47,7 @@ class TestMLSMatchExtractor:
                 match_id="U14_Northeast_0_20241219",
                 home_team="Team A",
                 away_team="Team B",
-                match_date=datetime(2024, 12, 19, 15, 0),
-                age_group="U14",
-                division="Northeast",
-                status="scheduled",
+                match_datetime=datetime(2024, 12, 19, 15, 0),
             )
             mock_extract_table.return_value = [mock_match]
 
@@ -104,10 +101,7 @@ class TestMLSMatchExtractor:
                 match_id="U14_Northeast_0_20241219",
                 home_team="Team C",
                 away_team="Team D",
-                match_date=datetime(2024, 12, 19, 15, 0),
-                age_group="U14",
-                division="Northeast",
-                status="scheduled",
+                match_datetime=datetime(2024, 12, 19, 15, 0),
             )
             mock_extract_cards.return_value = [mock_match]
 
@@ -189,10 +183,7 @@ class TestMLSMatchExtractor:
                 match_id="U14_Northeast_0_20241219",
                 home_team="Team A",
                 away_team="Team B",
-                match_date=datetime(2024, 12, 19, 15, 0),
-                age_group="U14",
-                division="Northeast",
-                status="scheduled",
+                match_datetime=datetime(2024, 12, 19, 15, 0),
             )
             mock_extract_row.return_value = mock_match
 
@@ -228,10 +219,7 @@ class TestMLSMatchExtractor:
                 match_id="U14_Northeast_0_20241219",
                 home_team="Team C",
                 away_team="Team D",
-                match_date=datetime(2024, 12, 19, 15, 0),
-                age_group="U14",
-                division="Northeast",
-                status="scheduled",
+                match_datetime=datetime(2024, 12, 19, 15, 0),
             )
             mock_extract_card.return_value = mock_match
 
@@ -275,7 +263,7 @@ class TestMLSMatchExtractor:
         assert result.away_team == "Team B"
         assert result.home_score == 2
         assert result.away_score == 1
-        assert result.status == "completed"
+        assert result.match_status == "completed"
 
     @pytest.mark.asyncio
     async def test_extract_match_from_row_insufficient_cells(
@@ -333,7 +321,7 @@ class TestMLSMatchExtractor:
         assert result is not None
         assert result.home_team == "Team A"
         assert result.away_team == "Team B"
-        assert result.status == "scheduled"
+        assert result.match_status == "scheduled"
 
     @pytest.mark.asyncio
     async def test_extract_from_cell_positions(self, match_extractor, mock_page):
@@ -464,11 +452,9 @@ class TestMLSMatchExtractor:
         assert result.away_team == "Team B"
         assert result.home_score == 2
         assert result.away_score == 1
-        assert result.status == "completed"
-        assert result.age_group == "U14"
-        assert result.division == "Northeast"
+        assert result.match_status == "completed"
         assert result.competition == "MLS Next"
-        assert result.venue == "Stadium A"
+        assert result.location == "Stadium A"
 
     @pytest.mark.asyncio
     async def test_create_match_from_data_missing_teams(
@@ -636,7 +622,7 @@ class TestMatchExtractionIntegration:
             assert len(result) == 1
             assert result[0].home_team == "Team A"
             assert result[0].away_team == "Team B"
-            assert result[0].status == "scheduled"
+            assert result[0].match_status == "scheduled"
 
     @pytest.mark.asyncio
     async def test_full_extraction_workflow_cards(self, match_extractor, mock_page):
@@ -714,18 +700,18 @@ class TestMatchExtractionIntegration:
             assert len(result) == 3
 
             # Check scheduled match
-            scheduled_match = next(m for m in result if m.status == "scheduled")
+            scheduled_match = next(m for m in result if m.match_status == "scheduled")
             assert scheduled_match.home_team == "Team A"
             assert scheduled_match.home_score is None
 
             # Check completed match
-            completed_match = next(m for m in result if m.status == "completed")
+            completed_match = next(m for m in result if m.match_status == "completed")
             assert completed_match.home_team == "Team C"
             assert completed_match.home_score == 2
             assert completed_match.away_score == 1
 
             # Check in-progress match
-            in_progress_match = next(m for m in result if m.status == "in_progress")
+            in_progress_match = next(m for m in result if m.match_status == "in_progress")
             assert in_progress_match.home_team == "Team E"
             assert in_progress_match.home_score == 1
             assert in_progress_match.away_score == 0

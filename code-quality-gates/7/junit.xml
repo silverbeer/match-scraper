@@ -1,0 +1,645 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="22" skipped="2" tests="309" time="80.852" timestamp="2025-09-24T01:15:40.987825+00:00" hostname="runnervmf4ws1"><testcase classname="tests.unit.test_browser.TestBrowserConfig" name="test_default_config" time="0.003" /><testcase classname="tests.unit.test_browser.TestBrowserConfig" name="test_custom_config" time="0.001" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_initialize_success" time="0.008" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_initialize_failure" time="0.004" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_new_page_success" time="0.006" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_new_page_not_initialized" time="0.002" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_cleanup_success" time="0.007" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_cleanup_with_errors" time="0.006" /><testcase classname="tests.unit.test_browser.TestBrowserManager" name="test_get_page_context_manager" time="0.006" /><testcase classname="tests.unit.test_browser.TestPageNavigator" name="test_navigate_success" time="0.003" /><testcase classname="tests.unit.test_browser.TestPageNavigator" name="test_navigate_custom_wait_until" time="0.003" /><testcase classname="tests.unit.test_browser.TestPageNavigator" name="test_navigate_non_ok_response" time="0.306" /><testcase classname="tests.unit.test_browser.TestPageNavigator" name="test_navigate_timeout_with_retry" time="0.305" /><testcase classname="tests.unit.test_browser.TestPageNavigator" name="test_navigate_max_retries_exceeded" time="0.305" /><testcase classname="tests.unit.test_browser.TestPageNavigator" name="test_navigate_exception_with_retry" time="0.106" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_wait_for_element_success" time="0.002" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_wait_for_element_timeout" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_wait_for_element_custom_params" time="0.002" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_click_element_success" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_click_element_not_found" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_click_element_force" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_fill_input_success" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_fill_input_no_clear" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_select_dropdown_option_success" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_select_dropdown_multiple_options" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_get_text_content_success" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_get_text_content_not_found" time="0.003" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_get_elements_text_success" time="0.004" /><testcase classname="tests.unit.test_browser.TestElementInteractor" name="test_get_elements_text_no_elements" time="0.003" /><testcase classname="tests.unit.test_browser.TestGetBrowserManager" name="test_context_manager_success" time="0.004" /><testcase classname="tests.unit.test_browser.TestGetBrowserManager" name="test_context_manager_with_config" time="0.003" /><testcase classname="tests.unit.test_browser.TestGetBrowserManager" name="test_context_manager_cleanup_on_exception" time="0.003" /><testcase classname="tests.unit.test_calendar_interaction.TestCalendarInteractionError" name="test_calendar_interaction_error_creation" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestCalendarInteractionError" name="test_calendar_interaction_error_with_cause" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_init" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_name_valid_names" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_name_short_names" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_name_invalid" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_year_text_valid_formats" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_year_text_different_formats" time="0.001" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_year_text_invalid_formats" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_parse_month_year_text_with_logging" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_access_iframe_content_success" time="0.004" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_access_iframe_content_no_iframe" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_access_iframe_content_no_content_frame" time="0.003" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_access_iframe_content_with_exception" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_set_date_range_direct_input_success" time="0.001"><skipped type="pytest.skip" message="Complex mock setup - needs refactoring for proper async mock support">/home/runner/work/match-scraper/match-scraper/tests/unit/test_calendar_interaction.py:195: Complex mock setup - needs refactoring for proper async mock support</skipped></testcase><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_set_date_range_direct_input_no_iframe" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_set_date_range_direct_input_no_input_field" time="0.004" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_set_date_range_direct_input_with_exception" time="0.004" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_get_current_month_year_success" time="0.003" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_get_current_month_year_no_iframe" time="0.005" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_get_current_month_year_no_element" time="0.005" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_navigation_button_clicks" time="0.003" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_navigation_button_clicks_no_elements" time="0.003" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_navigation_button_clicks_no_button_found_duplicate" time="0.002"><skipped type="pytest.skip" message="Duplicate test - same as test_navigation_button_clicks_no_elements">/home/runner/work/match-scraper/match-scraper/tests/unit/test_calendar_interaction.py:367: Duplicate test - same as test_navigation_button_clicks_no_elements</skipped></testcase><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_apply_date_filter_no_button_found" time="0.004" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_constants_and_selectors" time="0.002" /><testcase classname="tests.unit.test_calendar_interaction.TestMLSCalendarInteractor" name="test_class_attributes" time="0.001" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_setup_environment_default" time="0.003" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_setup_environment_verbose" time="0.002" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_setup_environment_preserves_existing" time="0.002" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_create_config_basic" time="0.001" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_create_config_with_optional_params" time="0.001" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_handle_cli_error_metrics_connection" time="0.002" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_handle_cli_error_network" time="0.001" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_handle_cli_error_timeout" time="0.001" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_handle_cli_error_verbose" time="0.002" /><testcase classname="tests.unit.test_cli.TestCliUtilityFunctions" name="test_handle_cli_error_generic" time="0.002" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_scrape_command_basic" time="0.020" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_scrape_command_invalid_age_group" time="0.007" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_scrape_command_invalid_division" time="0.006" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_scrape_command_with_options" time="0.012" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_config_command" time="0.020" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_debug_command_help" time="0.159"><failure message="AssertionError: assert '--timeout' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'&#10; +  where '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n' = &lt;Result okay&gt;.stdout">self = &lt;tests.unit.test_cli.TestCliCommands object at 0x7fe252e3d9d0&gt;
+
+    def test_debug_command_help(self):
+        """Test debug command help (avoids async issues)."""
+        result = self.runner.invoke(app, ["debug", "--help"])
+    
+        assert result.exit_code == 0
+&gt;       assert "--timeout" in result.stdout
+E       AssertionError: assert '--timeout' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'
+E        +  where '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n' = &lt;Result okay&gt;.stdout
+
+tests/unit/test_cli.py:216: AssertionError</failure></testcase><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_test_quiet_command_help" time="0.009" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_demo_command_help" time="0.009" /><testcase classname="tests.unit.test_cli.TestCliCommands" name="test_inspect_command_help" time="0.016"><failure message="AssertionError: assert '--timeout' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'&#10; +  where '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n' = &lt;Result okay&gt;.stdout">self = &lt;tests.unit.test_cli.TestCliCommands object at 0x7fe252e73d50&gt;
+
+    def test_inspect_command_help(self):
+        """Test inspect command help (avoids async issues)."""
+        result = self.runner.invoke(app, ["inspect", "--help"])
+    
+        assert result.exit_code == 0
+&gt;       assert "--timeout" in result.stdout
+E       AssertionError: assert '--timeout' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'
+E        +  where '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n' = &lt;Result okay&gt;.stdout
+
+tests/unit/test_cli.py:236: AssertionError</failure></testcase><testcase classname="tests.unit.test_cli.TestConstants" name="test_default_values" time="0.001" /><testcase classname="tests.unit.test_cli.TestConstants" name="test_valid_age_groups" time="0.001" /><testcase classname="tests.unit.test_cli.TestConstants" name="test_valid_divisions" time="0.001" /><testcase classname="tests.unit.test_cli.TestCliIntegration" name="test_app_help" time="0.017" /><testcase classname="tests.unit.test_cli.TestCliIntegration" name="test_scrape_help" time="0.037"><failure message="AssertionError: assert '--age-group' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1....  \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'&#10; +  where '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1....  \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n' = &lt;Result okay&gt;.stdout">self = &lt;tests.unit.test_cli.TestCliIntegration object at 0x7fe252d16350&gt;
+
+    def test_scrape_help(self):
+        """Test that scrape command help displays correctly."""
+        result = self.runner.invoke(app, ["scrape", "--help"])
+    
+        assert result.exit_code == 0
+&gt;       assert "--age-group" in result.stdout
+E       AssertionError: assert '--age-group' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1....  \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'
+E        +  where '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1....  \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n' = &lt;Result okay&gt;.stdout
+
+tests/unit/test_cli.py:291: AssertionError</failure></testcase><testcase classname="tests.unit.test_cli.TestCliIntegration" name="test_environment_isolation" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_with_defaults" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_with_custom_values" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_missing_required_api_url" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_missing_required_api_key" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_invalid_look_back_days_string" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_negative_look_back_days" time="0.003" /><testcase classname="tests.unit.test_config.TestLoadConfig" name="test_load_config_zero_look_back_days" time="0.002" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_valid" time="0.001" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_invalid_age_group" time="0.001" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_empty_age_group" time="0.001" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_invalid_date_range" time="0.001" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_invalid_log_level" time="0.001" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_invalid_api_url" time="0.001" /><testcase classname="tests.unit.test_config.TestValidateConfig" name="test_validate_config_case_insensitive_log_level" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestCalculateDateRange" name="test_calculate_date_range_basic" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestCalculateDateRange" name="test_calculate_date_range_zero_days" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestCalculateDateRange" name="test_calculate_date_range_default_reference" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestCalculateDateRange" name="test_calculate_date_range_negative_days_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestCalculateDateRange" name="test_calculate_date_range_large_number" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestCalculateDateRange" name="test_calculate_date_range_cross_year_boundary" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestValidateDateRange" name="test_validate_date_range_valid" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestValidateDateRange" name="test_validate_date_range_same_date" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestValidateDateRange" name="test_validate_date_range_invalid_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsWeekend" name="test_is_weekend_saturday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsWeekend" name="test_is_weekend_sunday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsWeekend" name="test_is_weekend_monday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsWeekend" name="test_is_weekend_friday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsWeekend" name="test_is_weekend_all_weekdays" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_new_years_day" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_independence_day" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_christmas" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_memorial_day_2024" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_labor_day_2024" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_thanksgiving_2024" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_regular_day" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestIsHoliday" name="test_is_holiday_different_years" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestHelperFunctions" name="test_get_last_monday_of_month" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestHelperFunctions" name="test_get_first_monday_of_month" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestHelperFunctions" name="test_get_nth_weekday_of_month" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestHelperFunctions" name="test_get_nth_weekday_of_month_invalid_occurrence" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestAdjustForWeekendsAndHolidays" name="test_adjust_forward_from_saturday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestAdjustForWeekendsAndHolidays" name="test_adjust_backward_from_sunday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestAdjustForWeekendsAndHolidays" name="test_adjust_forward_from_holiday" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestAdjustForWeekendsAndHolidays" name="test_adjust_no_change_needed" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestAdjustForWeekendsAndHolidays" name="test_adjust_invalid_direction_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestFormatDateForWebForm" name="test_format_mm_dd_yyyy" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestFormatDateForWebForm" name="test_format_yyyy_mm_dd" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestFormatDateForWebForm" name="test_format_dd_mm_yyyy" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestFormatDateForWebForm" name="test_format_mm_dd_yyyy_with_dashes" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestFormatDateForWebForm" name="test_format_invalid_format_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestFormatDateForWebForm" name="test_format_edge_cases" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestParseDateFromString" name="test_parse_mm_dd_yyyy" time="0.036" /><testcase classname="tests.unit.test_date_handler.TestParseDateFromString" name="test_parse_yyyy_mm_dd" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestParseDateFromString" name="test_parse_dd_mm_yyyy" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestParseDateFromString" name="test_parse_invalid_date_string_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestParseDateFromString" name="test_parse_invalid_format_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestParseDateFromString" name="test_parse_wrong_format_raises_error" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestGetDateRangeForScraping" name="test_get_date_range_basic" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestGetDateRangeForScraping" name="test_get_date_range_avoid_weekends" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestGetDateRangeForScraping" name="test_get_date_range_avoid_holidays" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestGetDateRangeForScraping" name="test_get_date_range_avoid_both" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestGetDateRangeForScraping" name="test_get_date_range_no_adjustments_needed" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestEdgeCases" name="test_leap_year_handling" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestEdgeCases" name="test_year_boundary_crossing" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestEdgeCases" name="test_month_boundary_crossing" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestEdgeCases" name="test_format_and_parse_roundtrip" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestEdgeCases" name="test_holiday_detection_edge_years" time="0.001" /><testcase classname="tests.unit.test_date_handler.TestEdgeCases" name="test_large_look_back_days" time="0.001" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_init" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_discover_available_options_success" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_discover_available_options_no_elements" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_age_group_filter_success" time="2.007" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_age_group_filter_empty_value" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_age_group_filter_invalid_value" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_age_group_filter_no_element_found" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_club_filter_success" time="2.007" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_club_filter_empty_value" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_competition_filter_success" time="2.007" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_division_filter_success" time="2.008" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_all_filters_success" time="9.018" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_all_filters_age_group_failure" time="5.012" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_apply_all_filters_club_failure" time="10.023" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_wait_for_filter_results_success" time="2.006" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_wait_for_filter_results_no_results_container" time="3.007" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filters_success" time="0.004" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filters_mixed_results" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_get_dropdown_options_success" time="0.004" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_get_dropdown_options_no_element" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_get_dropdown_options_filters_empty_values" time="0.007" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filter_option_empty_value" time="0.002" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filter_option_with_discovered_options" time="0.002" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filter_option_case_insensitive" time="0.002" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filter_option_hardcoded_age_group" time="0.002" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filter_option_hardcoded_division" time="0.002" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_validate_filter_option_club_competition_fallback" time="0.002" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_error_handling_in_apply_age_group_filter" time="9.018" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_error_handling_in_discover_available_options" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_error_handling_in_validate_filters" time="0.003" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_multiple_selector_fallback" time="9.018"><failure message="assert False is True">self = &lt;tests.unit.test_filter_application.TestMLSFilterApplicator object at 0x7fe252d58870&gt;
+filter_applicator = &lt;src.scraper.filter_application.MLSFilterApplicator object at 0x7fe252762990&gt;
+
+    @pytest.mark.asyncio
+    async def test_multiple_selector_fallback(self, filter_applicator):
+        """Test that multiple selectors are tried in order."""
+        with patch.object(
+            filter_applicator, "_validate_filter_option", return_value=True
+        ):
+            # Mock first selector failing, second succeeding
+            def mock_wait_for_element(selector, timeout=None):
+                return selector == 'select[name*="age" i]'
+    
+            with (
+                patch.object(
+                    filter_applicator.interactor,
+                    "wait_for_element",
+                    side_effect=mock_wait_for_element,
+                ),
+                patch.object(
+                    filter_applicator.interactor,
+                    "select_dropdown_option",
+                    return_value=True,
+                ),
+            ):
+                result = await filter_applicator.apply_age_group_filter("U14")
+&gt;               assert result is True
+E               assert False is True
+
+tests/unit/test_filter_application.py:601: AssertionError</failure></testcase><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicator" name="test_filter_application_with_delays" time="0.007"><failure message="AssertionError: assert 5 == 3&#10; +  where 5 = &lt;AsyncMock name='sleep' id='140610022838288'&gt;.call_count">self = &lt;tests.unit.test_filter_application.TestMLSFilterApplicator object at 0x7fe252d5a6c0&gt;
+filter_applicator = &lt;src.scraper.filter_application.MLSFilterApplicator object at 0x7fe252762ed0&gt;
+sample_config = ScrapingConfig(age_group='U14', club='Test Club', competition='Test Competition', division='Northeast', look_back_days...tlp', otel_exporter_otlp_protocol='http/protobuf', otel_service_name='mls-match-scraper', otel_service_version='1.0.0')
+
+    @pytest.mark.asyncio
+    async def test_filter_application_with_delays(
+        self, filter_applicator, sample_config
+    ):
+        """Test that delays are properly applied between filter applications."""
+        with (
+            patch("asyncio.sleep") as mock_sleep,
+            patch.object(
+                filter_applicator, "discover_available_options", return_value={}
+            ),
+            patch.object(
+                filter_applicator, "apply_age_group_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_club_filter", return_value=True),
+            patch.object(
+                filter_applicator, "apply_competition_filter", return_value=True
+            ),
+            patch.object(filter_applicator, "apply_division_filter", return_value=True),
+            patch.object(
+                filter_applicator, "wait_for_filter_results", return_value=True
+            ),
+        ):
+            await filter_applicator.apply_all_filters(sample_config)
+    
+            # Should have 3 sleep calls (between the 4 filter applications)
+&gt;           assert mock_sleep.call_count == 3
+E           AssertionError: assert 5 == 3
+E            +  where 5 = &lt;AsyncMock name='sleep' id='140610022838288'&gt;.call_count
+
+tests/unit/test_filter_application.py:628: AssertionError</failure></testcase><testcase classname="tests.unit.test_filter_application.TestFilterApplicationError" name="test_filter_application_error_creation" time="0.001" /><testcase classname="tests.unit.test_filter_application.TestFilterApplicationError" name="test_filter_application_error_with_cause" time="0.001" /><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicatorIntegration" name="test_complete_filter_workflow" time="9.020"><failure message="assert False is True">self = &lt;tests.unit.test_filter_application.TestMLSFilterApplicatorIntegration object at 0x7fe252cf4b90&gt;
+mock_page_with_elements = &lt;AsyncMock id='140610022843328'&gt;
+sample_config = ScrapingConfig(age_group='U14', club='Test Club', competition='Test Competition', division='Northeast', look_back_days...tlp', otel_exporter_otlp_protocol='http/protobuf', otel_service_name='mls-match-scraper', otel_service_version='1.0.0')
+
+    @pytest.mark.asyncio
+    async def test_complete_filter_workflow(
+        self, mock_page_with_elements, sample_config
+    ):
+        """Test complete filter application workflow."""
+        applicator = MLSFilterApplicator(mock_page_with_elements)
+    
+        with (
+            patch.object(applicator.interactor, "wait_for_element", return_value=True),
+            patch.object(
+                applicator.interactor, "select_dropdown_option", return_value=True
+            ),
+        ):
+            # Test the complete workflow
+            validation_results = await applicator.validate_filters(sample_config)
+            assert isinstance(validation_results, dict)
+    
+            filter_success = await applicator.apply_all_filters(sample_config)
+&gt;           assert filter_success is True
+E           assert False is True
+
+tests/unit/test_filter_application.py:706: AssertionError</failure></testcase><testcase classname="tests.unit.test_filter_application.TestMLSFilterApplicatorIntegration" name="test_realistic_error_scenarios" time="9.017" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_init_default_service_name" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_init_custom_service_name" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_init_with_log_level_env_var" time="0.002" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_get_logger_returns_powertools_logger" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_inject_lambda_context_decorator" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_scraping_start" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_scraping_complete" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_api_call_success" time="0.002" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_api_call_error_with_status_code" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_api_call_error_with_exception" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_browser_operation_success" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_log_browser_operation_failure" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_custom_serializer_datetime" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_custom_serializer_object_with_dict" time="0.001" /><testcase classname="tests.unit.test_logger.TestMLSScraperLogger" name="test_custom_serializer_fallback_to_str" time="0.001" /><testcase classname="tests.unit.test_logger.TestGlobalLoggerFunctions" name="test_get_logger_returns_powertools_logger" time="0.001" /><testcase classname="tests.unit.test_logger.TestGlobalLoggerFunctions" name="test_scraper_logger_is_mls_scraper_logger_instance" time="0.001" /><testcase classname="tests.unit.test_logger.TestLoggerIntegration" name="test_logger_with_environment_variables" time="0.002" /><testcase classname="tests.unit.test_logger.TestLoggerIntegration" name="test_logger_context_propagation" time="0.002" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_matches_success" time="0.003"><failure message="pydantic_core._pydantic_core.ValidationError: 1 validation error for Match&#10;match_datetime&#10;  Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]&#10;    For further information visit https://errors.pydantic.dev/2.11/v/missing">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252cf5a90&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2527c3cb0&gt;
+mock_page = &lt;AsyncMock id='140610022070256'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extract_matches_success(self, match_extractor, mock_page):
+        """Test successful match extraction."""
+        # Mock the extraction workflow
+        with (
+            patch.object(match_extractor, "_wait_for_results") as mock_wait,
+            patch.object(match_extractor, "_check_no_results") as mock_check_no_results,
+            patch.object(match_extractor, "_extract_from_table") as mock_extract_table,
+        ):
+            mock_wait.return_value = True
+            mock_check_no_results.return_value = False
+    
+            # Mock successful table extraction
+&gt;           mock_match = Match(
+                match_id="U14_Northeast_0_20241219",
+                home_team="Team A",
+                away_team="Team B",
+                match_date=datetime(2024, 12, 19, 15, 0),
+                age_group="U14",
+                division="Northeast",
+                status="scheduled",
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for Match
+E           match_datetime
+E             Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.11/v/missing
+
+tests/unit/test_match_extraction.py:46: ValidationError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_matches_no_results" time="0.004" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_matches_empty_results" time="0.004" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_matches_table_fails_fallback_to_cards" time="0.003"><failure message="pydantic_core._pydantic_core.ValidationError: 1 validation error for Match&#10;match_datetime&#10;  Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]&#10;    For further information visit https://errors.pydantic.dev/2.11/v/missing">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252d33a80&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe252891220&gt;
+mock_page = &lt;AsyncMock id='140610022074624'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extract_matches_table_fails_fallback_to_cards(
+        self, match_extractor, mock_page
+    ):
+        """Test fallback to card extraction when table extraction fails."""
+        with (
+            patch.object(match_extractor, "_wait_for_results") as mock_wait,
+            patch.object(match_extractor, "_check_no_results") as mock_check_no_results,
+            patch.object(match_extractor, "_extract_from_table") as mock_extract_table,
+            patch.object(match_extractor, "_extract_from_cards") as mock_extract_cards,
+        ):
+            mock_wait.return_value = True
+            mock_check_no_results.return_value = False
+            mock_extract_table.return_value = []  # Table extraction fails
+    
+            # Mock successful card extraction
+&gt;           mock_match = Match(
+                match_id="U14_Northeast_0_20241219",
+                home_team="Team C",
+                away_team="Team D",
+                match_date=datetime(2024, 12, 19, 15, 0),
+                age_group="U14",
+                division="Northeast",
+                status="scheduled",
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for Match
+E           match_datetime
+E             Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.11/v/missing
+
+tests/unit/test_match_extraction.py:103: ValidationError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_matches_exception" time="0.004" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_wait_for_results_success" time="0.002"><failure message="assert False is True">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252e3f350&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2527fb2f0&gt;
+mock_page = &lt;AsyncMock id='140610022835600'&gt;
+
+    @pytest.mark.asyncio
+    async def test_wait_for_results_success(self, match_extractor, mock_page):
+        """Test successful waiting for results."""
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
+            mock_wait.return_value = True
+    
+            result = await match_extractor._wait_for_results()
+    
+&gt;           assert result is True
+E           assert False is True
+
+tests/unit/test_match_extraction.py:137: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_wait_for_results_not_found" time="0.002" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_check_no_results_found" time="0.002"><failure message="assert False is True">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252dc0e50&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe252dcdd00&gt;
+mock_page = &lt;AsyncMock id='140610022845344'&gt;
+
+    @pytest.mark.asyncio
+    async def test_check_no_results_found(self, match_extractor, mock_page):
+        """Test detection of no results message."""
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
+            mock_wait.return_value = True
+    
+            result = await match_extractor._check_no_results()
+    
+&gt;           assert result is True
+E           assert False is True
+
+tests/unit/test_match_extraction.py:157: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_check_no_results_not_found" time="0.002" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_from_table_success" time="0.003"><failure message="pydantic_core._pydantic_core.ValidationError: 1 validation error for Match&#10;match_datetime&#10;  Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]&#10;    For further information visit https://errors.pydantic.dev/2.11/v/missing">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252adc140&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe252611050&gt;
+mock_page = &lt;AsyncMock id='140610022845008'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extract_from_table_success(self, match_extractor, mock_page):
+        """Test successful table extraction."""
+        # Mock table element
+        mock_table = AsyncMock()
+        mock_row = AsyncMock()
+        mock_table.query_selector_all.return_value = [mock_row]
+    
+        mock_page.query_selector.return_value = mock_table
+    
+        with (
+            patch.object(match_extractor.interactor, "wait_for_element") as mock_wait,
+            patch.object(
+                match_extractor, "_extract_match_from_row"
+            ) as mock_extract_row,
+        ):
+            mock_wait.return_value = True
+    
+            # Mock successful match extraction from row
+&gt;           mock_match = Match(
+                match_id="U14_Northeast_0_20241219",
+                home_team="Team A",
+                away_team="Team B",
+                match_date=datetime(2024, 12, 19, 15, 0),
+                age_group="U14",
+                division="Northeast",
+                status="scheduled",
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for Match
+E           match_datetime
+E             Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.11/v/missing
+
+tests/unit/test_match_extraction.py:188: ValidationError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_from_table_no_table" time="0.003" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_from_cards_success" time="0.003"><failure message="pydantic_core._pydantic_core.ValidationError: 1 validation error for Match&#10;match_datetime&#10;  Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]&#10;    For further information visit https://errors.pydantic.dev/2.11/v/missing">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252cd9550&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2526386e0&gt;
+mock_page = &lt;AsyncMock id='140610024598768'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extract_from_cards_success(self, match_extractor, mock_page):
+        """Test successful card extraction."""
+        # Mock card elements
+        mock_card = AsyncMock()
+        mock_page.query_selector_all.return_value = [mock_card]
+    
+        with patch.object(
+            match_extractor, "_extract_match_from_card"
+        ) as mock_extract_card:
+            # Mock successful match extraction from card
+&gt;           mock_match = Match(
+                match_id="U14_Northeast_0_20241219",
+                home_team="Team C",
+                away_team="Team D",
+                match_date=datetime(2024, 12, 19, 15, 0),
+                age_group="U14",
+                division="Northeast",
+                status="scheduled",
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for Match
+E           match_datetime
+E             Field required [type=missing, input_value={'match_id': 'U14_Northea..., 'status': 'scheduled'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.11/v/missing
+
+tests/unit/test_match_extraction.py:227: ValidationError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_from_cards_no_cards" time="0.003" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_match_from_row_success" time="0.007"><failure message="assert None is not None">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252ad9bf0&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2528b1550&gt;
+mock_page = &lt;AsyncMock id='140610024602800'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extract_match_from_row_success(self, match_extractor, mock_page):
+        """Test successful match extraction from table row."""
+        # Mock row element with cells
+        mock_row = AsyncMock()
+        mock_cells = [AsyncMock() for _ in range(5)]
+    
+        # Mock cell content
+        mock_cells[0].text_content.return_value = "12/19/2024"  # date
+        mock_cells[1].text_content.return_value = "3:00 PM"  # time
+        mock_cells[2].text_content.return_value = "Team A"  # home
+        mock_cells[3].text_content.return_value = "Team B"  # away
+        mock_cells[4].text_content.return_value = "2 - 1"  # score
+    
+        mock_row.query_selector_all.return_value = mock_cells
+        mock_row.query_selector.return_value = None  # No specific selectors found
+    
+        result = await match_extractor._extract_match_from_row(
+            mock_row, 0, "U14", "Northeast", None
+        )
+    
+&gt;       assert result is not None
+E       assert None is not None
+
+tests/unit/test_match_extraction.py:273: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_match_from_row_insufficient_cells" time="0.005" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_match_from_card_success" time="0.007"><failure message="AttributeError: 'Match' object has no attribute 'status'">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252d24f50&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2527f1010&gt;
+mock_page = &lt;AsyncMock id='140610022069584'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extract_match_from_card_success(self, match_extractor, mock_page):
+        """Test successful match extraction from card."""
+        mock_card = AsyncMock()
+    
+        # Mock card elements
+        mock_date_elem = AsyncMock()
+        mock_date_elem.text_content.return_value = "12/19/2024"
+    
+        mock_home_elem = AsyncMock()
+        mock_home_elem.text_content.return_value = "Team A"
+    
+        mock_away_elem = AsyncMock()
+        mock_away_elem.text_content.return_value = "Team B"
+    
+        mock_score_elem = AsyncMock()
+        mock_score_elem.text_content.return_value = "vs"
+    
+        # Mock query_selector to return elements for specific selectors
+        def mock_query_selector(selector):
+            if ".date" in selector or ".match-date" in selector:
+                return mock_date_elem
+            elif ".home-team" in selector or ".home" in selector:
+                return mock_home_elem
+            elif ".away-team" in selector or ".away" in selector:
+                return mock_away_elem
+            elif ".score" in selector or ".result" in selector:
+                return mock_score_elem
+            return None
+    
+        mock_card.query_selector.side_effect = mock_query_selector
+    
+        result = await match_extractor._extract_match_from_card(
+            mock_card, 0, "U14", "Northeast", None
+        )
+    
+        assert result is not None
+        assert result.home_team == "Team A"
+        assert result.away_team == "Team B"
+&gt;       assert result.status == "scheduled"
+               ^^^^^^^^^^^^^
+
+tests/unit/test_match_extraction.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Match(match_id='U14_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 0, 0), location=None, competition='Unknown', home_team='Team A', away_team='Team B', home_score='TBD', away_score='TBD', match_status='TBD')
+item = 'status'
+
+    def __getattr__(self, item: str) -&gt; Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra:
+                try:
+                    return pydantic_extra[item]
+                except KeyError as exc:
+                    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+&gt;                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'Match' object has no attribute 'status'
+
+.venv/lib/python3.13/site-packages/pydantic/main.py:991: AttributeError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_extract_from_cell_positions" time="0.005" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_row_text" time="0.001"><failure message="KeyError: 'time'">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252d75650&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2525e8310&gt;
+
+    def test_parse_row_text(self, match_extractor):
+        """Test parsing match data from row text."""
+        text = "12/19/2024 3:00 PM Team A Team B 2 - 1 Stadium A"
+    
+        result = match_extractor._parse_row_text(text)
+    
+        assert "12/19/2024" in result["date"]
+&gt;       assert "3:00 PM" in result["time"]
+                            ^^^^^^^^^^^^^^
+E       KeyError: 'time'
+
+tests/unit/test_match_extraction.py:366: KeyError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_match_datetime_success" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_match_datetime_different_formats" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_match_datetime_invalid" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_score_and_status_completed" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_score_and_status_scheduled" time="0.001"><failure message="AssertionError: assert 'TBD' is None">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252a4fcd0&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2525ddf90&gt;
+
+    def test_parse_score_and_status_scheduled(self, match_extractor):
+        """Test score and status parsing for scheduled match."""
+        home_score, away_score, status = match_extractor._parse_score_and_status(
+            "vs", "scheduled"
+        )
+    
+&gt;       assert home_score is None
+E       AssertionError: assert 'TBD' is None
+
+tests/unit/test_match_extraction.py:421: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_score_and_status_in_progress" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_parse_score_and_status_score_without_status" time="0.002"><failure message="AssertionError: assert 'scheduled' == 'completed'&#10;  &#10;  - completed&#10;  + scheduled">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252c986e0&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2525de5d0&gt;
+
+    def test_parse_score_and_status_score_without_status(self, match_extractor):
+        """Test score parsing when status is not explicit."""
+        home_score, away_score, status = match_extractor._parse_score_and_status(
+            "3 - 2", ""
+        )
+    
+        assert home_score == 3
+        assert away_score == 2
+&gt;       assert status == "completed"  # Should infer completed from score
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'scheduled' == 'completed'
+E         
+E         - completed
+E         + scheduled
+
+tests/unit/test_match_extraction.py:443: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_create_match_from_data_success" time="0.003"><failure message="AttributeError: 'Match' object has no attribute 'status'">self = &lt;tests.unit.test_match_extraction.TestMLSMatchExtractor object at 0x7fe252c6b5f0&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2527f40f0&gt;
+mock_page = &lt;AsyncMock id='140610022069584'&gt;
+
+    @pytest.mark.asyncio
+    async def test_create_match_from_data_success(self, match_extractor, mock_page):
+        """Test successful Match object creation from data."""
+        data = {
+            "date": "12/19/2024",
+            "time": "3:00 PM",
+            "home_team": "Team A",
+            "away_team": "Team B",
+            "score": "2 - 1",
+            "venue": "Stadium A",
+            "status": "completed",
+        }
+    
+        result = await match_extractor._create_match_from_data(
+            data, 0, "U14", "Northeast", "MLS Next"
+        )
+    
+        assert result is not None
+        assert result.home_team == "Team A"
+        assert result.away_team == "Team B"
+        assert result.home_score == 2
+        assert result.away_score == 1
+&gt;       assert result.status == "completed"
+               ^^^^^^^^^^^^^
+
+tests/unit/test_match_extraction.py:467: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Match(match_id='U14_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 15, 0), location='Stadium A', competition='MLS Next', home_team='Team A', away_team='Team B', home_score=2, away_score=1, match_status='completed')
+item = 'status'
+
+    def __getattr__(self, item: str) -&gt; Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra:
+                try:
+                    return pydantic_extra[item]
+                except KeyError as exc:
+                    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+&gt;                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'Match' object has no attribute 'status'
+
+.venv/lib/python3.13/site-packages/pydantic/main.py:991: AttributeError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_create_match_from_data_missing_teams" time="0.002" /><testcase classname="tests.unit.test_match_extraction.TestMLSMatchExtractor" name="test_create_match_from_data_invalid_date" time="0.002" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_extract_match_from_row_exception" time="0.005" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_extract_match_from_card_exception" time="0.002" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_extract_from_cell_positions_exception" time="0.003" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_parse_row_text_exception" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_parse_match_datetime_exception" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_parse_score_and_status_exception" time="0.001" /><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionErrorHandling" name="test_create_match_from_data_exception" time="0.003"><failure message="AssertionError: assert Match(match_id='InvalidAge_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 0, 0), location=None, competition='Unknown', home_team='Team A', away_team='Team B', home_score=None, away_score=None, match_status='TBD') is None">self = &lt;tests.unit.test_match_extraction.TestMatchExtractionErrorHandling object at 0x7fe252e3f9b0&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2525dfa70&gt;
+mock_page = &lt;AsyncMock id='140610022838960'&gt;
+
+    @pytest.mark.asyncio
+    async def test_create_match_from_data_exception(self, match_extractor, mock_page):
+        """Test exception handling in Match creation."""
+        # Invalid age_group should cause validation error
+        data = {
+            "date": "12/19/2024",
+            "home_team": "Team A",
+            "away_team": "Team B",
+        }
+    
+        # This should handle the validation error gracefully
+        result = await match_extractor._create_match_from_data(
+            data, 0, "InvalidAge", "Northeast", None
+        )
+    
+&gt;       assert result is None
+E       AssertionError: assert Match(match_id='InvalidAge_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 0, 0), location=None, competition='Unknown', home_team='Team A', away_team='Team B', home_score=None, away_score=None, match_status='TBD') is None
+
+tests/unit/test_match_extraction.py:595: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionIntegration" name="test_full_extraction_workflow_table" time="0.008"><failure message="assert 0 == 1&#10; +  where 0 = len([])">self = &lt;tests.unit.test_match_extraction.TestMatchExtractionIntegration object at 0x7fe252cf5e50&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2526e0050&gt;
+mock_page = &lt;AsyncMock id='140610022069920'&gt;
+
+    @pytest.mark.asyncio
+    async def test_full_extraction_workflow_table(self, match_extractor, mock_page):
+        """Test complete extraction workflow using table approach."""
+        # Mock the full workflow
+        mock_table = AsyncMock()
+        mock_row = AsyncMock()
+        mock_cells = [AsyncMock() for _ in range(5)]
+    
+        # Set up cell content
+        mock_cells[0].text_content.return_value = "12/19/2024"
+        mock_cells[1].text_content.return_value = "3:00 PM"
+        mock_cells[2].text_content.return_value = "Team A"
+        mock_cells[3].text_content.return_value = "Team B"
+        mock_cells[4].text_content.return_value = "vs"
+    
+        mock_row.query_selector_all.return_value = mock_cells
+        mock_row.query_selector.return_value = None
+        mock_table.query_selector_all.return_value = [mock_row]
+        mock_page.query_selector.return_value = mock_table
+    
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
+            mock_wait.return_value = True
+    
+            result = await match_extractor.extract_matches("U14", "Northeast")
+    
+&gt;           assert len(result) == 1
+E           assert 0 == 1
+E            +  where 0 = len([])
+
+tests/unit/test_match_extraction.py:636: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionIntegration" name="test_full_extraction_workflow_cards" time="0.006"><failure message="assert 0 == 1&#10; +  where 0 = len([])">self = &lt;tests.unit.test_match_extraction.TestMatchExtractionIntegration object at 0x7fe252cf5f90&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2526e0b90&gt;
+mock_page = &lt;AsyncMock id='140610021331968'&gt;
+
+    @pytest.mark.asyncio
+    async def test_full_extraction_workflow_cards(self, match_extractor, mock_page):
+        """Test complete extraction workflow using card approach."""
+        # Mock table extraction failure, card extraction success
+        mock_card = AsyncMock()
+        mock_page.query_selector.return_value = None  # No table found
+        mock_page.query_selector_all.return_value = [mock_card]
+    
+        # Mock card text content
+        mock_card.text_content.return_value = (
+            "12/19/2024 3:00 PM Team A vs Team B Stadium A"
+        )
+        mock_card.query_selector.return_value = None  # No specific selectors
+    
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
+            mock_wait.return_value = True
+    
+            result = await match_extractor.extract_matches("U14", "Northeast")
+    
+&gt;           assert len(result) == 1
+E           assert 0 == 1
+E            +  where 0 = len([])
+
+tests/unit/test_match_extraction.py:660: AssertionError</failure></testcase><testcase classname="tests.unit.test_match_extraction.TestMatchExtractionIntegration" name="test_extraction_with_mixed_match_statuses" time="0.013"><failure message="assert 0 == 3&#10; +  where 0 = len([])">self = &lt;tests.unit.test_match_extraction.TestMatchExtractionIntegration object at 0x7fe252d33e10&gt;
+match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0x7fe2526e1310&gt;
+mock_page = &lt;AsyncMock id='140610021342720'&gt;
+
+    @pytest.mark.asyncio
+    async def test_extraction_with_mixed_match_statuses(
+        self, match_extractor, mock_page
+    ):
+        """Test extraction with matches in different statuses."""
+        # Mock multiple rows with different statuses
+        mock_table = AsyncMock()
+        mock_rows = [AsyncMock() for _ in range(3)]
+    
+        # Row 1: Scheduled match
+        mock_cells_1 = [AsyncMock() for _ in range(5)]
+        mock_cells_1[0].text_content.return_value = "12/19/2024"
+        mock_cells_1[1].text_content.return_value = "3:00 PM"
+        mock_cells_1[2].text_content.return_value = "Team A"
+        mock_cells_1[3].text_content.return_value = "Team B"
+        mock_cells_1[4].text_content.return_value = "vs"
+        mock_rows[0].query_selector_all.return_value = mock_cells_1
+        mock_rows[0].query_selector.return_value = None
+    
+        # Row 2: Completed match
+        mock_cells_2 = [AsyncMock() for _ in range(5)]
+        mock_cells_2[0].text_content.return_value = "12/18/2024"
+        mock_cells_2[1].text_content.return_value = "2:00 PM"
+        mock_cells_2[2].text_content.return_value = "Team C"
+        mock_cells_2[3].text_content.return_value = "Team D"
+        mock_cells_2[4].text_content.return_value = "2 - 1"
+        mock_rows[1].query_selector_all.return_value = mock_cells_2
+        mock_rows[1].query_selector.return_value = None
+    
+        # Row 3: In-progress match
+        mock_cells_3 = [AsyncMock() for _ in range(6)]
+        mock_cells_3[0].text_content.return_value = "12/19/2024"
+        mock_cells_3[1].text_content.return_value = "1:00 PM"
+        mock_cells_3[2].text_content.return_value = "Team E"
+        mock_cells_3[3].text_content.return_value = "Team F"
+        mock_cells_3[4].text_content.return_value = "1 - 0"
+        mock_cells_3[5].text_content.return_value = "live"
+        mock_rows[2].query_selector_all.return_value = mock_cells_3
+        mock_rows[2].query_selector.return_value = None
+    
+        mock_table.query_selector_all.return_value = mock_rows
+        mock_page.query_selector.return_value = mock_table
+    
+        with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
+            mock_wait.return_value = True
+    
+            result = await match_extractor.extract_matches("U14", "Northeast")
+    
+&gt;           assert len(result) == 3
+E           assert 0 == 3
+E            +  where 0 = len([])
+
+tests/unit/test_match_extraction.py:714: AssertionError</failure></testcase><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_init_default_configuration" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_init_custom_configuration" time="0.003" /><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_parse_otlp_headers_empty" time="0.002" /><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_parse_otlp_headers_single_header" time="0.002" /><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_parse_otlp_headers_multiple_headers" time="0.002" /><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_counter_initialization" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMLSScraperMetrics" name="test_histogram_initialization" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_record_games_scheduled" time="0.006" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_record_games_scored" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_record_api_call" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_record_scraping_error" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_record_browser_operation" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_time_operation_context_manager" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_time_operation_context_manager_with_exception" time="0.004" /><testcase classname="tests.unit.test_metrics.TestMetricsRecording" name="test_time_lambda_execution_context_manager" time="0.006" /><testcase classname="tests.unit.test_metrics.TestGlobalMetricsFunctions" name="test_get_metrics_returns_mls_scraper_metrics" time="0.001" /><testcase classname="tests.unit.test_metrics.TestGlobalMetricsFunctions" name="test_scraper_metrics_is_mls_scraper_metrics_instance" time="0.001" /><testcase classname="tests.unit.test_metrics.TestMetricsIntegration" name="test_metrics_with_environment_variables" time="0.005" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraperError" name="test_mls_scraper_error_creation" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraperError" name="test_mls_scraper_error_with_cause" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_init" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_init_with_defaults" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_class_constants" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_calculate_retry_delay" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_log_discovered_matches_empty_list" time="0.002" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_log_discovered_matches_with_matches" time="0.002" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_get_execution_metrics_returns_correct_object" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_execution_metrics_is_scraping_metrics_object" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_emit_final_metrics_method_exists" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_scraper_workflow_methods_exist" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_execution_metrics_tracking" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_calculate_retry_delay_uses_time" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraper" name="test_mls_url_is_valid_format" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraperIntegration" name="test_scraper_initialization_workflow" time="0.001" /><testcase classname="tests.unit.test_mls_scraper.TestMLSScraperIntegration" name="test_scraper_attributes_after_init" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_valid_match_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_completed_match_with_scores" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_scheduled_match_status" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_tbd_match_status" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_tbd_mixed_scores" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_none_scores_past_match" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_score_validation_positive_int" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_score_validation_string_digits" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_score_validation_tbd_case_insensitive" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_score_validation_invalid_negative" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_score_validation_invalid_string" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_teams_validation_same_teams" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_teams_validation_same_teams_case_insensitive" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_teams_validation_same_teams_with_spaces" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_optional_fields" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_match_validation_empty_match_id" time="0.001" /><testcase classname="tests.unit.test_models.TestMatch" name="test_match_validation_empty_team_names" time="0.001" /><testcase classname="tests.unit.test_models.TestScrapingMetrics" name="test_valid_metrics_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestScrapingMetrics" name="test_metrics_validation_negative_values" time="0.001" /><testcase classname="tests.unit.test_models.TestScrapingMetrics" name="test_metrics_with_zero_values" time="0.001" /><testcase classname="tests.unit.test_models.TestScrapingMetrics" name="test_metrics_games_scored_validation" time="0.001" /><testcase classname="tests.unit.test_models.TestScrapingMetrics" name="test_get_success_rate_method" time="0.001" /><testcase classname="tests.unit.test_models.TestScrapingMetrics" name="test_get_success_rate_no_calls" time="0.001" /><testcase classname="tests.unit.test_pydantic_integration.TestPydanticIntegration" name="test_match_serialization_in_logging" time="0.001" /><testcase classname="tests.unit.test_pydantic_integration.TestPydanticIntegration" name="test_scraping_metrics_serialization_in_logging" time="0.001" /><testcase classname="tests.unit.test_pydantic_integration.TestPydanticIntegration" name="test_match_model_dump_json" time="0.001" /><testcase classname="tests.unit.test_pydantic_integration.TestPydanticIntegration" name="test_scraping_metrics_model_dump_json" time="0.001" /><testcase classname="tests.unit.test_pydantic_integration.TestPydanticIntegration" name="test_match_model_validation_with_custom_serializer" time="0.001" /><testcase classname="tests.unit.test_pydantic_integration.TestPydanticIntegration" name="test_datetime_serialization_with_custom_serializer" time="0.002" /></testsuite></testsuites>
