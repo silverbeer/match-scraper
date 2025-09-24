@@ -235,7 +235,7 @@ class TestMLSFilterApplicator:
 
         # Create mock select elements for the division filter
         mock_select_elements = []
-        for i in range(4):  # Division filter needs at least 4 select elements
+        for _ in range(4):  # Division filter needs at least 4 select elements
             mock_select = MagicMock()
             # Make select_option() async
             async def async_select_option(value=None, label=None):

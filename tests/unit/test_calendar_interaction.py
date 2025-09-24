@@ -197,7 +197,7 @@ class TestMLSCalendarInteractor:
     async def test_set_date_range_direct_input_success(self, calendar_interactor):
         """Test successful direct date input."""
         # Mock iframe content
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         mock_iframe_content = MagicMock()
         mock_locator = MagicMock()
