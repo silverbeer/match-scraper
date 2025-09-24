@@ -686,12 +686,13 @@ class MLSCalendarInteractor:
         Returns:
             Tuple of (month, year) or (None, None) if parsing fails
         """
+        logger.debug("Parsing month/year text", extra={"text": text})
         try:
             import re
 
             # Common patterns for month/year display
             patterns = [
-                r"(\w+)\s+(\d{4})",  # "January 2024"
+                r"(\w+)\s*,?\s*(\d{4})",  # "January 2024" or "January, 2024"
                 r"(\d{1,2})/(\d{4})",  # "01/2024"
                 r"(\d{4})-(\d{1,2})",  # "2024-01"
             ]

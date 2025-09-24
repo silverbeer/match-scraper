@@ -25,6 +25,27 @@ from src.scraper.match_extraction import MLSMatchExtractor
 from src.scraper.models import Match
 from src.utils.logger import get_logger
 
+
+def create_test_config(**overrides):
+    """Create a test ScrapingConfig with all required parameters."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    defaults = {
+        "age_group": "U14",
+        "club": "",
+        "competition": "",
+        "division": "Northeast",
+        "look_back_days": 30,
+        "start_date": today - timedelta(days=30),
+        "end_date": today,
+        "missing_table_api_url": "http://test.example.com",
+        "missing_table_api_key": "test-key",
+        "log_level": "INFO",
+    }
+    defaults.update(overrides)
+    return ScrapingConfig(**defaults)
+
 logger = get_logger()
 
 # Test configuration
@@ -50,13 +71,7 @@ class TestMatchExtractionE2E:
     @pytest.fixture
     def test_config(self):
         """Create test scraping configuration."""
-        return ScrapingConfig(
-            age_group="U14",
-            club="",  # Leave empty to get broader results
-            competition="",  # Leave empty to get broader results
-            division="Northeast",  # Focus on one division
-            look_back_days=30,  # Look back 30 days
-        )
+        return create_test_config()
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
@@ -220,9 +235,9 @@ class TestMatchExtractionE2E:
         browser_config.headless = True  # Run headless for speed
 
         test_cases = [
-            ScrapingConfig(age_group="U15", division="Southeast", look_back_days=14),
-            ScrapingConfig(age_group="U16", division="Central", look_back_days=7),
-            ScrapingConfig(age_group="U17", division="Southwest", look_back_days=21),
+            create_test_config(age_group="U15", division="Southeast", look_back_days=14),
+            create_test_config(age_group="U16", division="Central", look_back_days=7),
+            create_test_config(age_group="U17", division="Southwest", look_back_days=21),
         ]
 
         async with get_browser_manager(browser_config) as browser_manager:
@@ -447,7 +462,7 @@ class TestMatchExtractionDebugMode:
             viewport_height=1080,
         )
 
-        test_config = ScrapingConfig(
+        test_config = create_test_config(
             age_group="U14",
             division="Northeast",
             look_back_days=14,
@@ -558,7 +573,7 @@ def run_visible_test():
     async def _run():
         test_instance = TestMatchExtractionE2E()
         browser_config = BrowserConfig(headless=False, timeout=30000)
-        test_config = ScrapingConfig(
+        test_config = create_test_config(
             age_group="U14", division="Northeast", look_back_days=30
         )
 
