@@ -82,3 +82,4 @@ lambda-package/
 test-results/
 playwright-report/
 playwright/.cache/
+coverage-summary.json
