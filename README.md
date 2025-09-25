@@ -21,7 +21,7 @@ This serverless application scrapes match data from the MLS Next website and pos
 - **Comprehensive Monitoring**: Structured logging with AWS Powertools and metrics with OpenTelemetry
 - **Serverless Architecture**: AWS Lambda deployment with Terraform infrastructure
 - **Data Validation**: Pydantic models for robust data validation and serialization
-- **Quality Testing**: 25%+ test coverage with 216+ comprehensive unit tests
+- **Quality Testing**: Comprehensive test suite with unit, integration, and e2e tests
 
 ## Development Setup
 
@@ -59,10 +59,11 @@ uv run pytest --cov=src --cov-report=html --cov-report=term-missing
 uv run pytest tests/unit/test_logger.py tests/unit/test_metrics.py -v
 ```
 
-### Coverage Requirements
-- Minimum coverage: 25%
-- Current coverage: 25.2%
-- Coverage reports available in GitHub Pages and `htmlcov/` directory
+### Test Structure
+- `tests/unit/` - Fast unit tests (run on every commit)
+- `tests/integration/` - Multi-component integration tests
+- `tests/e2e/` - End-to-end browser automation tests
+- Coverage reports available in GitHub Pages
 
 ## Data Models
 
@@ -78,10 +79,8 @@ match = Match(
     match_id="12345",
     home_team="Team A",
     away_team="Team B",
-    match_date=datetime.now(),
-    age_group="U14",
-    division="Northeast",
-    status="scheduled"
+    match_datetime=datetime.now(),
+    # Note: age_group, division, and status are computed/computed fields
 )
 
 # Serialize to JSON
@@ -152,24 +151,62 @@ The scraper uses environment variables for configuration. See `src/scraper/confi
 
 ```
 src/
+├── cli/
+│   └── main.py            # CLI interface with Typer
 ├── scraper/
+│   ├── browser.py         # Playwright browser management
+│   ├── calendar_interaction.py # Calendar widget handling
 │   ├── config.py          # Configuration management
-│   └── models.py          # Data models
+│   ├── consent_handler.py # Cookie consent handling
+│   ├── filter_application.py # MLS filter interactions
+│   ├── match_extraction.py # Match data extraction
+│   ├── mls_scraper.py     # Main scraper orchestration
+│   └── models.py          # Pydantic data models
 ├── utils/
 │   ├── logger.py          # AWS Powertools logging
 │   ├── metrics.py         # OpenTelemetry metrics
 │   └── example_usage.py   # Usage examples
 tests/
-├── unit/
-│   ├── test_config.py     # Configuration tests
-│   ├── test_models.py     # Model tests
-│   ├── test_logger.py     # Logging tests
-│   └── test_metrics.py    # Metrics tests
+├── unit/                  # Fast unit tests (CI)
+├── integration/           # Multi-component tests
+├── e2e/                  # End-to-end browser tests
+.claude/
+├── agents/
+│   └── test-guardian.md   # Test Guardian agent config
+└── README.md             # Agent documentation
+scripts/
+└── test-review.py        # Test analysis helper script
 ```
 
 ## Deployment
 
 Infrastructure is managed with Terraform. See the `terraform/` directory for deployment configuration.
+
+## Development Tools
+
+### 🤖 Test Guardian Agent
+Specialized AI agent for automated test review, creation, and debugging.
+
+```bash
+# In Claude Code, activate the agent:
+/agents test-guardian
+
+# Or use the helper script:
+uv run python scripts/test-review.py review
+```
+
+**Capabilities:**
+- Review code changes for missing test coverage
+- Generate comprehensive unit tests following project patterns
+- Debug and fix async mock issues (Playwright, AsyncMock)
+- Update tests when models or APIs change
+
+**Usage Examples:**
+- `"Review recent commits and identify test coverage gaps"`
+- `"Fix the failing tests in test_match_extraction.py"`
+- `"Create comprehensive tests for the new scraping module"`
+
+See [`.claude/README.md`](.claude/README.md) for detailed agent documentation.
 
 ## Development Commands
 
@@ -185,6 +222,9 @@ uv run mypy src
 
 # Run tests with coverage
 uv run pytest --cov=src --cov-report=term-missing
+
+# Quick test review (shows recent changes + test status)
+uv run python scripts/test-review.py review
 
 # Run pre-commit hooks
 uv run pre-commit run --all-files
