@@ -1,0 +1,244 @@
+name: Tests and Coverage
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+          uv add pytest-html pytest-json-report
+
+      - name: Run linting
+        run: uv run ruff check --output-format=github .
+
+      - name: Run type checking
+        run: uv run mypy src/
+        continue-on-error: true
+
+      - name: Run tests with reports
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          REPORT_DIR="site/reports/$BRANCH/${GITHUB_RUN_NUMBER}"
+          mkdir -p "$REPORT_DIR"
+
+          # Run tests with multiple output formats
+          # Note: pytest will exit with non-zero if tests fail, failing the workflow
+          uv run python -m pytest \
+            --html="$REPORT_DIR/index.html" --self-contained-html \
+            --junitxml="$REPORT_DIR/junit.xml" \
+            --json-report --json-report-file="$REPORT_DIR/report.json" \
+            --cov=src \
+            --cov-report=xml:"$REPORT_DIR/coverage.xml" \
+            --cov-report=html:"$REPORT_DIR/coverage-html" \
+            --cov-report=json:"$REPORT_DIR/coverage.json" \
+            tests/unit/
+
+      - name: Generate diff coverage report
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          REPORT_DIR="site/reports/$BRANCH/${GITHUB_RUN_NUMBER}"
+
+          # Generate diff coverage report for new code
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$BRANCH" != "main" ]; then
+            echo "📊 Generating diff coverage report..."
+            uv run diff-cover "$REPORT_DIR/coverage.xml" \
+              --compare-branch=origin/main \
+              --html-report="$REPORT_DIR/diff-coverage.html" \
+              --json-report="$REPORT_DIR/diff-coverage.json" || true
+          else
+            echo "⏭️ Skipping diff coverage on main branch"
+          fi
+
+          # Extract key metrics for badges
+          COVERAGE=$(python -c "import json; data=json.load(open('$REPORT_DIR/coverage.json')); print(f\"{data['totals']['percent_covered']:.1f}\")")
+          TESTS_TOTAL=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary']['total'])")
+          TESTS_PASSED=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary']['passed'])")
+          TESTS_FAILED=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary']['failed'])")
+
+          # Create metrics file for badges
+          mkdir -p site/badges
+          echo "$COVERAGE" > site/badges/coverage.txt
+          echo "$TESTS_TOTAL" > site/badges/tests-total.txt
+          echo "$TESTS_PASSED" > site/badges/tests-passed.txt
+          echo "$TESTS_FAILED" > site/badges/tests-failed.txt
+
+          # Create simple status files
+          if [ "$TESTS_FAILED" = "0" ]; then
+            echo "passing" > site/badges/tests-status.txt
+          else
+            echo "failing" > site/badges/tests-status.txt
+          fi
+
+      - name: Prune old reports (keep last 5 per branch)
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          REPORTS_DIR="site/reports/$BRANCH"
+          mkdir -p "$REPORTS_DIR"
+          cd "$REPORTS_DIR"
+          ls -1 | sort -nr | tail -n +6 | xargs -r rm -rf
+
+      - name: Build index page
+        run: |
+          cat > site/index.html << 'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>MLS Match Scraper - Test Reports</title>
+              <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 2rem; }
+                  .header { border-bottom: 1px solid #eee; padding-bottom: 1rem; margin-bottom: 2rem; }
+                  .branch { margin-bottom: 2rem; }
+                  .branch h2 { color: #0366d6; margin-bottom: 0.5rem; }
+                  .run { margin: 0.5rem 0; padding: 0.5rem; background: #f6f8fa; border-radius: 4px; }
+                  .run a { text-decoration: none; color: #0366d6; }
+                  .run a:hover { text-decoration: underline; }
+                  .metrics { display: flex; gap: 1rem; margin-top: 0.5rem; }
+                  .metric { padding: 0.25rem 0.5rem; background: white; border-radius: 3px; font-size: 0.85em; }
+                  .badge { display: inline-block; margin-right: 0.5rem; }
+              </style>
+          </head>
+          <body>
+              <div class="header">
+                  <h1>🏆 MLS Match Scraper Test Reports</h1>
+                  <p>Automated test results and coverage reports</p>
+              </div>
+          HTML
+
+          # Add current status badges
+          echo '<div class="badges">' >> site/index.html
+          echo '<h3>Latest Status</h3>' >> site/index.html
+
+          if [ -f site/badges/coverage.txt ]; then
+            COVERAGE=$(cat site/badges/coverage.txt)
+            echo "<img src=\"https://img.shields.io/badge/coverage-${COVERAGE}%25-brightgreen\" alt=\"Coverage\">" >> site/index.html
+          fi
+
+          if [ -f site/badges/tests-status.txt ]; then
+            STATUS=$(cat site/badges/tests-status.txt)
+            if [ "$STATUS" = "passing" ]; then
+              COLOR="brightgreen"
+            else
+              COLOR="red"
+            fi
+            echo "<img src=\"https://img.shields.io/badge/tests-${STATUS}-${COLOR}\" alt=\"Tests\">" >> site/index.html
+          fi
+
+          if [ -f site/badges/tests-total.txt ]; then
+            TOTAL=$(cat site/badges/tests-total.txt)
+            echo "<img src=\"https://img.shields.io/badge/total_tests-${TOTAL}-blue\" alt=\"Total Tests\">" >> site/index.html
+          fi
+
+          echo '</div>' >> site/index.html
+
+          # Add branch reports
+          for branch in $(ls -1 site/reports 2>/dev/null || echo ""); do
+            echo "<div class=\"branch\">" >> site/index.html
+            echo "<h2>📂 Branch: $branch</h2>" >> site/index.html
+
+            for d in $(ls -1 site/reports/$branch | sort -nr | head -10); do
+              RUN_DATE=$(date -d "@$(($(date +%s) - ($(date +%s) - $d * 60)))" 2>/dev/null || echo "Run $d")
+              echo "<div class=\"run\">" >> site/index.html
+              echo "<a href=\"/$(basename $GITHUB_REPOSITORY)/reports/$branch/$d/\">🔗 Run #$d</a>" >> site/index.html
+
+              # Add links to specific reports
+              echo "<div class=\"metrics\">" >> site/index.html
+              echo "<span class=\"metric\"><a href=\"/$(basename $GITHUB_REPOSITORY)/reports/$branch/$d/\">📊 Test Results</a></span>" >> site/index.html
+              echo "<span class=\"metric\"><a href=\"/$(basename $GITHUB_REPOSITORY)/reports/$branch/$d/coverage-html/\">📈 Coverage Report</a></span>" >> site/index.html
+              echo "</div>" >> site/index.html
+              echo "</div>" >> site/index.html
+            done
+            echo "</div>" >> site/index.html
+          done
+
+          cat >> site/index.html << 'HTML'
+              <div class="footer" style="margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #666;">
+                  <p>🤖 Generated automatically by GitHub Actions</p>
+              </div>
+          </body>
+          </html>
+          HTML
+
+      # Always upload test reports as artifacts for debugging
+      - name: Upload test reports as artifact
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if tests failed
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: site/reports/
+          retention-days: 30
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        if: github.ref == 'refs/heads/main'
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: './site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        if: github.ref == 'refs/heads/main'
+
+  # Create dynamic badges endpoint
+  create-badges:
+    runs-on: ubuntu-latest
+    needs: test-and-publish
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create badge files
+        run: |
+          mkdir -p badges
+
+          # Create coverage badge data
+          if [ -f site/badges/coverage.txt ]; then
+            COVERAGE=$(cat site/badges/coverage.txt)
+            echo "{\"schemaVersion\": 1, \"label\": \"coverage\", \"message\": \"${COVERAGE}%\", \"color\": \"brightgreen\"}" > badges/coverage.json
+          fi
+
+          # Create test status badge data
+          if [ -f site/badges/tests-status.txt ]; then
+            STATUS=$(cat site/badges/tests-status.txt)
+            if [ "$STATUS" = "passing" ]; then
+              COLOR="brightgreen"
+            else
+              COLOR="red"
+            fi
+            echo "{\"schemaVersion\": 1, \"label\": \"tests\", \"message\": \"${STATUS}\", \"color\": \"${COLOR}\"}" > badges/tests.json
+          fi

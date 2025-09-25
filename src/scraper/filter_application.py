@@ -29,23 +29,23 @@ class MLSFilterApplicator:
     Handles application of filters on the MLS website iframe.
 
     All filters on the MLS website are contained within an iframe using Bootstrap Select
-    components. This class provides methods to apply age group, club, competition, 
+    components. This class provides methods to apply age group, club, competition,
     and division filters with proper iframe handling.
     """
 
     # Iframe access pattern - use more specific selector for the schedule iframe
     IFRAME_SELECTOR = 'main[role="main"] iframe, [aria-label*="main"] iframe, iframe[src*="modular11"]'
-    
+
     # Age group value mappings (from Bootstrap Select)
     AGE_GROUP_VALUES = {
         "U13": "21",
-        "U14": "22", 
+        "U14": "22",
         "U15": "33",
         "U16": "14",
         "U17": "15",
-        "U19": "26"
+        "U19": "26",
     }
-    
+
     # Division value mappings (from Bootstrap Select - Select 3)
     DIVISION_VALUES = {
         "Central": "34",
@@ -54,11 +54,11 @@ class MLSFilterApplicator:
         "Mid-Atlantic": "68",
         "Florida": "46",
         "Southwest": "36",  # May need to verify these
-        "Southeast": "37",  # May need to verify these  
+        "Southeast": "37",  # May need to verify these
         "Northwest": "38",  # May need to verify these
-        "Great Lakes": "39", # May need to verify these
-        "Texas": "40",      # May need to verify these
-        "California": "42"  # May need to verify these
+        "Great Lakes": "39",  # May need to verify these
+        "Texas": "40",  # May need to verify these
+        "California": "42",  # May need to verify these
     }
 
     # Bootstrap Select selectors for iframe filtering
@@ -71,7 +71,7 @@ class MLSFilterApplicator:
         "Homegrown Division",
         "Academy Division",
         "Northeast",
-        "Southeast", 
+        "Southeast",
         "Central",
         "Southwest",
         "Northwest",
@@ -83,7 +83,9 @@ class MLSFilterApplicator:
 
     # Loading indicator selectors for result waiting
     LOADING_INDICATOR_SELECTOR = ".loading, .spinner, .loading-indicator"
-    RESULTS_CONTAINER_SELECTOR = ".results-container, .matches-container, .schedule-results"
+    RESULTS_CONTAINER_SELECTOR = (
+        ".results-container, .matches-container, .schedule-results"
+    )
 
     def __init__(self, page: Page, timeout: int = 15000):
         """
@@ -102,35 +104,37 @@ class MLSFilterApplicator:
     async def _get_iframe_content(self):
         """
         Get the iframe content frame for filter interactions.
-        
+
         Returns:
             The iframe content frame or None if not found
         """
         try:
             if self._iframe_content is None:
                 logger.debug("Looking for iframe on page")
-                
+
                 # Wait for iframe to be available
                 try:
-                    iframe_element = await self.page.wait_for_selector(self.IFRAME_SELECTOR, timeout=10000)
+                    iframe_element = await self.page.wait_for_selector(
+                        self.IFRAME_SELECTOR, timeout=10000
+                    )
                     if iframe_element:
                         self._iframe_content = await iframe_element.content_frame()
                         logger.info("Successfully accessed iframe content frame")
-                        
+
                         # Simple wait for iframe to load - don't wait for specific elements
                         # as they may load at different times
                         await asyncio.sleep(5)
                         logger.info("Iframe content loading wait completed")
-                        
+
                     else:
                         logger.warning("Iframe element not found")
                         return None
                 except Exception as e:
                     logger.warning(f"Iframe not found or timed out: {e}")
                     return None
-                    
+
             return self._iframe_content
-            
+
         except Exception as e:
             logger.error("Failed to access iframe content", extra={"error": str(e)})
             return None
@@ -166,15 +170,19 @@ class MLSFilterApplicator:
                 # since we know the filter application works with the right values
                 logger.info("Using hardcoded age group options for reliable operation")
                 options["age_group"] = self.VALID_AGE_GROUPS.copy()
-                
+
                 # Optional: Try to verify iframe has the expected structure (but don't block on it)
                 try:
-                    age_select = iframe_content.locator('select[js-age]')
+                    age_select = iframe_content.locator("select[js-age]")
                     select_count = await age_select.count()
-                    logger.info(f"Iframe verification: Found {select_count} select[js-age] elements")
+                    logger.info(
+                        f"Iframe verification: Found {select_count} select[js-age] elements"
+                    )
                 except Exception as verify_e:
-                    logger.info(f"Iframe verification failed (non-blocking): {verify_e}")
-                
+                    logger.info(
+                        f"Iframe verification failed (non-blocking): {verify_e}"
+                    )
+
                 logger.debug(f"Discovered age groups: {options['age_group']}")
 
                 # For divisions, use hardcoded options for now
@@ -220,7 +228,9 @@ class MLSFilterApplicator:
             True if filter applied successfully, False otherwise
         """
         try:
-            logger.info("Applying age group filter in iframe", extra={"age_group": age_group})
+            logger.info(
+                "Applying age group filter in iframe", extra={"age_group": age_group}
+            )
 
             if not age_group:
                 logger.debug("Empty age group provided, skipping filter")
@@ -241,77 +251,108 @@ class MLSFilterApplicator:
             for attempt in range(3):
                 try:
                     age_value = self.AGE_GROUP_VALUES.get(age_group)
-                    logger.info(f"Attempting direct select for {age_group} with value {age_value} (attempt {attempt + 1})")
-                    
+                    logger.info(
+                        f"Attempting direct select for {age_group} with value {age_value} (attempt {attempt + 1})"
+                    )
+
                     if age_value:
-                        age_select = iframe_content.locator('select[js-age]')
+                        age_select = iframe_content.locator("select[js-age]")
                         select_count = await age_select.count()
-                        logger.info(f"Found {select_count} select[js-age] elements for direct selection")
-                        
+                        logger.info(
+                            f"Found {select_count} select[js-age] elements for direct selection"
+                        )
+
                         if select_count > 0:
                             await age_select.select_option(value=age_value)
                             logger.info(f"Selected option with value {age_value}")
-                            
+
                             # Give time for Bootstrap Select to update
                             await asyncio.sleep(2)
-                            
+
                             # Since our manual test showed this works, trust it worked and return success
-                            logger.info("Age group filter applied via direct select", extra={"age_group": age_group, "value": age_value})
+                            logger.info(
+                                "Age group filter applied via direct select",
+                                extra={"age_group": age_group, "value": age_value},
+                            )
                             return True
                         else:
                             if attempt < 2:  # Only wait if we have more attempts
-                                logger.info(f"No select elements found, waiting before retry {attempt + 1}")
+                                logger.info(
+                                    f"No select elements found, waiting before retry {attempt + 1}"
+                                )
                                 await asyncio.sleep(3)  # Wait for elements to load
                             else:
-                                logger.warning("No select[js-age] elements found after all retries")
+                                logger.warning(
+                                    "No select[js-age] elements found after all retries"
+                                )
                     else:
-                        logger.warning(f"No value mapping found for age group: {age_group}")
+                        logger.warning(
+                            f"No value mapping found for age group: {age_group}"
+                        )
                         break  # No point retrying if we don't have the value
-                        
+
                 except Exception as e:
-                    logger.warning(f"Direct select method failed on attempt {attempt + 1}: {e}")
+                    logger.warning(
+                        f"Direct select method failed on attempt {attempt + 1}: {e}"
+                    )
                     if attempt < 2:
                         await asyncio.sleep(2)  # Wait before retry
 
             # Strategy 2: Try Bootstrap Select UI interaction (based on actual HTML structure)
             try:
                 # Find the age group bootstrap select specifically (using js-age attribute)
-                age_bootstrap_select = iframe_content.locator('select[js-age]').locator('..')
-                
+                age_bootstrap_select = iframe_content.locator("select[js-age]").locator(
+                    ".."
+                )
+
                 # Click the dropdown toggle button
-                dropdown_button = age_bootstrap_select.locator('.dropdown-toggle')
+                dropdown_button = age_bootstrap_select.locator(".dropdown-toggle")
                 await dropdown_button.click()
                 await asyncio.sleep(1)  # Give more time for dropdown to open
-                
+
                 # Wait for dropdown to be visible
-                await iframe_content.locator('.dropdown-menu.open').wait_for(timeout=2000)
-                
+                await iframe_content.locator(".dropdown-menu.open").wait_for(
+                    timeout=2000
+                )
+
                 # Click the specific age group option from the dropdown menu
-                age_option = iframe_content.locator(f'.dropdown-menu li a .text:has-text("{age_group}")').first()
+                age_option = iframe_content.locator(
+                    f'.dropdown-menu li a .text:has-text("{age_group}")'
+                ).first()
                 await age_option.click()
                 await asyncio.sleep(1)
-                
-                logger.info("Age group filter applied via Bootstrap UI", extra={"age_group": age_group})
+
+                logger.info(
+                    "Age group filter applied via Bootstrap UI",
+                    extra={"age_group": age_group},
+                )
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Bootstrap UI method failed: {e}")
 
-            # Strategy 3: Try clicking the option parent link directly  
+            # Strategy 3: Try clicking the option parent link directly
             try:
                 # First ensure dropdown is open
-                dropdown_button = iframe_content.locator('.bootstrap-select .dropdown-toggle').first()
+                dropdown_button = iframe_content.locator(
+                    ".bootstrap-select .dropdown-toggle"
+                ).first()
                 await dropdown_button.click()
                 await asyncio.sleep(1)
-                
+
                 # Click the <a> element that contains the age group text
-                age_link = iframe_content.locator(f'li a:has(.text:has-text("{age_group}"))')
+                age_link = iframe_content.locator(
+                    f'li a:has(.text:has-text("{age_group}"))'
+                )
                 await age_link.click()
                 await asyncio.sleep(1)
-                
-                logger.info("Age group filter applied via option link", extra={"age_group": age_group})
+
+                logger.info(
+                    "Age group filter applied via option link",
+                    extra={"age_group": age_group},
+                )
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Option link method failed: {e}")
 
@@ -360,83 +401,106 @@ class MLSFilterApplicator:
             # Strategy 1: Try direct select option with retries
             for attempt in range(3):
                 try:
-                    logger.info(f"Attempting direct club select for {club} (attempt {attempt + 1})")
-                    
+                    logger.info(
+                        f"Attempting direct club select for {club} (attempt {attempt + 1})"
+                    )
+
                     # Find the club select element (select[name="academy"][js-academy])
                     club_select = iframe_content.locator(self.CLUB_SELECTOR)
                     select_count = await club_select.count()
                     logger.info(f"Found {select_count} club select elements")
-                    
+
                     if select_count > 0:
                         # Try to select by visible text (club name)
                         await club_select.select_option(label=club)
                         logger.info(f"Selected club option with label {club}")
-                        
+
                         # Give time for Bootstrap Select to update
                         await asyncio.sleep(2)
-                        
-                        logger.info("Club filter applied via direct select", extra={"club": club})
+
+                        logger.info(
+                            "Club filter applied via direct select",
+                            extra={"club": club},
+                        )
                         return True
                     else:
                         if attempt < 2:  # Only wait if we have more attempts
-                            logger.info(f"No club select elements found, waiting before retry {attempt + 1}")
+                            logger.info(
+                                f"No club select elements found, waiting before retry {attempt + 1}"
+                            )
                             await asyncio.sleep(3)  # Wait for elements to load
                         else:
-                            logger.warning("No club select elements found after all retries")
-                        
+                            logger.warning(
+                                "No club select elements found after all retries"
+                            )
+
                 except Exception as e:
-                    logger.warning(f"Direct select method failed on attempt {attempt + 1}: {e}")
+                    logger.warning(
+                        f"Direct select method failed on attempt {attempt + 1}: {e}"
+                    )
                     if attempt < 2:
                         await asyncio.sleep(2)  # Wait before retry
 
             # Strategy 2: Try Bootstrap Select UI interaction
             try:
                 # Find the club bootstrap select container
-                club_bootstrap_select = iframe_content.locator(self.CLUB_SELECTOR).locator('..')
-                
+                club_bootstrap_select = iframe_content.locator(
+                    self.CLUB_SELECTOR
+                ).locator("..")
+
                 # Click the dropdown toggle button for club select
-                dropdown_button = club_bootstrap_select.locator('.dropdown-toggle')
+                dropdown_button = club_bootstrap_select.locator(".dropdown-toggle")
                 await dropdown_button.click()
                 await asyncio.sleep(1)  # Give time for dropdown to open
-                
+
                 # Wait for dropdown to be visible
-                await iframe_content.locator('.dropdown-menu.open').wait_for(timeout=2000)
-                
+                await iframe_content.locator(".dropdown-menu.open").wait_for(
+                    timeout=2000
+                )
+
                 # Click the specific club option from the dropdown menu
-                club_option = iframe_content.locator(f'.dropdown-menu li a .text:has-text("{club}")').first()
+                club_option = iframe_content.locator(
+                    f'.dropdown-menu li a .text:has-text("{club}")'
+                ).first()
                 await club_option.click()
                 await asyncio.sleep(1)
-                
-                logger.info("Club filter applied via Bootstrap UI", extra={"club": club})
+
+                logger.info(
+                    "Club filter applied via Bootstrap UI", extra={"club": club}
+                )
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Bootstrap UI method failed: {e}")
 
             # Strategy 3: Try searching in the club dropdown (since it has search functionality)
             try:
                 # Click the club dropdown toggle to open it
-                club_bootstrap_select = iframe_content.locator(self.CLUB_SELECTOR).locator('..')
-                dropdown_button = club_bootstrap_select.locator('.dropdown-toggle')
+                club_bootstrap_select = iframe_content.locator(
+                    self.CLUB_SELECTOR
+                ).locator("..")
+                dropdown_button = club_bootstrap_select.locator(".dropdown-toggle")
                 await dropdown_button.click()
                 await asyncio.sleep(1)
-                
+
                 # Find and use the search box
                 search_box = iframe_content.locator('.bs-searchbox input[type="text"]')
                 if await search_box.count() > 0:
                     await search_box.fill(club)
                     await asyncio.sleep(1)  # Wait for search results
-                    
+
                     # Click the first matching result
-                    search_result = iframe_content.locator(f'.dropdown-menu li a .text:has-text("{club}")').first()
+                    search_result = iframe_content.locator(
+                        f'.dropdown-menu li a .text:has-text("{club}")'
+                    ).first()
                     await search_result.click()
                     await asyncio.sleep(1)
-                    
+
                     logger.info("Club filter applied via search", extra={"club": club})
                     return True
                 else:
                     logger.debug("Search box not found in club dropdown")
-                
+
             except Exception as e:
                 logger.debug(f"Search method failed: {e}")
 
@@ -461,7 +525,10 @@ class MLSFilterApplicator:
             True if filter applied successfully, False otherwise
         """
         try:
-            logger.info("Applying competition filter in iframe", extra={"competition": competition})
+            logger.info(
+                "Applying competition filter in iframe",
+                extra={"competition": competition},
+            )
 
             if not competition:
                 logger.debug("Empty competition provided, skipping filter")
@@ -469,7 +536,9 @@ class MLSFilterApplicator:
 
             # Validate competition option
             if not await self._validate_filter_option("competition", competition):
-                logger.warning("Invalid competition", extra={"competition": competition})
+                logger.warning(
+                    "Invalid competition", extra={"competition": competition}
+                )
                 return False
 
             # Get iframe content
@@ -481,56 +550,82 @@ class MLSFilterApplicator:
             # Strategy 1: Try direct select option with retries
             for attempt in range(3):
                 try:
-                    logger.info(f"Attempting direct competition select for {competition} (attempt {attempt + 1})")
-                    
+                    logger.info(
+                        f"Attempting direct competition select for {competition} (attempt {attempt + 1})"
+                    )
+
                     # Find the competition select element
-                    competition_select = iframe_content.locator(self.COMPETITION_SELECTOR)
+                    competition_select = iframe_content.locator(
+                        self.COMPETITION_SELECTOR
+                    )
                     select_count = await competition_select.count()
                     logger.info(f"Found {select_count} competition select elements")
-                    
+
                     if select_count > 0:
                         # Try to select by visible text (competition name)
                         await competition_select.select_option(label=competition)
-                        logger.info(f"Selected competition option with label {competition}")
-                        
+                        logger.info(
+                            f"Selected competition option with label {competition}"
+                        )
+
                         # Give time for Bootstrap Select to update
                         await asyncio.sleep(2)
-                        
-                        logger.info("Competition filter applied via direct select", extra={"competition": competition})
+
+                        logger.info(
+                            "Competition filter applied via direct select",
+                            extra={"competition": competition},
+                        )
                         return True
                     else:
                         if attempt < 2:  # Only wait if we have more attempts
-                            logger.info(f"No competition select elements found, waiting before retry {attempt + 1}")
+                            logger.info(
+                                f"No competition select elements found, waiting before retry {attempt + 1}"
+                            )
                             await asyncio.sleep(3)  # Wait for elements to load
                         else:
-                            logger.warning("No competition select elements found after all retries")
-                        
+                            logger.warning(
+                                "No competition select elements found after all retries"
+                            )
+
                 except Exception as e:
-                    logger.warning(f"Direct select method failed on attempt {attempt + 1}: {e}")
+                    logger.warning(
+                        f"Direct select method failed on attempt {attempt + 1}: {e}"
+                    )
                     if attempt < 2:
                         await asyncio.sleep(2)  # Wait before retry
 
             # Strategy 2: Try Bootstrap Select UI interaction
             try:
                 # Find the competition bootstrap select container
-                competition_bootstrap_select = iframe_content.locator(self.COMPETITION_SELECTOR).locator('..')
-                
+                competition_bootstrap_select = iframe_content.locator(
+                    self.COMPETITION_SELECTOR
+                ).locator("..")
+
                 # Click the dropdown toggle button for competition select
-                dropdown_button = competition_bootstrap_select.locator('.dropdown-toggle')
+                dropdown_button = competition_bootstrap_select.locator(
+                    ".dropdown-toggle"
+                )
                 await dropdown_button.click()
                 await asyncio.sleep(1)  # Give time for dropdown to open
-                
+
                 # Wait for dropdown to be visible
-                await iframe_content.locator('.dropdown-menu.open').wait_for(timeout=2000)
-                
+                await iframe_content.locator(".dropdown-menu.open").wait_for(
+                    timeout=2000
+                )
+
                 # Click the specific competition option from the dropdown menu
-                competition_option = iframe_content.locator(f'.dropdown-menu li a .text:has-text("{competition}")').first()
+                competition_option = iframe_content.locator(
+                    f'.dropdown-menu li a .text:has-text("{competition}")'
+                ).first()
                 await competition_option.click()
                 await asyncio.sleep(1)
-                
-                logger.info("Competition filter applied via Bootstrap UI", extra={"competition": competition})
+
+                logger.info(
+                    "Competition filter applied via Bootstrap UI",
+                    extra={"competition": competition},
+                )
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Bootstrap UI method failed: {e}")
 
@@ -559,7 +654,9 @@ class MLSFilterApplicator:
             True if filter applied successfully, False otherwise
         """
         try:
-            logger.info("Applying division filter in iframe", extra={"division": division})
+            logger.info(
+                "Applying division filter in iframe", extra={"division": division}
+            )
 
             if not division:
                 logger.debug("Empty division provided, skipping filter")
@@ -580,36 +677,55 @@ class MLSFilterApplicator:
             for attempt in range(3):
                 try:
                     division_value = self.DIVISION_VALUES.get(division)
-                    logger.info(f"Attempting direct select for {division} with value {division_value} (attempt {attempt + 1})")
-                    
+                    logger.info(
+                        f"Attempting direct select for {division} with value {division_value} (attempt {attempt + 1})"
+                    )
+
                     if division_value:
                         # Find the division select (it's the 4th select element - index 3)
-                        all_selects = await iframe_content.locator('select').all()
+                        all_selects = await iframe_content.locator("select").all()
                         logger.info(f"Found {len(all_selects)} select elements total")
-                        
-                        if len(all_selects) >= 4:  # Make sure we have at least 4 selects
-                            division_select = all_selects[3]  # Index 3 is the 4th select (division)
+
+                        if (
+                            len(all_selects) >= 4
+                        ):  # Make sure we have at least 4 selects
+                            division_select = all_selects[
+                                3
+                            ]  # Index 3 is the 4th select (division)
                             await division_select.select_option(value=division_value)
-                            logger.info(f"Selected division option with value {division_value}")
-                            
+                            logger.info(
+                                f"Selected division option with value {division_value}"
+                            )
+
                             # Give time for Bootstrap Select to update
                             await asyncio.sleep(2)
-                            
+
                             # Since our manual test showed this approach works, trust it worked
-                            logger.info("Division filter applied via direct select", extra={"division": division, "value": division_value})
+                            logger.info(
+                                "Division filter applied via direct select",
+                                extra={"division": division, "value": division_value},
+                            )
                             return True
                         else:
                             if attempt < 2:  # Only wait if we have more attempts
-                                logger.info(f"Not enough select elements found ({len(all_selects)}), waiting before retry {attempt + 1}")
+                                logger.info(
+                                    f"Not enough select elements found ({len(all_selects)}), waiting before retry {attempt + 1}"
+                                )
                                 await asyncio.sleep(3)  # Wait for elements to load
                             else:
-                                logger.warning(f"Not enough select elements found after all retries: {len(all_selects)}")
+                                logger.warning(
+                                    f"Not enough select elements found after all retries: {len(all_selects)}"
+                                )
                     else:
-                        logger.warning(f"No value mapping found for division: {division}")
+                        logger.warning(
+                            f"No value mapping found for division: {division}"
+                        )
                         break  # No point retrying if we don't have the value
-                        
+
                 except Exception as e:
-                    logger.warning(f"Direct select method failed on attempt {attempt + 1}: {e}")
+                    logger.warning(
+                        f"Direct select method failed on attempt {attempt + 1}: {e}"
+                    )
                     if attempt < 2:
                         await asyncio.sleep(2)  # Wait before retry
 
@@ -617,30 +733,42 @@ class MLSFilterApplicator:
             try:
                 # Extract the division name (e.g., "Central" from "Division Central")
                 division_name = division.replace("Division", "").strip()
-                division_button = iframe_content.get_by_role("button", name=f"Division {division_name}")
+                division_button = iframe_content.get_by_role(
+                    "button", name=f"Division {division_name}"
+                )
                 await division_button.click()
-                
-                logger.info("Division filter applied via role button", extra={"division": division})
+
+                logger.info(
+                    "Division filter applied via role button",
+                    extra={"division": division},
+                )
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Role button method failed: {e}")
 
             # Strategy 3: Try Bootstrap Select UI interaction - as fallback
             try:
                 # Click the division dropdown toggle
-                division_dropdown = iframe_content.locator('label:has-text("Division") + div .dropdown-toggle')
+                division_dropdown = iframe_content.locator(
+                    'label:has-text("Division") + div .dropdown-toggle'
+                )
                 await division_dropdown.click()
                 await asyncio.sleep(0.5)
-                
+
                 # Click the specific division option
-                division_option = iframe_content.locator(f'span.text:has-text("{division}")')
+                division_option = iframe_content.locator(
+                    f'span.text:has-text("{division}")'
+                )
                 await division_option.click()
                 await asyncio.sleep(0.5)
-                
-                logger.info("Division filter applied via Bootstrap UI", extra={"division": division})
+
+                logger.info(
+                    "Division filter applied via Bootstrap UI",
+                    extra={"division": division},
+                )
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Bootstrap UI method failed: {e}")
 
@@ -669,7 +797,10 @@ class MLSFilterApplicator:
             True if filter applied successfully, False otherwise
         """
         try:
-            logger.info("Applying age group filter via URL navigation", extra={"age_group": age_group})
+            logger.info(
+                "Applying age group filter via URL navigation",
+                extra={"age_group": age_group},
+            )
 
             if not age_group:
                 logger.debug("Empty age group provided, skipping filter")
@@ -683,7 +814,7 @@ class MLSFilterApplicator:
             # Map age group to URL path
             age_group_lower = age_group.lower()
             url_path = None
-            
+
             if age_group_lower == "u13":
                 url_path = "/mlsnext/schedule/u13/"
             elif age_group_lower == "u14":
@@ -696,22 +827,27 @@ class MLSFilterApplicator:
                 url_path = "/mlsnext/schedule/u17/"
             elif age_group_lower == "u19":
                 url_path = "/mlsnext/schedule/u19/"
-            
+
             if url_path:
                 # Navigate to the age group specific page
                 base_url = "https://www.mlssoccer.com"
                 full_url = base_url + url_path
-                
+
                 logger.info("Navigating to age group URL", extra={"url": full_url})
-                await self.page.goto(full_url, wait_until='load')
-                
+                await self.page.goto(full_url, wait_until="load")
+
                 # Wait for page to load
                 await asyncio.sleep(2)
-                
-                logger.info("Age group filter applied via URL navigation", extra={"age_group": age_group, "url": full_url})
+
+                logger.info(
+                    "Age group filter applied via URL navigation",
+                    extra={"age_group": age_group, "url": full_url},
+                )
                 return True
             else:
-                logger.error("No URL mapping found for age group", extra={"age_group": age_group})
+                logger.error(
+                    "No URL mapping found for age group", extra={"age_group": age_group}
+                )
                 return False
 
         except Exception as e:
@@ -736,7 +872,10 @@ class MLSFilterApplicator:
             True if filter applied successfully, False otherwise
         """
         try:
-            logger.info("Applying division filter via URL navigation", extra={"division": division})
+            logger.info(
+                "Applying division filter via URL navigation",
+                extra={"division": division},
+            )
 
             if not division:
                 logger.debug("Empty division provided, skipping filter")
@@ -750,32 +889,50 @@ class MLSFilterApplicator:
             # Map division to URL path
             division_lower = division.lower()
             url_path = None
-            
+
             if "homegrown" in division_lower:
                 url_path = "/mlsnext/schedule/homegrown-division/"
             elif "academy" in division_lower:
                 url_path = "/mlsnext/schedule/academy_division/"
-            elif division_lower in ["northeast", "southeast", "central", "southwest", "northwest", "mid-atlantic", "great lakes", "texas", "california"]:
+            elif division_lower in [
+                "northeast",
+                "southeast",
+                "central",
+                "southwest",
+                "northwest",
+                "mid-atlantic",
+                "great lakes",
+                "texas",
+                "california",
+            ]:
                 # For geographical divisions, we might need to construct a different URL
                 # For now, log that this type of division filtering needs additional investigation
-                logger.warning("Geographical division filtering not yet implemented", extra={"division": division})
+                logger.warning(
+                    "Geographical division filtering not yet implemented",
+                    extra={"division": division},
+                )
                 return True  # Return True to not fail the whole process
-            
+
             if url_path:
                 # Navigate to the division specific page
                 base_url = "https://www.mlssoccer.com"
                 full_url = base_url + url_path
-                
+
                 logger.info("Navigating to division URL", extra={"url": full_url})
-                await self.page.goto(full_url, wait_until='load')
-                
+                await self.page.goto(full_url, wait_until="load")
+
                 # Wait for page to load
                 await asyncio.sleep(2)
-                
-                logger.info("Division filter applied via URL navigation", extra={"division": division, "url": full_url})
+
+                logger.info(
+                    "Division filter applied via URL navigation",
+                    extra={"division": division, "url": full_url},
+                )
                 return True
             else:
-                logger.error("No URL mapping found for division", extra={"division": division})
+                logger.error(
+                    "No URL mapping found for division", extra={"division": division}
+                )
                 return False
 
         except Exception as e:
@@ -801,7 +958,10 @@ class MLSFilterApplicator:
             True if filter applied successfully, False otherwise
         """
         try:
-            logger.info("Applying date filter in iframe", extra={"start_date": start_date, "end_date": end_date})
+            logger.info(
+                "Applying date filter in iframe",
+                extra={"start_date": start_date, "end_date": end_date},
+            )
 
             if not start_date or not end_date:
                 logger.debug("Empty dates provided, skipping date filter")
@@ -816,79 +976,91 @@ class MLSFilterApplicator:
             # Strategy 1: Use calendar date picker by clicking actual date cells
             try:
                 from datetime import datetime, timedelta
-                
+
                 # Calculate actual start and end dates based on today
                 today = datetime.now().date()
                 yesterday = today - timedelta(days=1)
-                actual_start_date = yesterday - timedelta(days=1)  # Yesterday minus 1 day
-                actual_end_date = yesterday + timedelta(days=3)    # Yesterday plus 3 days
-                
-                logger.info(f"Calculated date range - Start: {actual_start_date}, End: {actual_end_date}")
-                
+                actual_start_date = yesterday - timedelta(
+                    days=1
+                )  # Yesterday minus 1 day
+                actual_end_date = yesterday + timedelta(days=3)  # Yesterday plus 3 days
+
+                logger.info(
+                    f"Calculated date range - Start: {actual_start_date}, End: {actual_end_date}"
+                )
+
                 # Find and click the date field to open calendar
                 date_field = iframe_content.locator('input[name="datefilter"]')
                 if await date_field.count() > 0:
                     await date_field.click()
                     logger.info("Clicked date field to open calendar")
                     await asyncio.sleep(2)  # Wait for calendar to appear
-                    
+
                     # Check if daterangepicker appeared
-                    calendar_picker = iframe_content.locator('.daterangepicker')
+                    calendar_picker = iframe_content.locator(".daterangepicker")
                     if await calendar_picker.count() > 0:
                         logger.info("Calendar picker opened successfully")
-                        
+
                         # Click on start date (19th) - use left calendar only
                         start_day = 19  # Always use 19th regardless of calculation
                         start_date_selectors = [
                             f'.daterangepicker .drp-calendar.left td:has-text("{start_day}"):not(.off)',
                             f'.drp-calendar.left .calendar-table td:has-text("{start_day}"):not(.off)',
-                            f'.daterangepicker .left td:has-text("{start_day}"):not(.off)'
+                            f'.daterangepicker .left td:has-text("{start_day}"):not(.off)',
                         ]
-                        
+
                         start_clicked = False
                         for start_selector in start_date_selectors:
                             start_cell = iframe_content.locator(start_selector)
                             if await start_cell.count() > 0:
                                 await start_cell.first.click()
-                                logger.info(f"Clicked start date {start_day} on left calendar using selector: {start_selector}")
+                                logger.info(
+                                    f"Clicked start date {start_day} on left calendar using selector: {start_selector}"
+                                )
                                 await asyncio.sleep(1)
                                 start_clicked = True
                                 break
-                        
+
                         if not start_clicked:
-                            logger.warning(f"Could not click start date {start_day} on left calendar")
+                            logger.warning(
+                                f"Could not click start date {start_day} on left calendar"
+                            )
                             return False
-                        
+
                         # Click on end date (22nd) - use left calendar only (same month)
                         end_day = 22  # Always use 22nd regardless of calculation
                         end_date_selectors = [
                             f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
                             f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
-                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)'
+                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
                         ]
-                        
+
                         end_clicked = False
                         for end_selector in end_date_selectors:
                             end_cell = iframe_content.locator(end_selector)
                             if await end_cell.count() > 0:
                                 await end_cell.first.click()
-                                logger.info(f"Clicked end date {end_day} on left calendar using selector: {end_selector}")
+                                logger.info(
+                                    f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                                )
                                 await asyncio.sleep(1)
                                 end_clicked = True
                                 break
-                        
+
                         if not end_clicked:
-                            logger.warning(f"Could not click end date {end_day} on left calendar")
+                            logger.warning(
+                                f"Could not click end date {end_day} on left calendar"
+                            )
                             return False
-                        
+
                         # Click Apply button
                         apply_selectors = [
-                            '.daterangepicker button.applyBtn',
-                            'button.applyBtn',
-                            '.drp-buttons button.applyBtn',
-                            'button:has-text("Apply")'
+                            ".daterangepicker button.applyBtn",
+                            "button.applyBtn",
+                            ".drp-buttons button.applyBtn",
+                            'button:has-text("Apply")',
                         ]
-                        
+
                         apply_clicked = False
                         for apply_selector in apply_selectors:
                             apply_button = iframe_content.locator(apply_selector)
@@ -898,46 +1070,53 @@ class MLSFilterApplicator:
                                 await asyncio.sleep(3)  # Wait for filter to apply
                                 apply_clicked = True
                                 break
-                        
+
                         if not apply_clicked:
                             logger.warning("Apply button not found")
                             return False
-                        
-                        logger.info("Date filter applied via calendar date picker", extra={
-                            "start_date": str(actual_start_date), 
-                            "end_date": str(actual_end_date)
-                        })
+
+                        logger.info(
+                            "Date filter applied via calendar date picker",
+                            extra={
+                                "start_date": str(actual_start_date),
+                                "end_date": str(actual_end_date),
+                            },
+                        )
                         return True
                     else:
-                        logger.warning("Calendar picker did not appear after clicking date field")
+                        logger.warning(
+                            "Calendar picker did not appear after clicking date field"
+                        )
                         return False
                 else:
                     logger.warning("Date field not found")
-                
+
             except Exception as e:
                 logger.warning(f"Direct text input method failed: {e}")
 
             # Strategy 2: Try role-based interaction (from recorded script)
             try:
                 # Click the Match Date textbox
-                match_date_textbox = iframe_content.get_by_role("textbox", name="Match Date")
+                match_date_textbox = iframe_content.get_by_role(
+                    "textbox", name="Match Date"
+                )
                 await match_date_textbox.click()
                 logger.info("Clicked Match Date textbox")
                 await asyncio.sleep(1)
-                
+
                 # This opens a calendar picker - for now, just click Apply to use default dates
                 # TODO: Implement specific date cell clicking based on start_date and end_date
                 apply_button = iframe_content.get_by_role("button", name="Apply")
                 await apply_button.click()
                 logger.info("Clicked Apply button via role-based method")
                 await asyncio.sleep(1)
-                
+
                 logger.info("Date filter applied via role-based interaction")
                 return True
-                
+
             except Exception as e:
                 logger.debug(f"Role-based method failed: {e}")
-                
+
             logger.error("Date filter application failed")
             return False
 
@@ -976,7 +1155,7 @@ class MLSFilterApplicator:
 
             # Stay on the current page - use URL navigation for filtering on /schedule/all/
             # Only use iframe if we're already on a division page that has one
-            
+
             # Discover available options from current page
             await self.discover_available_options()
 
@@ -985,11 +1164,11 @@ class MLSFilterApplicator:
 
             # Always try iframe filtering first since we discovered filters are available
             iframe_content = await self._get_iframe_content()
-            
+
             if iframe_content:
                 # Use iframe filtering when iframe is available
                 logger.info("Using iframe filtering - dropdown filters detected")
-                
+
                 # Apply age group filter via iframe
                 if config.age_group:
                     if await self.apply_age_group_filter(config.age_group):
@@ -998,7 +1177,7 @@ class MLSFilterApplicator:
                     else:
                         logger.error("Failed to apply age group filter via iframe")
                         return False
-                
+
                 # Apply division filter via iframe
                 if config.division:
                     if await self.apply_division_filter(config.division):
@@ -1007,11 +1186,11 @@ class MLSFilterApplicator:
                     else:
                         logger.error("Failed to apply division filter via iframe")
                         return False
-                        
+
             else:
                 # Fallback to URL navigation only if no iframe is available
                 logger.info("No iframe detected - falling back to URL navigation")
-                
+
                 # Apply age group filter via URL navigation
                 if config.age_group:
                     if await self._apply_age_group_via_url(config.age_group):
@@ -1019,8 +1198,8 @@ class MLSFilterApplicator:
                     else:
                         logger.error("Failed to apply age group filter via URL")
                         return False
-                
-                # Apply division filter via URL navigation  
+
+                # Apply division filter via URL navigation
                 if config.division:
                     if await self._apply_division_via_url(config.division):
                         filters_applied.append("division")
@@ -1041,7 +1220,7 @@ class MLSFilterApplicator:
                     else:
                         logger.warning("Failed to apply club filter via iframe")
                         # Don't fail the whole process for club filter
-                
+
                 # Apply competition filter via iframe
                 if config.competition:
                     if await self.apply_competition_filter(config.competition):
@@ -1093,13 +1272,15 @@ class MLSFilterApplicator:
             for selector in results_selectors:
                 if await self.interactor.wait_for_element(selector, timeout=5000):
                     logger.info("Filter results loaded", extra={"selector": selector})
-                    
+
                     # Additional wait to ensure content is fully rendered
                     await asyncio.sleep(2)
                     return True
 
             # If no specific results container found, just wait a bit and continue
-            logger.info("No specific results container found, proceeding with extraction")
+            logger.info(
+                "No specific results container found, proceeding with extraction"
+            )
             await asyncio.sleep(3)
             return True
 

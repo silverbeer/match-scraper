@@ -6,7 +6,6 @@ on the MLS website before the main content is accessible.
 """
 
 import asyncio
-from typing import Optional
 
 from playwright.async_api import Page
 
@@ -18,13 +17,14 @@ logger = get_logger()
 
 class ConsentHandlerError(Exception):
     """Custom exception for consent handling failures."""
+
     pass
 
 
 class MLSConsentHandler:
     """
     Handles cookie consent and privacy banners on the MLS website.
-    
+
     The MLS website uses OneTrust consent management which shows a modal
     that must be accepted before accessing the main page content.
     """
@@ -42,7 +42,7 @@ class MLSConsentHandler:
         ".ot-sdk-show-settings button",
         "#accept-recommended-btn-handler",
     ]
-    
+
     # Alternative consent selectors
     CONSENT_MODAL_SELECTORS = [
         ".consent-modal",
@@ -55,7 +55,7 @@ class MLSConsentHandler:
         "[id*='onetrust']",  # Any OneTrust element
         "[class*='onetrust']",  # Any OneTrust element
     ]
-    
+
     ACCEPT_BUTTON_SELECTORS = [
         "button:has-text('Accept')",
         "button:has-text('Continue')",
@@ -122,15 +122,15 @@ class MLSConsentHandler:
                 "#ot-sdk-btn",
                 ".ot-sdk-show-settings",
                 "[id*='onetrust']",
-                "[class*='onetrust']"
+                "[class*='onetrust']",
             ]
-            
+
             for selector in onetrust_selectors:
                 if await self.interactor.wait_for_element(selector, timeout=3000):
                     logger.info(f"OneTrust element detected: {selector}")
                     banner_found = True
                     break
-            
+
             if not banner_found:
                 logger.debug("OneTrust banner not found")
                 return False
@@ -140,13 +140,15 @@ class MLSConsentHandler:
             # Try to find and click accept button
             for selector in self.ONETRUST_ACCEPT_BUTTON_SELECTORS:
                 logger.debug(f"Trying OneTrust accept button: {selector}")
-                
+
                 if await self.interactor.wait_for_element(selector, timeout=2000):
                     if await self.interactor.click_element(selector):
                         logger.info(f"Clicked OneTrust accept button: {selector}")
-                        
+
                         # Wait for banner to disappear
-                        await self._wait_for_banner_disappear(self.ONETRUST_BANNER_SELECTOR)
+                        await self._wait_for_banner_disappear(
+                            self.ONETRUST_BANNER_SELECTOR
+                        )
                         return True
 
             logger.warning("OneTrust banner found but no accept button worked")
@@ -166,7 +168,7 @@ class MLSConsentHandler:
         try:
             # Check for generic consent modals
             consent_modal_found = False
-            
+
             for modal_selector in self.CONSENT_MODAL_SELECTORS:
                 if await self.interactor.wait_for_element(modal_selector, timeout=2000):
                     logger.info(f"Generic consent modal detected: {modal_selector}")
@@ -180,11 +182,11 @@ class MLSConsentHandler:
             # Try to find and click accept button
             for selector in self.ACCEPT_BUTTON_SELECTORS:
                 logger.debug(f"Trying generic accept button: {selector}")
-                
+
                 if await self.interactor.wait_for_element(selector, timeout=2000):
                     if await self.interactor.click_element(selector):
                         logger.info(f"Clicked generic accept button: {selector}")
-                        
+
                         # Wait a moment for modal to disappear
                         await asyncio.sleep(1)
                         return True
@@ -196,7 +198,9 @@ class MLSConsentHandler:
             logger.debug(f"Error handling generic consent: {e}")
             return False
 
-    async def _wait_for_banner_disappear(self, banner_selector: str, timeout: int = 5000) -> bool:
+    async def _wait_for_banner_disappear(
+        self, banner_selector: str, timeout: int = 5000
+    ) -> bool:
         """
         Wait for consent banner to disappear.
 
@@ -244,7 +248,7 @@ class MLSConsentHandler:
             for indicator in ready_indicators:
                 if await self.interactor.wait_for_element(indicator, timeout=2000):
                     logger.info(f"Page ready indicator found: {indicator}")
-                    
+
                     # Additional wait for JavaScript to load
                     await asyncio.sleep(2)
                     return True
@@ -288,7 +292,7 @@ async def test_consent_handling():
 
             if consent_handled:
                 print("✅ Consent handled successfully")
-                
+
                 # Wait for page to be ready
                 page_ready = await consent_handler.wait_for_page_ready()
                 if page_ready:

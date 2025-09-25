@@ -35,7 +35,7 @@ class MLSMatchExtractor:
 
     # CSS selectors for MLS website match elements (iframe-based Bootstrap grid)
     IFRAME_SELECTOR = 'main[role="main"] iframe, [aria-label*="main"] iframe, iframe[src*="modular11"]'
-    
+
     # Try multiple container selectors - the exact class names may vary
     MATCHES_CONTAINER_SELECTORS = [
         ".container-fluid.container-table-matches",  # Original from user HTML
@@ -44,7 +44,7 @@ class MLSMatchExtractor:
         "[class*='container-matches']",  # Any class containing 'container-matches'
         ".container-row",  # Look for the row container directly
     ]
-    
+
     # Try multiple row selectors
     MATCH_ROW_SELECTORS = [
         ".container-row .row.table-content-row.hidden-xs",  # Original from user HTML
@@ -53,20 +53,20 @@ class MLSMatchExtractor:
         ".table-content-row",  # Without hidden-xs
         "[class*='table-content-row']",  # Any class containing table-content-row
     ]
-    
+
     # Bootstrap grid column selectors for match data
     MATCH_COLUMN_SELECTORS = {
         "match_id": ".col-sm-1.pad-0:first-child",  # First column: Match ID + Gender
-        "details": ".col-sm-2:nth-child(2)",         # Second column: Date/Time + Venue  
-        "age": ".col-sm-1.pad-0:nth-child(3)",       # Third column: Age
-        "competition": ".col-sm-2:nth-child(4)",     # Fourth column: Competition + Division
-        "teams": ".col-sm-6.pad-0 .container-teams-info", # Fifth column: Teams + Score
+        "details": ".col-sm-2:nth-child(2)",  # Second column: Date/Time + Venue
+        "age": ".col-sm-1.pad-0:nth-child(3)",  # Third column: Age
+        "competition": ".col-sm-2:nth-child(4)",  # Fourth column: Competition + Division
+        "teams": ".col-sm-6.pad-0 .container-teams-info",  # Fifth column: Teams + Score
     }
-    
+
     # Team and score selectors within the teams column
     TEAM_SELECTORS = {
         "home_team": ".container-first-team p",
-        "score": ".container-score .score-match-table", 
+        "score": ".container-score .score-match-table",
         "away_team": ".container-second-team p",
     }
 
@@ -140,8 +140,12 @@ class MLSMatchExtractor:
 
             # If table extraction fails, try card-based extraction
             if not matches:
-                logger.info("Table extraction found no matches, trying card-based extraction")
-                matches = await self._extract_from_cards(age_group, division, competition)
+                logger.info(
+                    "Table extraction found no matches, trying card-based extraction"
+                )
+                matches = await self._extract_from_cards(
+                    age_group, division, competition
+                )
             else:
                 logger.info(f"Table extraction found {len(matches)} matches")
 
@@ -178,14 +182,14 @@ class MLSMatchExtractor:
             iframe_element = await self.page.wait_for_selector(
                 self.IFRAME_SELECTOR, timeout=self.timeout
             )
-            
+
             if not iframe_element:
                 logger.debug("No iframe found")
                 return False
 
             # Get iframe content frame
             self.iframe_content = await iframe_element.content_frame()
-            
+
             if not self.iframe_content:
                 logger.debug("Cannot access iframe content frame")
                 return False
@@ -221,9 +225,13 @@ class MLSMatchExtractor:
 
             for selector in result_selectors:
                 try:
-                    element = await self.iframe_content.wait_for_selector(selector, timeout=10000)
+                    element = await self.iframe_content.wait_for_selector(
+                        selector, timeout=10000
+                    )
                     if element:
-                        logger.debug("Results found in iframe", extra={"selector": selector})
+                        logger.debug(
+                            "Results found in iframe", extra={"selector": selector}
+                        )
                         return True
                 except Exception:
                     continue
@@ -258,9 +266,14 @@ class MLSMatchExtractor:
 
             for selector in no_results_selectors:
                 try:
-                    element = await self.iframe_content.wait_for_selector(selector, timeout=2000)
+                    element = await self.iframe_content.wait_for_selector(
+                        selector, timeout=2000
+                    )
                     if element:
-                        logger.debug("No results message found in iframe", extra={"selector": selector})
+                        logger.debug(
+                            "No results message found in iframe",
+                            extra={"selector": selector},
+                        )
                         return True
                 except Exception:
                     continue
@@ -295,32 +308,41 @@ class MLSMatchExtractor:
             # Try to find matches container using multiple selectors
             matches_container = None
             container_selector_used = None
-            
+
             for selector in self.MATCHES_CONTAINER_SELECTORS:
                 matches_container = await self.iframe_content.query_selector(selector)
                 if matches_container:
                     container_selector_used = selector
                     logger.info("Found matches container", extra={"selector": selector})
                     break
-            
+
             if not matches_container:
-                logger.debug("No matches container found with any selector", extra={"selectors": self.MATCHES_CONTAINER_SELECTORS})
+                logger.debug(
+                    "No matches container found with any selector",
+                    extra={"selectors": self.MATCHES_CONTAINER_SELECTORS},
+                )
                 return []
 
             # Try to find match rows using multiple selectors
             match_rows = None
             row_selector_used = None
-            
+
             for selector in self.MATCH_ROW_SELECTORS:
                 match_rows = await matches_container.query_selector_all(selector)
                 if match_rows:
                     row_selector_used = selector
-                    logger.info("Found match rows", extra={"selector": selector, "count": len(match_rows)})
+                    logger.info(
+                        "Found match rows",
+                        extra={"selector": selector, "count": len(match_rows)},
+                    )
                     break
-            
+
             if not match_rows:
-                logger.debug("No match rows found with any selector", extra={"selectors": self.MATCH_ROW_SELECTORS})
-                
+                logger.debug(
+                    "No match rows found with any selector",
+                    extra={"selectors": self.MATCH_ROW_SELECTORS},
+                )
+
                 # If we can't find rows with our selectors, try to find ANY divs that might be matches
                 fallback_selectors = [
                     "div[class*='row']",
@@ -329,23 +351,29 @@ class MLSMatchExtractor:
                     ".row",
                     "tr",  # In case it's still a table
                 ]
-                
+
                 for selector in fallback_selectors:
                     fallback_rows = await matches_container.query_selector_all(selector)
                     if fallback_rows:
-                        logger.info("Found fallback rows", extra={
-                            "selector": selector,
-                            "count": len(fallback_rows)
-                        })
+                        logger.info(
+                            "Found fallback rows",
+                            extra={"selector": selector, "count": len(fallback_rows)},
+                        )
                         # Use first few for testing
-                        match_rows = fallback_rows[:10]  # Limit to first 10 for performance
+                        match_rows = fallback_rows[
+                            :10
+                        ]  # Limit to first 10 for performance
                         row_selector_used = selector + " (fallback)"
                         break
-                
+
                 if not match_rows:
                     return []
 
-            logger.info("Using container selector: %s, row selector: %s", container_selector_used, row_selector_used)
+            logger.info(
+                "Using container selector: %s, row selector: %s",
+                container_selector_used,
+                row_selector_used,
+            )
 
             # Extract matches from rows
             matches = []
@@ -401,7 +429,10 @@ class MLSMatchExtractor:
                 cards = await self.page.query_selector_all(selector)
                 if cards:
                     match_cards = cards
-                    logger.debug("Found match cards", extra={"count": len(cards), "selector": selector})
+                    logger.debug(
+                        "Found match cards",
+                        extra={"count": len(cards), "selector": selector},
+                    )
                     break
 
             if not match_cards:
@@ -453,99 +484,182 @@ class MLSMatchExtractor:
             Match object or None if extraction fails
         """
         try:
-            logger.info("Extracting match from grid row", extra={"row_index": row_index})
+            logger.info(
+                "Extracting match from grid row", extra={"row_index": row_index}
+            )
 
             # Extract data from Bootstrap grid columns
             match_data = {}
 
             # Extract match ID and gender from first column
-            match_id_col = await row_element.query_selector(self.MATCH_COLUMN_SELECTORS["match_id"])
+            match_id_col = await row_element.query_selector(
+                self.MATCH_COLUMN_SELECTORS["match_id"]
+            )
             if match_id_col:
                 match_id_text = await match_id_col.text_content()
                 if match_id_text:
                     match_data["match_id_raw"] = match_id_text.strip()
-                    logger.info("Extracted match ID", extra={"row_index": row_index, "match_id": match_data["match_id_raw"]})
+                    logger.info(
+                        "Extracted match ID",
+                        extra={
+                            "row_index": row_index,
+                            "match_id": match_data["match_id_raw"],
+                        },
+                    )
 
             # Extract date/time and venue from second column
-            details_col = await row_element.query_selector(self.MATCH_COLUMN_SELECTORS["details"])
+            details_col = await row_element.query_selector(
+                self.MATCH_COLUMN_SELECTORS["details"]
+            )
             if details_col:
                 details_text = await details_col.text_content()
                 if details_text:
-                    logger.info("Raw details text", extra={"row_index": row_index, "details_text": repr(details_text)})
+                    logger.info(
+                        "Raw details text",
+                        extra={
+                            "row_index": row_index,
+                            "details_text": repr(details_text),
+                        },
+                    )
 
                     # Parse date, time, and venue from the details column
-                    details_parts = details_text.strip().split('\n')
-                    logger.info("Details parts", extra={"row_index": row_index, "parts": details_parts})
+                    details_parts = details_text.strip().split("\n")
+                    logger.info(
+                        "Details parts",
+                        extra={"row_index": row_index, "parts": details_parts},
+                    )
 
                     for i, part in enumerate(details_parts):
                         part = part.strip()
                         if not part:
                             continue
-                        logger.info("Processing details part", extra={"row_index": row_index, "part_index": i, "part": repr(part)})
+                        logger.info(
+                            "Processing details part",
+                            extra={
+                                "row_index": row_index,
+                                "part_index": i,
+                                "part": repr(part),
+                            },
+                        )
 
                         # Look for date patterns
                         date_found = False
                         for pattern in self.DATE_PATTERNS:
                             if pattern.search(part):
                                 match_data["date"] = part
-                                logger.info("Found date", extra={"row_index": row_index, "date": part})
+                                logger.info(
+                                    "Found date",
+                                    extra={"row_index": row_index, "date": part},
+                                )
                                 date_found = True
                                 break
 
                         # Look for time patterns (including combined date/time)
                         if not date_found and self.TIME_PATTERN.search(part):
                             match_data["time"] = part
-                            logger.info("Found time", extra={"row_index": row_index, "time": part})
+                            logger.info(
+                                "Found time",
+                                extra={"row_index": row_index, "time": part},
+                            )
                         # Check if this might be venue (everything else that's not date/time and not empty)
-                        elif not date_found and not self.TIME_PATTERN.search(part) and len(part) > 3:
+                        elif (
+                            not date_found
+                            and not self.TIME_PATTERN.search(part)
+                            and len(part) > 3
+                        ):
                             match_data["venue"] = part
-                            logger.info("Found venue", extra={"row_index": row_index, "venue": part})
+                            logger.info(
+                                "Found venue",
+                                extra={"row_index": row_index, "venue": part},
+                            )
 
             # Extract age from third column
-            age_col = await row_element.query_selector(self.MATCH_COLUMN_SELECTORS["age"])
+            age_col = await row_element.query_selector(
+                self.MATCH_COLUMN_SELECTORS["age"]
+            )
             if age_col:
                 age_text = await age_col.text_content()
                 if age_text:
                     match_data["age_raw"] = age_text.strip()
 
             # Extract competition and division from fourth column
-            competition_col = await row_element.query_selector(self.MATCH_COLUMN_SELECTORS["competition"])
+            competition_col = await row_element.query_selector(
+                self.MATCH_COLUMN_SELECTORS["competition"]
+            )
             if competition_col:
                 comp_text = await competition_col.text_content()
                 if comp_text:
                     match_data["competition_raw"] = comp_text.strip()
-                    logger.info("Found competition", extra={"row_index": row_index, "competition": comp_text.strip()})
+                    logger.info(
+                        "Found competition",
+                        extra={
+                            "row_index": row_index,
+                            "competition": comp_text.strip(),
+                        },
+                    )
 
             # Extract teams and score from fifth column
-            teams_col = await row_element.query_selector(self.MATCH_COLUMN_SELECTORS["teams"])
+            teams_col = await row_element.query_selector(
+                self.MATCH_COLUMN_SELECTORS["teams"]
+            )
             if teams_col:
                 logger.info("Found teams column", extra={"row_index": row_index})
-                
+
                 # Extract home team
-                home_team_elem = await teams_col.query_selector(self.TEAM_SELECTORS["home_team"])
+                home_team_elem = await teams_col.query_selector(
+                    self.TEAM_SELECTORS["home_team"]
+                )
                 if home_team_elem:
                     home_team_text = await home_team_elem.text_content()
                     if home_team_text:
                         match_data["home_team"] = home_team_text.strip()
-                        logger.info("Extracted home team", extra={"row_index": row_index, "home_team": match_data["home_team"]})
+                        logger.info(
+                            "Extracted home team",
+                            extra={
+                                "row_index": row_index,
+                                "home_team": match_data["home_team"],
+                            },
+                        )
 
                 # Extract away team
-                away_team_elem = await teams_col.query_selector(self.TEAM_SELECTORS["away_team"])
+                away_team_elem = await teams_col.query_selector(
+                    self.TEAM_SELECTORS["away_team"]
+                )
                 if away_team_elem:
                     away_team_text = await away_team_elem.text_content()
                     if away_team_text:
                         match_data["away_team"] = away_team_text.strip()
-                        logger.info("Extracted away team", extra={"row_index": row_index, "away_team": match_data["away_team"]})
+                        logger.info(
+                            "Extracted away team",
+                            extra={
+                                "row_index": row_index,
+                                "away_team": match_data["away_team"],
+                            },
+                        )
 
                 # Extract score
-                score_elem = await teams_col.query_selector(self.TEAM_SELECTORS["score"])
+                score_elem = await teams_col.query_selector(
+                    self.TEAM_SELECTORS["score"]
+                )
                 if score_elem:
                     score_text = await score_elem.text_content()
                     if score_text:
                         match_data["score"] = score_text.strip()
-                        logger.info("Extracted score", extra={"row_index": row_index, "score": match_data["score"]})
+                        logger.info(
+                            "Extracted score",
+                            extra={
+                                "row_index": row_index,
+                                "score": match_data["score"],
+                            },
+                        )
             else:
-                logger.info("Teams column not found", extra={"row_index": row_index, "selector": self.MATCH_COLUMN_SELECTORS["teams"]})
+                logger.info(
+                    "Teams column not found",
+                    extra={
+                        "row_index": row_index,
+                        "selector": self.MATCH_COLUMN_SELECTORS["teams"],
+                    },
+                )
 
             # Fallback: if specific selectors fail, try to parse row text
             if not match_data.get("home_team") or not match_data.get("away_team"):
@@ -555,14 +669,21 @@ class MLSMatchExtractor:
                     match_data.update(fallback_data)
 
             if not match_data:
-                logger.info("No data extracted from grid row", extra={"row_index": row_index})
+                logger.info(
+                    "No data extracted from grid row", extra={"row_index": row_index}
+                )
                 return None
 
-            logger.info("Row extraction summary", extra={
-                "row_index": row_index,
-                "extracted_fields": list(match_data.keys()),
-                "has_teams": bool(match_data.get("home_team") and match_data.get("away_team"))
-            })
+            logger.info(
+                "Row extraction summary",
+                extra={
+                    "row_index": row_index,
+                    "extracted_fields": list(match_data.keys()),
+                    "has_teams": bool(
+                        match_data.get("home_team") and match_data.get("away_team")
+                    ),
+                },
+            )
 
             # Convert to Match object
             match = await self._create_match_from_data(
@@ -570,15 +691,21 @@ class MLSMatchExtractor:
             )
 
             if match:
-                logger.info("Successfully created match object", extra={
-                    "row_index": row_index, 
-                    "match_id": match.match_id,
-                    "home_team": match.home_team,
-                    "away_team": match.away_team
-                })
+                logger.info(
+                    "Successfully created match object",
+                    extra={
+                        "row_index": row_index,
+                        "match_id": match.match_id,
+                        "home_team": match.home_team,
+                        "away_team": match.away_team,
+                    },
+                )
             else:
-                logger.info("Failed to create match object", extra={"row_index": row_index, "data": match_data})
-            
+                logger.info(
+                    "Failed to create match object",
+                    extra={"row_index": row_index, "data": match_data},
+                )
+
             return match
 
         except Exception as e:
@@ -650,7 +777,10 @@ class MLSMatchExtractor:
                 match_data, card_index, age_group, division, competition
             )
 
-            logger.debug("Successfully extracted match from card", extra={"match_id": match.match_id if match else None})
+            logger.debug(
+                "Successfully extracted match from card",
+                extra={"match_id": match.match_id if match else None},
+            )
             return match
 
         except Exception as e:
@@ -672,7 +802,7 @@ class MLSMatchExtractor:
         """
         try:
             data = {}
-            
+
             # Common cell position mappings
             if len(cells) >= 5:
                 # Typical layout: Date, Time, Home, Away, Score
@@ -681,12 +811,12 @@ class MLSMatchExtractor:
                 data["home_team"] = await cells[2].text_content()
                 data["away_team"] = await cells[3].text_content()
                 data["score"] = await cells[4].text_content()
-                
+
                 if len(cells) >= 6:
                     data["venue"] = await cells[5].text_content()
                 if len(cells) >= 7:
                     data["status"] = await cells[6].text_content()
-                    
+
             elif len(cells) >= 3:
                 # Minimal layout: Home, Away, Score/Status
                 data["home_team"] = await cells[0].text_content()
@@ -697,7 +827,9 @@ class MLSMatchExtractor:
             return {k: v.strip() for k, v in data.items() if v and v.strip()}
 
         except Exception as e:
-            logger.debug("Error extracting from cell positions", extra={"error": str(e)})
+            logger.debug(
+                "Error extracting from cell positions", extra={"error": str(e)}
+            )
             return {}
 
     def _parse_row_text(self, text: str) -> dict:
@@ -712,15 +844,15 @@ class MLSMatchExtractor:
         """
         try:
             data = {}
-            
+
             # Split text into parts
             parts = [part.strip() for part in text.split() if part.strip()]
-            
+
             if len(parts) < 3:
                 return {}
 
             # Look for date patterns
-            for i, part in enumerate(parts):
+            for _i, part in enumerate(parts):
                 for pattern in self.DATE_PATTERNS:
                     if pattern.search(part):
                         data["date"] = part
@@ -739,7 +871,9 @@ class MLSMatchExtractor:
                     break
 
             # Try to identify teams (usually the longest text parts)
-            text_parts = [p for p in parts if len(p) > 3 and not any(c.isdigit() for c in p)]
+            text_parts = [
+                p for p in parts if len(p) > 3 and not any(c.isdigit() for c in p)
+            ]
             if len(text_parts) >= 2:
                 data["home_team"] = text_parts[0]
                 data["away_team"] = text_parts[1]
@@ -786,13 +920,15 @@ class MLSMatchExtractor:
         """
         try:
             # Generate match ID
-            match_id = f"{age_group}_{division}_{index}_{datetime.now().strftime('%Y%m%d')}"
+            match_id = (
+                f"{age_group}_{division}_{index}_{datetime.now().strftime('%Y%m%d')}"
+            )
 
             # Parse date and time
             # Handle combined date/time format like "09/20/25 03:45pm"
             time_str = data.get("time", "")
             date_str = data.get("date", "")
-            
+
             if time_str and not date_str:
                 # Combined format: split date and time
                 parts = time_str.split(" ", 1)
@@ -804,29 +940,37 @@ class MLSMatchExtractor:
                     time_part = ""
             else:
                 time_part = time_str
-            
+
             match_date = self._parse_match_datetime(date_str, time_part)
             if not match_date:
-                logger.info("Could not parse match date/time", extra={
-                    "time_str": time_str,
-                    "date_str": date_str, 
-                    "time_part": time_part,
-                    "data": data
-                })
+                logger.info(
+                    "Could not parse match date/time",
+                    extra={
+                        "time_str": time_str,
+                        "date_str": date_str,
+                        "time_part": time_part,
+                        "data": data,
+                    },
+                )
                 return None
 
-            logger.info("Successfully parsed match date/time", extra={
-                "match_date": match_date.isoformat(),
-                "date_str": date_str,
-                "time_part": time_part
-            })
+            logger.info(
+                "Successfully parsed match date/time",
+                extra={
+                    "match_date": match_date.isoformat(),
+                    "date_str": date_str,
+                    "time_part": time_part,
+                },
+            )
 
             # Extract team names
             home_team = data.get("home_team", "").strip()
             away_team = data.get("away_team", "").strip()
-            
+
             if not home_team or not away_team:
-                logger.info("Missing team names", extra={"home": home_team, "away": away_team})
+                logger.info(
+                    "Missing team names", extra={"home": home_team, "away": away_team}
+                )
                 return None
 
             # Clean up competition data
@@ -834,7 +978,10 @@ class MLSMatchExtractor:
             if competition_raw:
                 # Clean up whitespace and tabs/newlines
                 competition_clean = " ".join(competition_raw.split())
-                logger.info("Cleaned competition", extra={"raw": repr(competition_raw), "clean": competition_clean})
+                logger.info(
+                    "Cleaned competition",
+                    extra={"raw": repr(competition_raw), "clean": competition_clean},
+                )
                 competition = competition_clean
             else:
                 competition = competition or "Unknown"
@@ -843,17 +990,22 @@ class MLSMatchExtractor:
             score_text = data.get("score", "").strip()
             status_text = data.get("status", "").strip().lower()
 
-            home_score, away_score, status = self._parse_score_and_status(score_text, status_text, match_date)
+            home_score, away_score, status = self._parse_score_and_status(
+                score_text, status_text, match_date
+            )
 
-            logger.info("About to create Match object", extra={
-                "match_id": match_id,
-                "home_team": home_team,
-                "away_team": away_team,
-                "match_date": match_date.isoformat(),
-                "status": status,
-                "home_score": home_score,
-                "away_score": away_score
-            })
+            logger.info(
+                "About to create Match object",
+                extra={
+                    "match_id": match_id,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "match_date": match_date.isoformat(),
+                    "status": status,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                },
+            )
 
             # Create Match object using new model structure
             match = Match(
@@ -867,7 +1019,10 @@ class MLSMatchExtractor:
                 away_score=away_score,
             )
 
-            logger.info("Successfully created match object", extra={"match_id": match_id, "status": match.match_status})
+            logger.info(
+                "Successfully created match object",
+                extra={"match_id": match_id, "status": match.match_status},
+            )
             return match
 
         except Exception as e:
@@ -894,7 +1049,7 @@ class MLSMatchExtractor:
 
             # Try different date formats
             parsed_date = None
-            
+
             # MM/DD/YY (2-digit year)
             match = re.match(r"(\d{1,2})/(\d{1,2})/(\d{2})$", date_str)
             if match:
@@ -905,7 +1060,7 @@ class MLSMatchExtractor:
                 else:  # 50-99 = 1950-1999
                     year += 1900
                 parsed_date = datetime(year, month, day)
-            
+
             # MM/DD/YYYY (4-digit year)
             if not parsed_date:
                 match = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", date_str)
@@ -926,12 +1081,29 @@ class MLSMatchExtractor:
                 if match:
                     month_name, day, year = match.groups()
                     month_map = {
-                        "january": 1, "jan": 1, "february": 2, "feb": 2,
-                        "march": 3, "mar": 3, "april": 4, "apr": 4,
-                        "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
-                        "august": 8, "aug": 8, "september": 9, "sep": 9,
-                        "october": 10, "oct": 10, "november": 11, "nov": 11,
-                        "december": 12, "dec": 12
+                        "january": 1,
+                        "jan": 1,
+                        "february": 2,
+                        "feb": 2,
+                        "march": 3,
+                        "mar": 3,
+                        "april": 4,
+                        "apr": 4,
+                        "may": 5,
+                        "june": 6,
+                        "jun": 6,
+                        "july": 7,
+                        "jul": 7,
+                        "august": 8,
+                        "aug": 8,
+                        "september": 9,
+                        "sep": 9,
+                        "october": 10,
+                        "oct": 10,
+                        "november": 11,
+                        "nov": 11,
+                        "december": 12,
+                        "dec": 12,
                     }
                     month = month_map.get(month_name.lower())
                     if month:
@@ -948,12 +1120,12 @@ class MLSMatchExtractor:
                     hour, minute, ampm = time_match.groups()
                     hour = int(hour)
                     minute = int(minute)
-                    
+
                     if ampm.upper() == "PM" and hour != 12:
                         hour += 12
                     elif ampm.upper() == "AM" and hour == 12:
                         hour = 0
-                        
+
                     parsed_date = parsed_date.replace(hour=hour, minute=minute)
 
             return parsed_date
@@ -965,7 +1137,9 @@ class MLSMatchExtractor:
             )
             return None
 
-    def _parse_score_and_status(self, score_text: str, status_text: str, match_date: Optional[datetime] = None) -> tuple[Optional[int], Optional[int], str]:
+    def _parse_score_and_status(
+        self, score_text: str, status_text: str, match_date: Optional[datetime] = None
+    ) -> tuple[Optional[int], Optional[int], str]:
         """
         Parse score and status information.
 
@@ -985,7 +1159,9 @@ class MLSMatchExtractor:
             # Check for explicit status indicators
             if any(word in status_text for word in ["completed", "final", "finished"]):
                 status = "completed"
-            elif any(word in status_text for word in ["live", "playing", "in progress"]):
+            elif any(
+                word in status_text for word in ["live", "playing", "in progress"]
+            ):
                 status = "in_progress"
             elif any(word in status_text for word in ["scheduled", "upcoming"]):
                 status = "scheduled"
@@ -993,10 +1169,17 @@ class MLSMatchExtractor:
             # Try to parse score
             if score_text:
                 # Clean the score text (remove non-breaking spaces and normalize)
-                cleaned_score = score_text.replace('\xa0', ' ').strip()
+                cleaned_score = score_text.replace("\xa0", " ").strip()
 
                 # Check if it's TBD/not yet played
-                if cleaned_score.upper() in ["TBD", "VS", "V", "@", "NOT STARTED", "PENDING"]:
+                if cleaned_score.upper() in [
+                    "TBD",
+                    "VS",
+                    "V",
+                    "@",
+                    "NOT STARTED",
+                    "PENDING",
+                ]:
                     # Return TBD for scores - the model will calculate the status automatically
                     home_score = "TBD"
                     away_score = "TBD"
@@ -1012,7 +1195,11 @@ class MLSMatchExtractor:
         except Exception as e:
             logger.debug(
                 "Error parsing score and status",
-                extra={"error": str(e), "score_text": score_text, "status_text": status_text},
+                extra={
+                    "error": str(e),
+                    "score_text": score_text,
+                    "status_text": status_text,
+                },
             )
             return None, None, "scheduled"
 
@@ -1046,14 +1233,14 @@ async def example_match_extraction():
             try:
                 # Extract matches (assuming filters have been applied)
                 matches = await extractor.extract_matches(
-                    age_group="U14",
-                    division="Northeast",
-                    competition="MLS Next"
+                    age_group="U14", division="Northeast", competition="MLS Next"
                 )
 
                 print(f"Extracted {len(matches)} matches:")
                 for match in matches:
-                    print(f"  {match.home_team} vs {match.away_team} - {match.match_status}")
+                    print(
+                        f"  {match.home_team} vs {match.away_team} - {match.match_status}"
+                    )
                     if match.has_score():
                         print(f"    Score: {match.get_score_string()}")
 
@@ -1065,4 +1252,5 @@ async def example_match_extraction():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(example_match_extraction())

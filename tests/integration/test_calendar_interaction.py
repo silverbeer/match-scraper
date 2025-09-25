@@ -46,11 +46,12 @@ class TestMLSCalendarInteractor:
     async def test_open_calendar_widget_success(self, calendar_interactor, mock_page):
         """Test successful calendar widget opening."""
         # Mock ElementInteractor methods
-        with patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            calendar_interactor.interactor, "click_element"
-        ) as mock_click:
+        with (
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+            patch.object(calendar_interactor.interactor, "click_element") as mock_click,
+        ):
             mock_wait.side_effect = [True, True]  # date field found, calendar appears
             mock_click.return_value = True
 
@@ -65,11 +66,12 @@ class TestMLSCalendarInteractor:
     ):
         """Test calendar opening when date field not found."""
         # Mock ElementInteractor methods
-        with patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            calendar_interactor.interactor, "click_element"
-        ) as mock_click:
+        with (
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+            patch.object(calendar_interactor.interactor, "click_element") as mock_click,
+        ):
             mock_wait.return_value = False  # No date field found
 
             result = await calendar_interactor.open_calendar_widget()
@@ -83,11 +85,12 @@ class TestMLSCalendarInteractor:
     ):
         """Test when date field clicks but calendar doesn't appear."""
         # Mock ElementInteractor methods
-        with patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            calendar_interactor.interactor, "click_element"
-        ) as mock_click:
+        with (
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+            patch.object(calendar_interactor.interactor, "click_element") as mock_click,
+        ):
             mock_wait.side_effect = [
                 True,
                 False,
@@ -123,13 +126,13 @@ class TestMLSCalendarInteractor:
         target_date = date(2024, 5, 15)
 
         # Mock current month/year and navigation
-        with patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current, patch.object(
-            calendar_interactor, "_navigate_to_year"
-        ) as mock_nav_year, patch.object(
-            calendar_interactor, "_navigate_to_month"
-        ) as mock_nav_month:
+        with (
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+            patch.object(calendar_interactor, "_navigate_to_year") as mock_nav_year,
+            patch.object(calendar_interactor, "_navigate_to_month") as mock_nav_month,
+        ):
             mock_get_current.return_value = (3, 2024)  # Currently March 2024
             mock_nav_year.return_value = True
             mock_nav_month.return_value = True
@@ -147,13 +150,13 @@ class TestMLSCalendarInteractor:
         """Test navigation to different year."""
         target_date = date(2025, 3, 15)
 
-        with patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current, patch.object(
-            calendar_interactor, "_navigate_to_year"
-        ) as mock_nav_year, patch.object(
-            calendar_interactor, "_navigate_to_month"
-        ) as mock_nav_month:
+        with (
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+            patch.object(calendar_interactor, "_navigate_to_year") as mock_nav_year,
+            patch.object(calendar_interactor, "_navigate_to_month") as mock_nav_month,
+        ):
             mock_get_current.return_value = (3, 2024)  # Currently March 2024
             mock_nav_year.return_value = True
             mock_nav_month.return_value = True
@@ -171,11 +174,12 @@ class TestMLSCalendarInteractor:
         """Test navigation failure."""
         target_date = date(2025, 5, 15)
 
-        with patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current, patch.object(
-            calendar_interactor, "_navigate_to_year"
-        ) as mock_nav_year:
+        with (
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+            patch.object(calendar_interactor, "_navigate_to_year") as mock_nav_year,
+        ):
             mock_get_current.return_value = (3, 2024)
             mock_nav_year.return_value = False  # Navigation fails
 
@@ -191,13 +195,15 @@ class TestMLSCalendarInteractor:
         target_date = date(2024, 3, 15)
 
         # Mock successful navigation and date selection
-        with patch.object(
-            calendar_interactor, "navigate_to_month_year"
-        ) as mock_navigate, patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            calendar_interactor.interactor, "click_element"
-        ) as mock_click:
+        with (
+            patch.object(
+                calendar_interactor, "navigate_to_month_year"
+            ) as mock_navigate,
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+            patch.object(calendar_interactor.interactor, "click_element") as mock_click,
+        ):
             mock_navigate.return_value = True
             mock_wait.return_value = True
             mock_click.return_value = True
@@ -229,11 +235,14 @@ class TestMLSCalendarInteractor:
         target_date = date(2024, 3, 15)
 
         # Mock navigation success but data-attribute approach fails
-        with patch.object(
-            calendar_interactor, "navigate_to_month_year"
-        ) as mock_navigate, patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait:
+        with (
+            patch.object(
+                calendar_interactor, "navigate_to_month_year"
+            ) as mock_navigate,
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+        ):
             mock_navigate.return_value = True
             mock_wait.return_value = False  # Data-attribute selectors fail
 
@@ -303,11 +312,12 @@ class TestMLSCalendarInteractor:
     async def test_apply_date_filter_success(self, calendar_interactor, mock_page):
         """Test successful date filter application."""
         # Mock ElementInteractor methods
-        with patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            calendar_interactor.interactor, "click_element"
-        ) as mock_click:
+        with (
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+            patch.object(calendar_interactor.interactor, "click_element") as mock_click,
+        ):
             mock_wait.side_effect = [True, False]  # Button found, calendar closed
             mock_click.return_value = True
 
@@ -320,11 +330,12 @@ class TestMLSCalendarInteractor:
     async def test_apply_date_filter_no_button(self, calendar_interactor, mock_page):
         """Test date filter application when no apply button found."""
         # Mock ElementInteractor methods
-        with patch.object(
-            calendar_interactor.interactor, "wait_for_element"
-        ) as mock_wait, patch.object(
-            calendar_interactor.interactor, "click_element"
-        ) as mock_click:
+        with (
+            patch.object(
+                calendar_interactor.interactor, "wait_for_element"
+            ) as mock_wait,
+            patch.object(calendar_interactor.interactor, "click_element") as mock_click,
+        ):
             mock_wait.return_value = False  # No apply button found
 
             result = await calendar_interactor.apply_date_filter()
@@ -340,13 +351,11 @@ class TestMLSCalendarInteractor:
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
-        with patch.object(
-            calendar_interactor, "open_calendar_widget"
-        ) as mock_open, patch.object(
-            calendar_interactor, "select_date_range"
-        ) as mock_select_range, patch.object(
-            calendar_interactor, "apply_date_filter"
-        ) as mock_apply:
+        with (
+            patch.object(calendar_interactor, "open_calendar_widget") as mock_open,
+            patch.object(calendar_interactor, "select_date_range") as mock_select_range,
+            patch.object(calendar_interactor, "apply_date_filter") as mock_apply,
+        ):
             mock_open.return_value = True
             mock_select_range.return_value = True
             mock_apply.return_value = True
@@ -384,11 +393,10 @@ class TestMLSCalendarInteractor:
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
-        with patch.object(
-            calendar_interactor, "open_calendar_widget"
-        ) as mock_open, patch.object(
-            calendar_interactor, "select_date_range"
-        ) as mock_select_range:
+        with (
+            patch.object(calendar_interactor, "open_calendar_widget") as mock_open,
+            patch.object(calendar_interactor, "select_date_range") as mock_select_range,
+        ):
             mock_open.return_value = True
             mock_select_range.return_value = False
 
@@ -405,13 +413,11 @@ class TestMLSCalendarInteractor:
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
-        with patch.object(
-            calendar_interactor, "open_calendar_widget"
-        ) as mock_open, patch.object(
-            calendar_interactor, "select_date_range"
-        ) as mock_select_range, patch.object(
-            calendar_interactor, "apply_date_filter"
-        ) as mock_apply:
+        with (
+            patch.object(calendar_interactor, "open_calendar_widget") as mock_open,
+            patch.object(calendar_interactor, "select_date_range") as mock_select_range,
+            patch.object(calendar_interactor, "apply_date_filter") as mock_apply,
+        ):
             mock_open.return_value = True
             mock_select_range.return_value = True
             mock_apply.return_value = False
@@ -508,11 +514,12 @@ class TestCalendarNavigationHelpers:
     @pytest.mark.asyncio
     async def test_navigate_to_year_forward(self, calendar_interactor, mock_page):
         """Test navigating forward to future year."""
-        with patch.object(
-            calendar_interactor, "_click_next_year"
-        ) as mock_next_year, patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current:
+        with (
+            patch.object(calendar_interactor, "_click_next_year") as mock_next_year,
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+        ):
             mock_next_year.return_value = True
             # First call returns current year, second call after navigation returns target year
             mock_get_current.side_effect = [
@@ -527,11 +534,12 @@ class TestCalendarNavigationHelpers:
     @pytest.mark.asyncio
     async def test_navigate_to_year_backward(self, calendar_interactor, mock_page):
         """Test navigating backward to past year."""
-        with patch.object(
-            calendar_interactor, "_click_prev_year"
-        ) as mock_prev_year, patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current:
+        with (
+            patch.object(calendar_interactor, "_click_prev_year") as mock_prev_year,
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+        ):
             mock_prev_year.return_value = True
             # After navigation, we're at target year
             mock_get_current.side_effect = [
@@ -546,11 +554,12 @@ class TestCalendarNavigationHelpers:
     @pytest.mark.asyncio
     async def test_navigate_to_month_forward(self, calendar_interactor, mock_page):
         """Test navigating forward to future month."""
-        with patch.object(
-            calendar_interactor, "_click_next_month"
-        ) as mock_next_month, patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current:
+        with (
+            patch.object(calendar_interactor, "_click_next_month") as mock_next_month,
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+        ):
             mock_next_month.return_value = True
             mock_get_current.side_effect = [
                 (3, 2024),
@@ -565,11 +574,12 @@ class TestCalendarNavigationHelpers:
     @pytest.mark.asyncio
     async def test_navigate_to_month_backward(self, calendar_interactor, mock_page):
         """Test navigating backward to past month."""
-        with patch.object(
-            calendar_interactor, "_click_prev_month"
-        ) as mock_prev_month, patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current:
+        with (
+            patch.object(calendar_interactor, "_click_prev_month") as mock_prev_month,
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+        ):
             mock_prev_month.return_value = True
             mock_get_current.side_effect = [
                 (5, 2024),
@@ -584,11 +594,12 @@ class TestCalendarNavigationHelpers:
     @pytest.mark.asyncio
     async def test_navigate_to_month_wrap_around(self, calendar_interactor, mock_page):
         """Test navigating with year wrap-around (shortest path)."""
-        with patch.object(
-            calendar_interactor, "_click_prev_month"
-        ) as mock_prev_month, patch.object(
-            calendar_interactor, "_get_current_month_year"
-        ) as mock_get_current:
+        with (
+            patch.object(calendar_interactor, "_click_prev_month") as mock_prev_month,
+            patch.object(
+                calendar_interactor, "_get_current_month_year"
+            ) as mock_get_current,
+        ):
             mock_prev_month.return_value = True
             # Navigate from February to November (should go backward: Feb -> Jan -> Dec -> Nov)
             mock_get_current.side_effect = [(2, 2024), (11, 2023)]

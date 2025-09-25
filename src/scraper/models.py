@@ -3,11 +3,10 @@
 Contains Pydantic models for match data, metrics, and validation methods.
 """
 
-import re
 from datetime import datetime
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 
 class Match(BaseModel):
@@ -29,12 +28,18 @@ class Match(BaseModel):
         ..., min_length=1, description="Unique identifier for the match"
     )
     match_datetime: datetime = Field(..., description="Date and time of the match")
-    location: Optional[str] = Field(None, description="Venue/location where match is played")
+    location: Optional[str] = Field(
+        None, description="Venue/location where match is played"
+    )
     competition: Optional[str] = Field(None, description="Competition name")
     home_team: str = Field(..., min_length=1, description="Name of the home team")
     away_team: str = Field(..., min_length=1, description="Name of the away team")
-    home_score: Optional[Union[int, str]] = Field(None, description="Home team score or 'TBD'")
-    away_score: Optional[Union[int, str]] = Field(None, description="Away team score or 'TBD'")
+    home_score: Optional[Union[int, str]] = Field(
+        None, description="Home team score or 'TBD'"
+    )
+    away_score: Optional[Union[int, str]] = Field(
+        None, description="Away team score or 'TBD'"
+    )
 
     @computed_field
     @property
@@ -46,19 +51,31 @@ class Match(BaseModel):
         - If match_datetime is in the past and TBD detected in scores: "TBD"
         - If match_datetime is in the future: "scheduled"
         """
-        now = datetime.now(self.match_datetime.tzinfo) if self.match_datetime.tzinfo else datetime.now()
+        now = (
+            datetime.now(self.match_datetime.tzinfo)
+            if self.match_datetime.tzinfo
+            else datetime.now()
+        )
 
         if self.match_datetime > now:
             return "scheduled"
 
         # Match is in the past
-        if (self.home_score is not None and self.away_score is not None and
-            isinstance(self.home_score, int) and isinstance(self.away_score, int)):
+        if (
+            self.home_score is not None
+            and self.away_score is not None
+            and isinstance(self.home_score, int)
+            and isinstance(self.away_score, int)
+        ):
             return "completed"
 
         # Check for TBD in scores
-        if (str(self.home_score).upper() == "TBD" or str(self.away_score).upper() == "TBD" or
-            self.home_score is None or self.away_score is None):
+        if (
+            str(self.home_score).upper() == "TBD"
+            or str(self.away_score).upper() == "TBD"
+            or self.home_score is None
+            or self.away_score is None
+        ):
             return "TBD"
 
         return "completed"
@@ -90,8 +107,12 @@ class Match(BaseModel):
         Returns:
             bool: True if both home and away scores are available and not TBD
         """
-        return (self.home_score is not None and self.away_score is not None and
-                isinstance(self.home_score, int) and isinstance(self.away_score, int))
+        return (
+            self.home_score is not None
+            and self.away_score is not None
+            and isinstance(self.home_score, int)
+            and isinstance(self.away_score, int)
+        )
 
     def is_completed(self) -> bool:
         """Check if the match is completed.
