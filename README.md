@@ -182,6 +182,42 @@ scripts/
 
 Infrastructure is managed with Terraform. See the `terraform/` directory for deployment configuration.
 
+## CLI Tool
+
+The project includes **mls-scraper**, a beautiful command-line interface for scraping and displaying MLS match data:
+
+```bash
+# Basic scraping with rich formatting
+uv run mls-scraper scrape
+
+# Scrape specific age group and division
+uv run mls-scraper scrape --age-group U16 --division Southwest
+
+# Show upcoming games in clean format
+uv run mls-scraper upcoming
+
+# Interactive mode with guided configuration
+uv run mls-scraper interactive
+
+# Quiet output perfect for scripting
+uv run mls-scraper scrape --quiet
+
+# Debug mode for troubleshooting
+uv run mls-scraper debug
+
+# Show all configuration options
+uv run mls-scraper config
+```
+
+### CLI Features
+
+- **Rich Formatting**: Beautiful tables with colors and statistics
+- **Multiple Output Modes**: Rich display for humans, quiet mode for scripts
+- **Interactive Mode**: Guided experience for exploring match data
+- **Debug Tools**: Step-by-step troubleshooting and page inspection
+- **Flexible Filtering**: Age group, division, club, and competition filters
+- **Smart Date Handling**: Automatic date ranges and upcoming game detection
+
 ## Development Tools
 
 ### 🤖 Test Guardian Agent
