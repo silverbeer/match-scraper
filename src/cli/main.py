@@ -28,6 +28,7 @@ sys.path.insert(0, str(project_root))
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
+from src.api.missing_table_client import MissingTableClient, MissingTableAPIError  # noqa: E402
 
 # Initialize Rich console and Typer app
 console = Console()
@@ -61,8 +62,8 @@ def setup_environment(verbose: bool = False):
     """Set up environment variables for CLI usage."""
     log_level = "DEBUG" if verbose else "WARNING"
     os.environ.setdefault("LOG_LEVEL", log_level)
-    os.environ.setdefault("MISSING_TABLE_API_URL", "https://api.missing-table.com")
-    os.environ.setdefault("MISSING_TABLE_API_KEY", "cli-test-key")
+    os.environ.setdefault("MISSING_TABLE_API_BASE_URL", "http://localhost:8000")
+    os.environ.setdefault("MISSING_TABLE_API_TOKEN", "")  # Set via env var
 
 
 def handle_cli_error(e: Exception, verbose: bool = False):
@@ -95,6 +96,41 @@ def handle_cli_error(e: Exception, verbose: bool = False):
         console.print_exception()
     else:
         console.print("[dim]💡 Use --verbose/-v to see full error details[/dim]")
+
+
+async def check_missing_table_api(verbose: bool = False) -> bool:
+    """Check if missing-table API is healthy and ready."""
+    try:
+        client = MissingTableClient()
+
+        if verbose:
+            console.print("🏥 Checking missing-table API health...")
+
+        # Perform health check
+        health = await client.health_check(full=False)
+
+        if verbose:
+            console.print(f"✅ API Health: {health.status}")
+            if health.version:
+                console.print(f"   Version: {health.version}")
+
+        return health.status.lower() == "healthy"
+
+    except MissingTableAPIError as e:
+        if verbose:
+            console.print(f"❌ Missing-table API error: {e}")
+            if e.status_code:
+                console.print(f"   Status: {e.status_code}")
+        else:
+            console.print("⚠️  Missing-table API not available (continuing with scraping only)")
+        return False
+
+    except Exception as e:
+        if verbose:
+            console.print(f"💥 Unexpected API error: {e}")
+        else:
+            console.print("⚠️  Missing-table API check failed (continuing with scraping only)")
+        return False
 
 
 def create_config(
@@ -382,8 +418,8 @@ def display_upcoming_games(matches: list[Match], limit: int = 5):
 
 async def run_scraper(
     config: ScrapingConfig, verbose: bool = False, headless: bool = True
-) -> list[Match]:
-    """Run the scraper with progress indication."""
+) -> tuple[list[Match], bool]:
+    """Run the scraper with progress indication and API health check."""
     import logging
     import warnings
 
@@ -398,6 +434,7 @@ async def run_scraper(
         logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
     matches = []
+    api_healthy = False
 
     with Progress(
         SpinnerColumn(),
@@ -405,25 +442,38 @@ async def run_scraper(
         console=console,
         transient=True,
     ) as progress:
-        # Add progress tasks
-        task1 = progress.add_task("🌐 Initializing browser...", total=None)
+        # Check API health first
+        health_task = progress.add_task("🏥 Checking missing-table API...", total=None)
+        try:
+            api_healthy = await check_missing_table_api(verbose=verbose)
+            if api_healthy:
+                progress.update(health_task, description="✅ API ready for integration")
+            else:
+                progress.update(health_task, description="⚠️  API not available (scraping only)")
+        except Exception as e:
+            progress.update(health_task, description="❌ API check failed")
+            if verbose:
+                console.print(f"API health check error: {e}")
+
+        # Add scraping progress task
+        scrape_task = progress.add_task("🌐 Initializing browser...", total=None)
 
         try:
             scraper = MLSScraper(config, headless=headless)
 
-            progress.update(task1, description="🔍 Scraping matches...")
+            progress.update(scrape_task, description="🔍 Scraping matches...")
             matches = await scraper.scrape_matches()
 
-            progress.update(task1, description="✅ Scraping completed!", completed=True)
+            progress.update(scrape_task, description="✅ Scraping completed!", completed=True)
 
         except MLSScraperError as e:
-            progress.update(task1, description=f"❌ Scraping failed: {e}")
+            progress.update(scrape_task, description=f"❌ Scraping failed: {e}")
             raise
         except Exception as e:
-            progress.update(task1, description=f"💥 Unexpected error: {e}")
+            progress.update(scrape_task, description=f"💥 Unexpected error: {e}")
             raise
 
-    return matches
+    return matches, api_healthy
 
 
 @app.command()
