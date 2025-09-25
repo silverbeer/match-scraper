@@ -82,4 +82,7 @@ lambda-package/
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Generated test reports and coverage
 coverage-summary.json
+code-quality-gates/
