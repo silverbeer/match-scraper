@@ -254,7 +254,8 @@ class MissingTableClient:
             except httpx.RequestError as e:
                 if attempt == self.max_retries:
                     error_msg = f"{method} {endpoint} request failed: {str(e)}"
-                    logger.error(error_msg, extra={"error": str(e), "attempt": attempt + 1})
+                    # Log at debug level to avoid cluttering CLI output - higher level will show user-friendly error
+                    logger.debug(error_msg, extra={"error": str(e), "attempt": attempt + 1})
                     raise MissingTableAPIError(error_msg)
 
                 # Network error, retry with backoff
