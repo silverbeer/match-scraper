@@ -7,7 +7,7 @@ from .browser import (
     PageNavigator,
     get_browser_manager,
 )
-from .config import ScrapingConfig, load_config, validate_config
+from .config import ScrapingConfig, load_config
 from .models import Match, ScrapingMetrics
 
 __all__ = [
@@ -18,7 +18,6 @@ __all__ = [
     "get_browser_manager",
     "ScrapingConfig",
     "load_config",
-    "validate_config",
     "Match",
     "ScrapingMetrics",
 ]

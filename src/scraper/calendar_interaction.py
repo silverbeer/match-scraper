@@ -513,8 +513,8 @@ class MLSCalendarInteractor:
                 if await calendar_picker.count() > 0:
                     logger.info("Calendar picker opened successfully")
 
-                    # Click on start date (19th) - use left calendar only
-                    start_day = 19  # Always use 19th for start date
+                    # Click on start date - use left calendar only
+                    start_day = start_date.day  # Use actual start date
                     start_date_selectors = [
                         f'.daterangepicker .drp-calendar.left td:has-text("{start_day}"):not(.off)',
                         f'.drp-calendar.left .calendar-table td:has-text("{start_day}"):not(.off)',
@@ -539,8 +539,8 @@ class MLSCalendarInteractor:
                         )
                         return False
 
-                    # Click on end date (22nd) - use left calendar only (same month)
-                    end_day = 22  # Always use 22nd for end date
+                    # Click on end date - use left calendar only (same month)
+                    end_day = end_date.day  # Use actual end date
                     end_date_selectors = [
                         f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
                         f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',

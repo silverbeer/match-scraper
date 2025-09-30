@@ -919,10 +919,20 @@ class MLSMatchExtractor:
             Match object or None if creation fails
         """
         try:
-            # Generate match ID
-            match_id = (
-                f"{age_group}_{division}_{index}_{datetime.now().strftime('%Y%m%d')}"
-            )
+            # Extract actual match ID from raw data
+            match_id_raw = data.get("match_id_raw", "")
+            if match_id_raw:
+                # Extract numeric match ID from raw text (format: "99963\t\t\t\n\t\t\tMALE")
+                import re
+                match_id_match = re.search(r'(\d+)', match_id_raw.strip())
+                if match_id_match:
+                    match_id = match_id_match.group(1)
+                else:
+                    # Fallback to generated ID if extraction fails
+                    match_id = f"{age_group}_{division}_{index}_{datetime.now().strftime('%Y%m%d')}"
+            else:
+                # Generate fallback match ID if no raw ID available
+                match_id = f"{age_group}_{division}_{index}_{datetime.now().strftime('%Y%m%d')}"
 
             # Parse date and time
             # Handle combined date/time format like "09/20/25 03:45pm"

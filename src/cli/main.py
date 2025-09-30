@@ -7,11 +7,12 @@ rich formatting and interactive features.
 """
 
 import asyncio
+import json
 import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
@@ -28,6 +29,13 @@ sys.path.insert(0, str(project_root))
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
+from src.api.missing_table_client import MissingTableClient, MissingTableAPIError  # noqa: E402
+from src.cli.env_config import (  # noqa: E402
+    display_current_config,
+    interactive_setup,
+    set_variable,
+    validate_config,
+)
 
 # Initialize Rich console and Typer app
 console = Console()
@@ -40,7 +48,9 @@ app = typer.Typer(
 # Configuration defaults
 DEFAULT_AGE_GROUP = "U14"
 DEFAULT_DIVISION = "Northeast"
-DEFAULT_DAYS = 3  # Look ahead 3 days for upcoming matches
+DEFAULT_START_OFFSET = 1  # 1 day backward from today = Yesterday
+DEFAULT_END_OFFSET = 1    # 1 day forward from today = Tomorrow
+DEFAULT_DAYS = 3  # Keep for upcoming command backward compatibility
 
 # Valid options
 VALID_AGE_GROUPS = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
@@ -57,12 +67,37 @@ VALID_DIVISIONS = [
 ]
 
 
+# Team name mappings for display (matches api_integration mappings)
+TEAM_NAME_MAPPINGS = {
+    "Intercontinental Football Academy of New England": "IFA",
+}
+
+
+def normalize_team_name_for_display(team_name: str) -> str:
+    """Normalize team names for consistent display."""
+    return TEAM_NAME_MAPPINGS.get(team_name, team_name)
+
+
 def setup_environment(verbose: bool = False):
     """Set up environment variables for CLI usage."""
-    log_level = "DEBUG" if verbose else "WARNING"
-    os.environ.setdefault("LOG_LEVEL", log_level)
-    os.environ.setdefault("MISSING_TABLE_API_URL", "https://api.missing-table.com")
-    os.environ.setdefault("MISSING_TABLE_API_KEY", "cli-test-key")
+    # Load .env file first
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass  # dotenv not available, use system env vars
+
+    log_level = "DEBUG" if verbose else "ERROR"  # Only show errors unless verbose
+    os.environ["LOG_LEVEL"] = log_level  # Force set the log level
+    os.environ.setdefault("MISSING_TABLE_API_BASE_URL", "http://localhost:8000")
+    # Don't override the token if it's already set from .env file
+    if not os.getenv("MISSING_TABLE_API_TOKEN"):
+        os.environ.setdefault("MISSING_TABLE_API_TOKEN", "")
+
+    # Update the existing logger level immediately
+    from src.utils.logger import scraper_logger
+    logger = scraper_logger.get_logger()
+    logger.setLevel(log_level)
 
 
 def handle_cli_error(e: Exception, verbose: bool = False):
@@ -97,32 +132,96 @@ def handle_cli_error(e: Exception, verbose: bool = False):
         console.print("[dim]💡 Use --verbose/-v to see full error details[/dim]")
 
 
+async def check_missing_table_api(verbose: bool = False) -> bool:
+    """Check if missing-table API is healthy and ready."""
+    try:
+        client = MissingTableClient()
+
+        if verbose:
+            console.print("🏥 Checking missing-table API health...")
+
+        # Perform health check
+        health = await client.health_check(full=False)
+
+        if verbose:
+            console.print(f"✅ API Health: {health.status}")
+            if health.version:
+                console.print(f"   Version: {health.version}")
+
+        return health.status.lower() == "healthy"
+
+    except MissingTableAPIError as e:
+        if verbose:
+            console.print(f"❌ Missing-table API error: {e}")
+            if e.status_code:
+                console.print(f"   Status: {e.status_code}")
+        else:
+            console.print("⚠️  Missing-table API not available (continuing with scraping only)")
+        return False
+
+    except Exception as e:
+        if verbose:
+            console.print(f"💥 Unexpected API error: {e}")
+        else:
+            console.print("⚠️  Missing-table API check failed (continuing with scraping only)")
+        return False
+
+
 def create_config(
     age_group: str,
     division: str,
-    days: int,
+    start_offset: int,
+    end_offset: int,
     club: str = "",
     competition: str = "",
+    verbose: bool = False,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
 ) -> ScrapingConfig:
     """Create scraping configuration from CLI parameters."""
-    # Date range logic: start from yesterday, end at today + days
-    today = date.today()
-    start_date = today - timedelta(days=1)  # Subtract 1 day from current date
-    end_date = today + timedelta(days=days)  # Add specified days to current date
+
+    # Validate argument combinations and determine date calculation method
+    if from_date and to_date:
+        # Both absolute dates provided - use them
+        try:
+            start_date = date.fromisoformat(from_date)
+            end_date = date.fromisoformat(to_date)
+        except ValueError as e:
+            raise ValueError(f"Invalid date format. Use YYYY-MM-DD format: {e}")
+
+    elif from_date or to_date:
+        # Only one absolute date provided - error
+        raise ValueError("Both --from and --to must be provided when using absolute dates")
+
+    else:
+        # Use relative offsets (enhanced with negative support for --end)
+        today = date.today()
+        start_date = today - timedelta(days=start_offset)  # --start: backward from today
+
+        # --end: positive = forward, negative = backward from today
+        if end_offset >= 0:
+            end_date = today + timedelta(days=end_offset)  # Forward
+        else:
+            end_date = today - timedelta(days=abs(end_offset))  # Backward
 
     return ScrapingConfig(
         age_group=age_group,
         club=club,
         competition=competition,
         division=division,
-        look_back_days=days,  # Keep for backwards compatibility
+        look_back_days=abs(start_offset) if start_offset < 0 else 0,  # Keep for backwards compatibility
         start_date=start_date,
         end_date=end_date,
         missing_table_api_url=os.getenv(
-            "MISSING_TABLE_API_URL", "https://api.missing-table.com"
+            "MISSING_TABLE_API_BASE_URL", "http://localhost:8000"
         ),
-        missing_table_api_key=os.getenv("MISSING_TABLE_API_KEY", "cli-test-key"),
-        log_level="WARNING",  # Quiet for CLI
+        missing_table_api_key=os.getenv("MISSING_TABLE_API_TOKEN", ""),
+        log_level="DEBUG" if verbose else "ERROR",  # Verbose or quiet for CLI
+
+        # Team cache configuration
+        enable_team_cache=os.getenv("ENABLE_TEAM_CACHE", "true").lower() == "true",
+        cache_refresh_on_miss=os.getenv("CACHE_REFRESH_ON_MISS", "true").lower() == "true",
+        cache_preload_timeout=int(os.getenv("CACHE_PRELOAD_TIMEOUT", "30")),
     )
 
 
@@ -147,7 +246,10 @@ def display_config_summary(config: ScrapingConfig):
 
     config_table.add_row("Age Group", config.age_group)
     config_table.add_row("Division", config.division)
-    config_table.add_row("Date Range", f"{config.start_date} to {config.end_date}")
+    # Display dates in chronological order (earlier to later)
+    from_date = min(config.start_date, config.end_date)
+    to_date = max(config.start_date, config.end_date)
+    config_table.add_row("Date Range", f"{from_date} to {to_date}")
     config_table.add_row("Club Filter", config.club or "All clubs")
     config_table.add_row("Competition Filter", config.competition or "All competitions")
 
@@ -168,12 +270,13 @@ def display_matches_table(matches: list[Match]):
 
     # Create main matches table
     table = Table(show_header=True, header_style="bold magenta", box=None)
+    table.add_column("Match ID", style="dim", width=10)
     table.add_column("Date", style="cyan", width=12)
     table.add_column("Time", style="dim", width=8)
     table.add_column("Home Team", style="green", min_width=20)
     table.add_column("Away Team", style="red", min_width=20)
     table.add_column("Score/Status", style="yellow", width=12, justify="center")
-    table.add_column("Venue", style="blue", min_width=15)
+    table.add_column("Venue", style="blue", min_width=20)
 
     # Sort matches by date
     from datetime import datetime
@@ -234,16 +337,18 @@ def display_matches_table(matches: list[Match]):
             else:
                 score_status = "[dim]⏰ Scheduled[/dim]"
 
-        # Format venue
+        # Format venue - no truncation
         venue = match.location or "TBD"
-        if len(venue) > 20:
-            venue = venue[:17] + "..."
+
+        # Format match_id (show last 8 characters for readability)
+        match_id_display = match.match_id[-8:] if len(match.match_id) > 8 else match.match_id
 
         table.add_row(
+            match_id_display,
             match_date,
             match_time,
-            match.home_team,
-            match.away_team,
+            normalize_team_name_for_display(match.home_team),
+            normalize_team_name_for_display(match.away_team),
             score_status,
             venue,
         )
@@ -273,7 +378,7 @@ def display_matches_table(matches: list[Match]):
             if match.has_score():
                 score_str = f" ({match.get_score_string()})"
             console.print(
-                f"✅ {date_str} {time_str} {match.home_team} vs {match.away_team}{score_str}"
+                f"✅ {date_str} {time_str} {normalize_team_name_for_display(match.home_team)} vs {normalize_team_name_for_display(match.away_team)}{score_str}"
             )
         console.print("=" * 50)
 
@@ -291,7 +396,7 @@ def display_statistics(matches: list[Match]):
     matches_with_scores = len([m for m in matches if m.has_score()])
     matches_with_venues = len([m for m in matches if m.location])
     unique_teams = len(
-        set([m.home_team for m in matches] + [m.away_team for m in matches])
+        set([normalize_team_name_for_display(m.home_team) for m in matches] + [normalize_team_name_for_display(m.away_team) for m in matches])
     )
 
     # Create statistics table
@@ -332,6 +437,72 @@ def display_statistics(matches: list[Match]):
     console.print(Panel(stats_table, title="📊 Statistics", border_style="magenta"))
 
 
+def display_api_results(api_results: dict, api_healthy: bool):
+    """Display API integration results in a prominent panel."""
+    if not api_results:
+        if api_healthy:
+            console.print(Panel(
+                "[yellow]⚠️  API was available but no matches were posted[/yellow]",
+                title="📡 Missing-table API Integration",
+                border_style="yellow"
+            ))
+        else:
+            console.print(Panel(
+                "[dim]⚠️  API not available - matches not posted[/dim]",
+                title="📡 Missing-table API Integration",
+                border_style="dim"
+            ))
+        return
+
+    posted = api_results.get("posted", 0)
+    errors = api_results.get("errors", 0)
+    skipped = api_results.get("skipped", 0)
+    duplicates = api_results.get("duplicates", 0)
+    api_error = api_results.get("api_error")
+
+    # If there's a specific API error, show it prominently
+    if api_error:
+        console.print(Panel(
+            f"[red]❌ API Connection Failed[/red]\n\n{api_error}\n\n[dim]Matches were scraped successfully but could not be posted to missing-table API.[/dim]",
+            title="📡 Missing-table API Integration - Connection Error",
+            border_style="red"
+        ))
+        return
+
+    # Create API results table
+    api_table = Table(show_header=False, box=None, padding=(0, 1))
+    api_table.add_column("Status", style="cyan", width=20)
+    api_table.add_column("Count", style="white", justify="right", width=8)
+
+    if posted > 0:
+        api_table.add_row("✅ Successfully posted", str(posted))
+    if duplicates > 0:
+        api_table.add_row("🔄 Skipped duplicates", str(duplicates))
+    if errors > 0:
+        api_table.add_row("❌ Failed to post", str(errors))
+    if skipped > 0:
+        api_table.add_row("⏭️  Skipped (other)", str(skipped))
+
+    if not posted and not errors and not skipped and not duplicates:
+        api_table.add_row("ℹ️  No action taken", "0")
+
+    # Determine panel style based on results
+    if errors > 0 and posted == 0:
+        title_style = "red"
+        title = "📡 Missing-table API Integration - ❌ Failed"
+    elif errors > 0:
+        title_style = "yellow"
+        title = "📡 Missing-table API Integration - ⚠️  Partial Success"
+    elif posted > 0 or duplicates > 0:
+        title_style = "green"
+        title = "📡 Missing-table API Integration - ✅ Success"
+    else:
+        title_style = "dim"
+        title = "📡 Missing-table API Integration - ℹ️  No Changes"
+
+    console.print(Panel(api_table, title=title, border_style=title_style))
+
+
 def display_upcoming_games(matches: list[Match], limit: int = 5):
     """Display upcoming games in a special format."""
     from datetime import date
@@ -369,7 +540,7 @@ def display_upcoming_games(matches: list[Match], limit: int = 5):
         )
         venue = match.location or "Venue TBD"
 
-        game_text = f"[bold]{i}.[/bold] [green]{match.home_team}[/green] vs [red]{match.away_team}[/red]"
+        game_text = f"[bold]{i}.[/bold] [green]{normalize_team_name_for_display(match.home_team)}[/green] vs [red]{normalize_team_name_for_display(match.away_team)}[/red]"
         details_text = f"   📅 {match_date} at {match_time}"
         venue_text = f"   🏟️  {venue}"
 
@@ -380,10 +551,55 @@ def display_upcoming_games(matches: list[Match], limit: int = 5):
             console.print()
 
 
+def save_matches_to_file(matches: list[Match], file_path: str, age_group: str, division: str) -> bool:
+    """Save matches to JSON file for later processing."""
+    try:
+        # Convert matches to JSON-serializable format
+        matches_data = []
+        for match in matches:
+            match_data = {
+                "match_id": match.match_id,
+                "match_datetime": match.match_datetime.isoformat(),
+                "location": match.location,
+                "competition": match.competition,
+                "home_team": normalize_team_name_for_display(match.home_team),
+                "away_team": normalize_team_name_for_display(match.away_team),
+                "home_score": match.home_score,
+                "away_score": match.away_score,
+                "match_status": match.match_status,
+            }
+            matches_data.append(match_data)
+
+        # Create output data with metadata
+        output_data = {
+            "metadata": {
+                "age_group": age_group,
+                "division": division,
+                "scraped_at": date.today().isoformat(),
+                "total_matches": len(matches),
+            },
+            "matches": matches_data
+        }
+
+        # Save to file
+        with open(file_path, 'w') as f:
+            json.dump(output_data, f, indent=2)
+
+        return True
+
+    except Exception as e:
+        console.print(f"[red]❌ Failed to save matches to {file_path}: {e}[/red]")
+        return False
+
+
 async def run_scraper(
-    config: ScrapingConfig, verbose: bool = False, headless: bool = True
-) -> list[Match]:
-    """Run the scraper with progress indication."""
+    config: ScrapingConfig, verbose: bool = False, headless: bool = True, enable_api_integration: bool = True
+) -> tuple[list[Match], bool, dict]:
+    """Run the scraper with progress indication and API health check.
+
+    Returns:
+        Tuple of (matches, api_healthy, api_results)
+    """
     import logging
     import warnings
 
@@ -398,6 +614,7 @@ async def run_scraper(
         logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
     matches = []
+    api_healthy = False
 
     with Progress(
         SpinnerColumn(),
@@ -405,25 +622,57 @@ async def run_scraper(
         console=console,
         transient=True,
     ) as progress:
-        # Add progress tasks
-        task1 = progress.add_task("🌐 Initializing browser...", total=None)
+        # Check API health first
+        health_task = progress.add_task("🏥 Checking missing-table API...", total=None)
+        try:
+            api_healthy = await check_missing_table_api(verbose=verbose)
+            if api_healthy:
+                progress.update(health_task, description="✅ API ready for integration")
+            else:
+                progress.update(health_task, description="⚠️  API not available (scraping only)")
+        except Exception as e:
+            progress.update(health_task, description="❌ API check failed")
+            if verbose:
+                console.print(f"API health check error: {e}")
+
+        # Add scraping progress task
+        scrape_task = progress.add_task("🌐 Initializing browser...", total=None)
 
         try:
-            scraper = MLSScraper(config, headless=headless)
+            scraper = MLSScraper(config, headless=headless, enable_api_integration=enable_api_integration)
 
-            progress.update(task1, description="🔍 Scraping matches...")
+            progress.update(scrape_task, description="🔍 Scraping matches...")
             matches = await scraper.scrape_matches()
 
-            progress.update(task1, description="✅ Scraping completed!", completed=True)
+            # Extract API results from scraper metrics
+            api_results = {
+                "posted": scraper.execution_metrics.api_calls_successful,
+                "errors": scraper.execution_metrics.api_calls_failed,
+                "skipped": 0  # Will be populated by the actual API integration
+            }
+
+            progress.update(scrape_task, description="✅ Scraping completed!", completed=True)
 
         except MLSScraperError as e:
-            progress.update(task1, description=f"❌ Scraping failed: {e}")
+            progress.update(scrape_task, description=f"❌ Scraping failed: {e}")
             raise
         except Exception as e:
-            progress.update(task1, description=f"💥 Unexpected error: {e}")
-            raise
+            error_str = str(e).lower()
+            if "cannot connect to missing-table api" in error_str:
+                progress.update(scrape_task, description="⚠️  API connection failed, continuing...")
+                # Still return matches, just without API integration
+                api_results = {
+                    "posted": 0,
+                    "errors": scraper.execution_metrics.api_calls_failed,
+                    "skipped": 0,
+                    "api_error": str(e)
+                }
+                return matches, False, api_results
+            else:
+                progress.update(scrape_task, description=f"💥 Unexpected error: {e}")
+                raise
 
-    return matches
+    return matches, api_healthy, api_results
 
 
 @app.command()
@@ -434,12 +683,30 @@ def scrape(
     division: Annotated[
         str, typer.Option("--division", "-d", help="Division to scrape")
     ] = DEFAULT_DIVISION,
-    days: Annotated[
+    start: Annotated[
         int,
         typer.Option(
-            "--days", "-n", help="Number of days to look ahead for upcoming matches"
+            "--start", help="Days backward from today (0=today, 1=yesterday, 7=week ago)"
         ),
-    ] = DEFAULT_DAYS,
+    ] = DEFAULT_START_OFFSET,
+    end: Annotated[
+        int,
+        typer.Option(
+            "--end", "-e", help="Days from today: positive=forward, negative=backward (2=tomorrow, -7=week ago)"
+        ),
+    ] = DEFAULT_END_OFFSET,
+    from_date: Annotated[
+        Optional[str],
+        typer.Option(
+            "--from", help="Absolute start date (YYYY-MM-DD format, e.g., 2025-09-05)"
+        ),
+    ] = None,
+    to_date: Annotated[
+        Optional[str],
+        typer.Option(
+            "--to", help="Absolute end date (YYYY-MM-DD format, e.g., 2025-09-08)"
+        ),
+    ] = None,
     club: Annotated[
         str, typer.Option("--club", "-c", help="Filter by specific club")
     ] = "",
@@ -469,13 +736,22 @@ def scrape(
         bool,
         typer.Option("--headless/--no-headless", help="Run browser in headless mode"),
     ] = True,
+    api_integration: Annotated[
+        bool,
+        typer.Option("--api/--no-api", help="Enable posting matches to missing-table API"),
+    ] = True,
+    save_file: Annotated[
+        Optional[str],
+        typer.Option("--save", help="Save matches to JSON file (e.g., --save games.json)"),
+    ] = None,
 ):
     """
     ⚽ Scrape MLS match data and display in beautiful format.
 
     This command scrapes match data from the MLS website and displays it
     in a nicely formatted table with colors and statistics. By default,
-    shows all matches found - use --limit to restrict the number shown.
+    searches from yesterday to tomorrow. Use --start and --end to customize
+    the date range (0=today, -1=yesterday, 1=tomorrow, etc.).
     """
     setup_environment(verbose)
 
@@ -494,7 +770,7 @@ def scrape(
         display_header()
 
     # Create configuration
-    config = create_config(age_group, division, days, club, competition)
+    config = create_config(age_group, division, start, end, club, competition, verbose, from_date, to_date)
 
     if not quiet:
         display_config_summary(config)
@@ -502,7 +778,7 @@ def scrape(
 
     try:
         # Run scraper
-        matches = asyncio.run(run_scraper(config, verbose, headless))
+        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose, headless, api_integration))
 
         # Filter for upcoming only if requested
         if upcoming_only:
@@ -536,7 +812,7 @@ def scrape(
                     else "TBD"
                 )
                 print(
-                    f"{status} {date_str} {match.home_team} vs {match.away_team}{score}"
+                    f"{status} {date_str} {normalize_team_name_for_display(match.home_team)} vs {normalize_team_name_for_display(match.away_team)}{score}"
                 )
             return  # Exit early for quiet mode
         else:
@@ -560,6 +836,15 @@ def scrape(
                 console.print(
                     f"\n[green]✅ Successfully found {len(matches)} matches![/green]"
                 )
+
+            # Show API integration results prominently
+            if api_integration:
+                display_api_results(api_results, api_healthy)
+
+            # Save matches to file if requested
+            if save_file and matches:
+                if save_matches_to_file(matches, save_file, age_group, division):
+                    console.print(f"[green]💾 Saved {len(matches)} matches to {save_file}[/green]")
 
     except MLSScraperError as e:
         console.print(f"[red]❌ Scraping failed: {e}[/red]")
@@ -602,10 +887,10 @@ def upcoming(
     console.print("[bold cyan]⚽ Upcoming MLS Games[/bold cyan]\n")
 
     # Create configuration for future games
-    config = create_config(age_group, division, days)
+    config = create_config(age_group, division, 0, days, verbose=verbose)
 
     try:
-        matches = asyncio.run(run_scraper(config, verbose))
+        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose))
         upcoming_matches = [m for m in matches if m.match_status == "scheduled"]
 
         if not upcoming_matches:
@@ -636,7 +921,7 @@ def upcoming(
                 match_time = "TBD"
 
             console.print(
-                f"[bold cyan]{i:2d}.[/bold cyan] [green]{match.home_team}[/green] vs [red]{match.away_team}[/red]"
+                f"[bold cyan]{i:2d}.[/bold cyan] [green]{normalize_team_name_for_display(match.home_team)}[/green] vs [red]{normalize_team_name_for_display(match.away_team)}[/red]"
             )
             console.print(f"     📅 {match_date} at {match_time}")
             if match.location:
@@ -680,8 +965,9 @@ def interactive(
     console.print(f"\nAvailable divisions: {', '.join(VALID_DIVISIONS)}")
     division = Prompt.ask("Division", default=DEFAULT_DIVISION, choices=VALID_DIVISIONS)
 
-    # Days selection
-    days = int(Prompt.ask("Days to look back", default=str(DEFAULT_DAYS)))
+    # Date range selection
+    start_offset = int(Prompt.ask("Start date offset from today (0=today, -1=yesterday)", default="-1"))
+    end_offset = int(Prompt.ask("End date offset from today (0=today, 1=tomorrow, 7=week from now)", default="1"))
 
     # Optional filters
     club = Prompt.ask("Club filter (optional)", default="")
@@ -693,7 +979,7 @@ def interactive(
     console.print("\n" + "=" * 50)
 
     # Create and display configuration
-    config = create_config(age_group, division, days, club, competition)
+    config = create_config(age_group, division, start_offset, end_offset, club, competition, verbose=False)
     display_config_summary(config)
 
     if not Confirm.ask("\nProceed with scraping?", default=True):
@@ -701,7 +987,7 @@ def interactive(
         return
 
     try:
-        matches = asyncio.run(run_scraper(config, verbose))
+        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose))
 
         console.print()
         display_matches_table(matches)
@@ -734,25 +1020,17 @@ def test_quiet():
             match_id="demo_1",
             home_team="FC Dallas Youth",
             away_team="Houston Dynamo Academy",
-            match_date=datetime(2025, 9, 20, 15, 0),
-            match_time="3:00 PM",
-            venue="Toyota Stadium",
-            age_group="U14",
-            division="Southwest",
+            match_datetime=datetime(2025, 9, 20, 15, 0),
+            location="Toyota Stadium",
             competition="MLS Next",
-            status="scheduled",
         ),
         Match(
             match_id="demo_2",
             home_team="Austin FC Academy",
             away_team="San Antonio FC Youth",
-            match_date=datetime(2025, 9, 18, 10, 0),
-            match_time="10:00 AM",
-            venue="St. David's Performance Center",
-            age_group="U14",
-            division="Southwest",
+            match_datetime=datetime(2025, 9, 18, 10, 0),
+            location="St. David's Performance Center",
             competition="MLS Next",
-            status="completed",
             home_score=2,
             away_score=1,
         ),
@@ -775,12 +1053,355 @@ def test_quiet():
             match.match_datetime.strftime("%m/%d") if match.match_datetime else "TBD"
         )
         console.print(
-            f"{status} {date_str} {match.home_team} vs {match.away_team}{score}",
+            f"{status} {date_str} {normalize_team_name_for_display(match.home_team)} vs {normalize_team_name_for_display(match.away_team)}{score}",
             style="white",
         )
 
     console.print("[dim]" + "=" * 50 + "[/dim]")
     console.print("[dim]Perfect for piping to other commands or scripts![/dim]")
+
+
+# Create cache subapp
+cache_app = typer.Typer(help="🗄️ Team cache management commands")
+app.add_typer(cache_app, name="cache")
+
+
+@cache_app.command("load")
+def cache_load(
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
+    ] = False,
+):
+    """Load teams into cache and display statistics."""
+    setup_environment(verbose)
+
+    if not verbose:
+        display_header()
+
+    async def load_cache():
+        try:
+            from src.api.missing_table_client import MissingTableClient
+            from src.scraper.api_integration import MatchAPIIntegrator
+
+            # Create API client and integrator
+            client = MissingTableClient()
+            integrator = MatchAPIIntegrator(client)
+
+            console.print("🔄 Loading teams cache...")
+
+            # Preload cache
+            result = await integrator.preload_teams_cache()
+
+            if result.get("success", True):  # True for already_loaded case
+                if result.get("already_loaded"):
+                    console.print("[yellow]✓ Cache already loaded![/yellow]")
+                else:
+                    console.print("[green]✅ Cache loaded successfully![/green]")
+
+                # Display statistics
+                stats = integrator.get_cache_stats()
+
+                stats_table = Table(show_header=False, box=None)
+                stats_table.add_column("Metric", style="cyan")
+                stats_table.add_column("Value", style="white")
+
+                stats_table.add_row("Teams loaded", str(stats["team_count"]))
+                stats_table.add_row("Load time", f"{stats['load_time']:.3f}s")
+                stats_table.add_row("Cache status", "✅ Loaded" if stats["loaded"] else "❌ Not loaded")
+
+                console.print(Panel(stats_table, title="📊 Cache Statistics", border_style="green"))
+            else:
+                console.print(f"[red]❌ Cache loading failed: {result.get('error', 'Unknown error')}[/red]")
+
+        except Exception as e:
+            console.print(f"[red]❌ Error loading cache: {e}[/red]")
+
+    asyncio.run(load_cache())
+
+
+@cache_app.command("status")
+def cache_status(
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
+    ] = False,
+):
+    """Show current cache status and statistics."""
+    setup_environment(verbose)
+
+    if not verbose:
+        display_header()
+
+    async def show_status():
+        try:
+            from src.api.missing_table_client import MissingTableClient
+            from src.scraper.api_integration import MatchAPIIntegrator
+
+            # Create API client and integrator
+            client = MissingTableClient()
+            integrator = MatchAPIIntegrator(client)
+
+            # Get cache statistics
+            stats = integrator.get_cache_stats()
+
+            # Create status table
+            status_table = Table(show_header=False, box=None)
+            status_table.add_column("Metric", style="cyan")
+            status_table.add_column("Value", style="white")
+
+            status_table.add_row("Cache loaded", "✅ Yes" if stats["loaded"] else "❌ No")
+            status_table.add_row("Teams in cache", str(stats["team_count"]))
+            if stats["load_time"]:
+                status_table.add_row("Last load time", f"{stats['load_time']:.3f}s")
+            if stats["hit_count"] > 0 or stats["miss_count"] > 0:
+                status_table.add_row("Cache hits", str(stats["hit_count"]))
+                status_table.add_row("Cache misses", str(stats["miss_count"]))
+                status_table.add_row("Hit rate", f"{stats['hit_rate']:.1%}")
+
+            # Determine border color based on status
+            border_color = "green" if stats["loaded"] else "red"
+            title = "📊 Cache Status - ✅ Active" if stats["loaded"] else "📊 Cache Status - ❌ Not Loaded"
+
+            console.print(Panel(status_table, title=title, border_style=border_color))
+
+        except Exception as e:
+            console.print(f"[red]❌ Error getting cache status: {e}[/red]")
+
+    asyncio.run(show_status())
+
+
+@cache_app.command("clear")
+def cache_clear(
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
+    ] = False,
+):
+    """Clear the teams cache for testing purposes."""
+    setup_environment(verbose)
+
+    if not verbose:
+        display_header()
+
+    async def clear_cache():
+        try:
+            from src.api.missing_table_client import MissingTableClient
+            from src.scraper.api_integration import MatchAPIIntegrator
+
+            # Create API client and integrator
+            client = MissingTableClient()
+            integrator = MatchAPIIntegrator(client)
+
+            # Clear cache
+            integrator.clear_cache()
+            console.print("[yellow]🗑️  Cache cleared successfully![/yellow]")
+
+        except Exception as e:
+            console.print(f"[red]❌ Error clearing cache: {e}[/red]")
+
+    asyncio.run(clear_cache())
+
+
+@cache_app.command("test")
+def cache_test(
+    teams: Annotated[
+        str, typer.Option("--teams", help="Comma-separated list of team names to test")
+    ] = "Boston Bolts,New York City FC,IFA",
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
+    ] = False,
+):
+    """Test cache performance with specific team names."""
+    setup_environment(verbose)
+
+    if not verbose:
+        display_header()
+
+    async def test_teams():
+        try:
+            from src.api.missing_table_client import MissingTableClient
+            from src.scraper.api_integration import MatchAPIIntegrator
+            import time
+
+            # Create API client and integrator
+            client = MissingTableClient()
+            integrator = MatchAPIIntegrator(client)
+
+            team_list = [team.strip() for team in teams.split(",")]
+
+            console.print(f"🧪 Testing cache with {len(team_list)} teams...")
+            console.print(f"Teams: {', '.join(team_list)}")
+            console.print()
+
+            # Load cache first
+            console.print("🔄 Loading cache...")
+            cache_result = await integrator.preload_teams_cache()
+
+            if not cache_result.get("success", True):
+                console.print(f"[yellow]⚠️ Cache loading failed, testing without cache[/yellow]")
+
+            # Test each team
+            results_table = Table(show_header=True, header_style="bold magenta")
+            results_table.add_column("Team Name", style="cyan")
+            results_table.add_column("Found", style="white")
+            results_table.add_column("Team ID", style="green")
+            results_table.add_column("Status", style="yellow")
+
+            for team_name in team_list:
+                start_time = time.time()
+                team_id = await integrator._find_team_by_name(team_name)
+                lookup_time = time.time() - start_time
+
+                if team_id:
+                    results_table.add_row(
+                        team_name,
+                        "✅ Yes",
+                        str(team_id),
+                        f"Found in {lookup_time:.3f}s"
+                    )
+                else:
+                    results_table.add_row(
+                        team_name,
+                        "❌ No",
+                        "-",
+                        f"Not found ({lookup_time:.3f}s)"
+                    )
+
+            console.print(Panel(results_table, title="🧪 Team Lookup Test Results"))
+
+            # Show final cache stats
+            stats = integrator.get_cache_stats()
+            if stats["hit_count"] > 0 or stats["miss_count"] > 0:
+                console.print(f"\n📊 Cache Performance:")
+                console.print(f"   Hits: {stats['hit_count']}")
+                console.print(f"   Misses: {stats['miss_count']}")
+                console.print(f"   Hit Rate: {stats['hit_rate']:.1%}")
+
+        except Exception as e:
+            console.print(f"[red]❌ Error testing teams: {e}[/red]")
+
+    asyncio.run(test_teams())
+
+
+@cache_app.command("benchmark")
+def cache_benchmark(
+    teams: Annotated[
+        str, typer.Option("--teams", help="Comma-separated list of team names to benchmark")
+    ] = "Boston Bolts,New York City FC,IFA,Austin FC Academy,Real Salt Lake Academy",
+    iterations: Annotated[
+        int, typer.Option("--iterations", help="Number of iterations per test")
+    ] = 3,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
+    ] = False,
+):
+    """Benchmark cache performance vs traditional individual lookups."""
+    setup_environment(verbose)
+
+    if not verbose:
+        display_header()
+
+    async def benchmark():
+        try:
+            from src.api.missing_table_client import MissingTableClient
+            from src.scraper.api_integration import MatchAPIIntegrator
+            import time
+
+            # Create API client and integrator
+            client = MissingTableClient()
+            integrator = MatchAPIIntegrator(client)
+
+            team_list = [team.strip() for team in teams.split(",")]
+
+            console.print(f"🏁 Benchmarking cache performance...")
+            console.print(f"Teams: {len(team_list)} | Iterations: {iterations}")
+            console.print()
+
+            # Test 1: Traditional individual lookups (clear cache first)
+            console.print("🔄 Testing traditional individual lookups...")
+            integrator.clear_cache()
+
+            traditional_times = []
+            for i in range(iterations):
+                integrator.clear_cache()  # Clear cache between iterations
+                start_time = time.time()
+
+                # Do individual lookups without cache
+                for team_name in team_list:
+                    await integrator._find_team_by_name(team_name)
+
+                iteration_time = time.time() - start_time
+                traditional_times.append(iteration_time)
+                console.print(f"   Iteration {i+1}: {iteration_time:.3f}s")
+
+            avg_traditional = sum(traditional_times) / len(traditional_times)
+
+            console.print()
+
+            # Test 2: Cache-optimized lookups
+            console.print("🚀 Testing cache-optimized lookups...")
+
+            cached_times = []
+            for i in range(iterations):
+                integrator.clear_cache()  # Start fresh
+                start_time = time.time()
+
+                # Preload cache once, then do lookups
+                await integrator.preload_teams_cache()
+                for team_name in team_list:
+                    await integrator._find_team_by_name(team_name)
+
+                iteration_time = time.time() - start_time
+                cached_times.append(iteration_time)
+                console.print(f"   Iteration {i+1}: {iteration_time:.3f}s")
+
+            avg_cached = sum(cached_times) / len(cached_times)
+
+            console.print()
+
+            # Results comparison
+            improvement = ((avg_traditional - avg_cached) / avg_traditional) * 100
+            speedup = avg_traditional / avg_cached
+
+            results_table = Table(show_header=True, header_style="bold magenta")
+            results_table.add_column("Method", style="cyan")
+            results_table.add_column("Avg Time", style="white")
+            results_table.add_column("Min Time", style="green")
+            results_table.add_column("Max Time", style="red")
+            results_table.add_column("Performance", style="yellow")
+
+            results_table.add_row(
+                "Traditional Lookups",
+                f"{avg_traditional:.3f}s",
+                f"{min(traditional_times):.3f}s",
+                f"{max(traditional_times):.3f}s",
+                "Baseline"
+            )
+
+            results_table.add_row(
+                "Cache-Optimized",
+                f"{avg_cached:.3f}s",
+                f"{min(cached_times):.3f}s",
+                f"{max(cached_times):.3f}s",
+                f"{speedup:.1f}x faster" if improvement > 0 else f"{abs(speedup):.1f}x slower"
+            )
+
+            console.print(Panel(results_table, title="🏁 Benchmark Results"))
+
+            # Summary
+            if improvement > 0:
+                console.print(f"\n🎉 [green]Cache optimization achieved {improvement:.1f}% improvement![/green]")
+                console.print(f"   Cache method is {speedup:.1f}x faster than traditional lookups")
+            else:
+                console.print(f"\n⚠️ [yellow]Cache method was {abs(improvement):.1f}% slower[/yellow]")
+                console.print("   Consider investigating network conditions or API response times")
+
+            # Show final cache stats
+            stats = integrator.get_cache_stats()
+            console.print(f"\n📊 Final cache stats: {stats['hit_count']} hits, {stats['miss_count']} misses")
+
+        except Exception as e:
+            console.print(f"[red]❌ Benchmark failed: {e}[/red]")
+
+    asyncio.run(benchmark())
 
 
 @app.command()
@@ -800,25 +1421,17 @@ def demo():
             match_id="demo_1",
             home_team="FC Dallas Youth",
             away_team="Houston Dynamo Academy",
-            match_date=datetime(2025, 9, 20, 15, 0),
-            match_time="3:00 PM",
-            venue="Toyota Stadium",
-            age_group="U14",
-            division="Southwest",
+            match_datetime=datetime(2025, 9, 20, 15, 0),
+            location="Toyota Stadium",
             competition="MLS Next",
-            status="scheduled",
         ),
         Match(
             match_id="demo_2",
             home_team="Austin FC Academy",
             away_team="San Antonio FC Youth",
-            match_date=datetime(2025, 9, 18, 10, 0),
-            match_time="10:00 AM",
-            venue="St. David's Performance Center",
-            age_group="U14",
-            division="Southwest",
+            match_datetime=datetime(2025, 9, 18, 10, 0),
+            location="St. David's Performance Center",
             competition="MLS Next",
-            status="completed",
             home_score=2,
             away_score=1,
         ),
@@ -826,13 +1439,9 @@ def demo():
             match_id="demo_3",
             home_team="Real Salt Lake Academy",
             away_team="Colorado Rapids Youth",
-            match_date=datetime(2025, 9, 19, 13, 30),
-            match_time="1:30 PM",
-            venue="Zions Bank Training Center",
-            age_group="U14",
-            division="Southwest",
+            match_datetime=datetime(2025, 9, 19, 13, 30),
+            location="Zions Bank Training Center",
             competition="MLS Next",
-            status="in_progress",
             home_score=1,
             away_score=0,
         ),
@@ -1229,7 +1838,7 @@ async def test_extraction(headless: bool, timeout: int):
 
             if matches:
                 console.print(
-                    f"      Sample match: {matches[0].home_team} vs {matches[0].away_team}"
+                    f"      Sample match: {normalize_team_name_for_display(matches[0].home_team)} vs {normalize_team_name_for_display(matches[0].away_team)}"
                 )
                 console.print(f"      Match status: {matches[0].match_status}")
             else:
@@ -1523,10 +2132,67 @@ async def inspect_browser(headless: bool, timeout: int):
         console.print(f"❌ Error during inspection: {e}")
 
 
-@app.command()
-def config():
+# Create config subcommand group
+config_app = typer.Typer(name="config", help="⚙️ Configuration management")
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("show")
+def config_show():
     """
-    ⚙️ Show configuration options and examples.
+    📋 Show current environment configuration.
+
+    Displays the current values of all environment variables used by the scraper.
+    """
+    display_header()
+    display_current_config()
+
+
+@config_app.command("setup")
+def config_setup():
+    """
+    🚀 Interactive setup of environment variables.
+
+    Guides you through setting up all required and optional environment variables.
+    """
+    display_header()
+    interactive_setup()
+
+
+@config_app.command("set")
+def config_set(
+    variable: Annotated[str, typer.Argument(help="Environment variable name")],
+    value: Annotated[str, typer.Argument(help="Environment variable value")],
+):
+    """
+    📝 Set a specific environment variable.
+
+    Sets the value of a specific environment variable and saves it to .env file.
+    """
+    if set_variable(variable, value):
+        console.print(f"[green]✅ Successfully set {variable}[/green]")
+    else:
+        raise typer.Exit(1)
+
+
+@config_app.command("validate")
+def config_validate():
+    """
+    ✅ Validate current configuration.
+
+    Checks if all required environment variables are properly configured.
+    """
+    if validate_config():
+        console.print("\n[green]🎉 Configuration is valid and ready to use![/green]")
+    else:
+        console.print("\n[yellow]💡 Run 'mls-scraper config setup' to fix configuration issues.[/yellow]")
+        raise typer.Exit(1)
+
+
+@config_app.command("options")
+def config_options():
+    """
+    🎯 Show available CLI options and examples.
 
     Displays available age groups, divisions, and usage examples.
     """
@@ -1556,10 +2222,12 @@ def config():
 
     # Examples
     examples = [
-        ("Show all matches found", "mls-scraper scrape"),
+        ("Show all matches (yesterday to tomorrow)", "mls-scraper scrape"),
+        ("Show today's matches only", "mls-scraper scrape --start 0 --end 0"),
+        ("Show next week (today to 7 days)", "mls-scraper scrape --start 0 --end 7"),
+        ("Show last 3 days to today", "mls-scraper scrape --start -3 --end 0"),
         ("Limit to 5 matches", "mls-scraper scrape -l 5"),
         ("Specific age/division", "mls-scraper scrape -a U16 -d Southwest"),
-        ("Last 14 days with stats", "mls-scraper scrape -n 14 --stats"),
         ("Upcoming games only", "mls-scraper scrape --upcoming"),
         ("Quick upcoming check", "mls-scraper upcoming"),
         ("Interactive mode", "mls-scraper interactive"),
@@ -1574,6 +2242,17 @@ def config():
         example_table.add_row(desc, cmd)
 
     console.print(example_table)
+
+
+# Backward compatibility - keep the old config command as an alias
+@app.command("options")
+def options():
+    """
+    🎯 Show available CLI options and examples (alias for 'config options').
+
+    Displays available age groups, divisions, and usage examples.
+    """
+    config_options()
 
 
 if __name__ == "__main__":
