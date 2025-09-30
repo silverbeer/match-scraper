@@ -180,6 +180,41 @@ scripts/
 
 ## Deployment
 
+### AWS Lambda Deployment
+
+Deploy the scraper as a serverless AWS Lambda function with scheduled execution:
+
+**Quick Start:**
+```bash
+# Verify setup
+./scripts/verify_lambda_setup.sh
+
+# Start LocalStack for local testing
+docker-compose -f docker-compose.localstack.yml up -d
+
+# Deploy to LocalStack
+./scripts/deploy_lambda_localstack.sh
+
+# Test the function
+./scripts/invoke_lambda_localstack.sh
+
+# Set up EventBridge schedule
+./scripts/setup_eventbridge_localstack.sh
+```
+
+**Documentation:**
+- 📖 [Lambda Deployment Guide](LAMBDA_DEPLOYMENT.md) - Full AWS deployment documentation
+- 🚀 [Quick Start Guide](LAMBDA_QUICKSTART.md) - Get started in 10 minutes with LocalStack
+
+**Features:**
+- Containerized Lambda with Playwright
+- EventBridge scheduled triggers (e.g., daily at 6 AM UTC)
+- CloudWatch metrics and logging
+- LocalStack support for local testing
+- Production-ready infrastructure
+
+### Terraform Infrastructure
+
 Infrastructure is managed with Terraform. See the `terraform/` directory for deployment configuration.
 
 ## CLI Tool
