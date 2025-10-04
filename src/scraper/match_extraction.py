@@ -1197,8 +1197,38 @@ class MLSMatchExtractor:
                     # Try to parse actual scores
                     score_match = self.SCORE_PATTERN.search(cleaned_score)
                     if score_match:
-                        home_score = int(score_match.group(1))
-                        away_score = int(score_match.group(2))
+                        home_score_val = int(score_match.group(1))
+                        away_score_val = int(score_match.group(2))
+                        
+                        # Check if this is a placeholder score for games without real scores
+                        # Only treat 0-0 as a placeholder - other scores might be real
+                        placeholder_scores = [(0, 0)]  # TODO: Get from config when available
+                        if (home_score_val, away_score_val) in placeholder_scores:
+                            # This is likely a placeholder - treat as TBD
+                            home_score = "TBD"
+                            away_score = "TBD"
+                            logger.info(
+                                "Detected placeholder score, treating as TBD",
+                                extra={
+                                    "match_date": match_date.isoformat() if match_date else None,
+                                    "original_score": cleaned_score,
+                                    "status_text": status_text,
+                                    "placeholder_score": f"{home_score_val}-{away_score_val}"
+                                }
+                            )
+                        else:
+                            # Real scores
+                            home_score = home_score_val
+                            away_score = away_score_val
+                            logger.info(
+                                "Parsed real score",
+                                extra={
+                                    "match_date": match_date.isoformat() if match_date else None,
+                                    "original_score": cleaned_score,
+                                    "parsed_score": f"{home_score_val}-{away_score_val}",
+                                    "status_text": status_text
+                                }
+                            )
 
             return home_score, away_score, status
 

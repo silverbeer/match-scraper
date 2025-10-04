@@ -12,7 +12,7 @@ data:
   MISSING_TABLE_API_BASE_URL: "https://dev.missingtable.com"
   
   # Logging Configuration
-  LOG_LEVEL: "INFO"
+  LOG_LEVEL: "DEBUG"
   
   # Browser Configuration
   HEADLESS: "true"

@@ -26,7 +26,7 @@ spec:
             image: gcr.io/missing-table/mls-scraper:latest
             imagePullPolicy: Always
             command: ["python", "-m", "src.cli.main"]
-            args: ["scrape-matches"]
+            args: ["scrape"]
             env:
             # Load from ConfigMap
             - name: AGE_GROUP

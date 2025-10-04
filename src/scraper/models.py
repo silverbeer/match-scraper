@@ -47,9 +47,10 @@ class Match(BaseModel):
         """Calculate match status based on datetime and scores.
 
         Rules:
-        - If match_datetime is in the past and both scores exist: "completed"
-        - If match_datetime is in the past and TBD detected in scores: "TBD"
         - If match_datetime is in the future: "scheduled"
+        - If match_datetime is today or in the past:
+          - If both scores are integers (not TBD): "completed"
+          - If scores are TBD or None: "TBD"
         """
         now = (
             datetime.now(self.match_datetime.tzinfo)
@@ -57,10 +58,11 @@ class Match(BaseModel):
             else datetime.now()
         )
 
+        # Future games are always scheduled
         if self.match_datetime > now:
             return "scheduled"
 
-        # Match is in the past
+        # Past/today games - check scores
         if (
             self.home_score is not None
             and self.away_score is not None
@@ -69,16 +71,8 @@ class Match(BaseModel):
         ):
             return "completed"
 
-        # Check for TBD in scores
-        if (
-            str(self.home_score).upper() == "TBD"
-            or str(self.away_score).upper() == "TBD"
-            or self.home_score is None
-            or self.away_score is None
-        ):
-            return "TBD"
-
-        return "completed"
+        # Everything else (TBD, None, etc.) is TBD
+        return "TBD"
 
     @field_validator("home_score", "away_score")
     @classmethod

@@ -32,6 +32,12 @@ class ScrapingConfig(BaseModel):
     cache_refresh_on_miss: bool = Field(default=True, description="Refresh cache on miss")
     cache_preload_timeout: int = Field(default=30, ge=1, description="Cache preload timeout in seconds")
 
+    # Score parsing configuration
+    placeholder_scores: list[tuple[int, int]] = Field(
+        default=[(0, 0)], 
+        description="Score combinations that should be treated as placeholders/TBD"
+    )
+
     # OpenTelemetry configuration
     otel_exporter_otlp_endpoint: Optional[str] = Field(default=None, description="OTLP exporter endpoint")
     otel_exporter_otlp_headers: Optional[str] = Field(default=None, description="OTLP exporter headers")
