@@ -79,6 +79,7 @@ override.tf.json
 .env.local
 .env.production
 .env.staging
+.env.dev
 
 # Lambda deployment packages
 *.zip
