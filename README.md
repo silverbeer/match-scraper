@@ -12,14 +12,14 @@ Automated MLS match data scraper for missing-table.com API integration.
 
 ## Overview
 
-This serverless application scrapes match data from the MLS Next website and posts it to the missing-table.com API. Built with AWS Lambda, Playwright, and comprehensive monitoring using AWS Powertools and OpenTelemetry.
+This application scrapes match data from the MLS Next website and posts it to the missing-table.com API. Deployed on Google Kubernetes Engine (GKE) as a scheduled CronJob, built with Playwright and comprehensive monitoring.
 
 ## Features
 
 - **Automated Scraping**: Playwright-based web scraping of MLS Next match data
 - **API Integration**: Direct posting to missing-table.com API
-- **Comprehensive Monitoring**: Structured logging with AWS Powertools and metrics with OpenTelemetry
-- **Serverless Architecture**: AWS Lambda deployment with Terraform infrastructure
+- **Scheduled Execution**: Kubernetes CronJob runs daily at 6 AM UTC
+- **Containerized Deployment**: GKE deployment with optimized Docker container
 - **Data Validation**: Pydantic models for robust data validation and serialization
 - **Quality Testing**: Comprehensive test suite with unit, integration, and e2e tests
 
@@ -97,10 +97,10 @@ metrics = ScrapingMetrics(
 )
 ```
 
-## Logging and Metrics
+## Logging and Monitoring
 
 ### Structured Logging
-The application uses AWS Powertools for structured JSON logging with Pydantic model support:
+The application uses structured logging with Pydantic model support:
 
 ```python
 from src.utils import get_logger
@@ -110,7 +110,7 @@ logger.info("Operation completed", extra={"operation": "scraping", "match": matc
 ```
 
 ### Metrics Collection
-OpenTelemetry metrics are exported to Grafana Cloud via OTLP:
+OpenTelemetry metrics are available for monitoring:
 
 ```python
 from src.utils import get_metrics
@@ -129,7 +129,7 @@ with metrics.time_operation("scraping"):
 # Logging
 LOG_LEVEL=INFO
 
-# OpenTelemetry Metrics
+# OpenTelemetry Metrics (optional)
 OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway.grafana.net
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <your-token>
 OTEL_METRIC_EXPORT_INTERVAL=5000
@@ -163,24 +163,89 @@ src/
 │   ├── mls_scraper.py     # Main scraper orchestration
 │   └── models.py          # Pydantic data models
 ├── utils/
-│   ├── logger.py          # AWS Powertools logging
+│   ├── logger.py          # Structured logging
 │   ├── metrics.py         # OpenTelemetry metrics
 │   └── example_usage.py   # Usage examples
 tests/
 ├── unit/                  # Fast unit tests (CI)
 ├── integration/           # Multi-component tests
 ├── e2e/                  # End-to-end browser tests
-.claude/
-├── agents/
-│   └── test-guardian.md   # Test Guardian agent config
-└── README.md             # Agent documentation
+k8s/                      # Kubernetes manifests
+├── namespace.yaml         # Kubernetes namespace
+├── configmap.yaml         # Configuration
+├── secret.yaml           # API tokens
+└── cronjob.yaml          # Scheduled job
 scripts/
+├── deploy-gke-complete.sh # Complete GKE deployment
+├── deploy-gke-env.sh     # Environment-based deployment
+├── build-and-push-gke.sh # Container build and push
+├── deploy-to-gke.sh      # Kubernetes deployment
+├── test-gke.sh           # Testing and monitoring
 └── test-review.py        # Test analysis helper script
 ```
 
 ## Deployment
 
-Infrastructure is managed with Terraform. See the `terraform/` directory for deployment configuration.
+### Google Kubernetes Engine (GKE)
+
+The scraper is deployed as a Kubernetes CronJob on GKE, running daily at 6 AM UTC.
+
+#### Quick Start
+
+Deploy with a single command:
+
+```bash
+# Automated deployment (recommended)
+./scripts/deploy-gke-complete.sh
+```
+
+This script will:
+1. ✅ Check prerequisites (gcloud, kubectl, docker)
+2. ✅ Load configuration from terraform/dev.tfvars
+3. ✅ Build and push Docker image to GCP Container Registry
+4. ✅ Deploy Kubernetes manifests (CronJob, ConfigMap, Secret)
+5. ✅ Test the deployment with a manual job
+6. ✅ Display deployment summary and management commands
+
+#### Alternative: Using .env.dev file
+
+```bash
+# Create environment file
+cp env.dev.template .env.dev
+# Edit .env.dev with your values
+
+# Deploy using environment file
+./scripts/deploy-gke-env.sh .env.dev
+```
+
+#### Manual Deployment
+
+For manual deployments:
+
+```bash
+# Build and push container
+./scripts/build-and-push-gke.sh YOUR_PROJECT_ID
+
+# Deploy to GKE
+./scripts/deploy-to-gke.sh YOUR_PROJECT_ID YOUR_API_TOKEN
+
+# Test the deployment
+./scripts/test-gke.sh trigger
+./scripts/test-gke.sh logs
+```
+
+**Documentation:**
+- 📖 [GKE Deployment Guide](GKE_DEPLOYMENT.md) - Complete GKE deployment guide
+- 🧪 [Testing Guide](GKE_TESTING_GUIDE.md) - Testing and monitoring guide
+- 🚀 [Migration Guide](MIGRATION_TO_GKE.md) - Migration from AWS Lambda
+
+**Infrastructure Features:**
+- Kubernetes CronJob with configurable schedule
+- GCP Container Registry for container images
+- ConfigMap for non-sensitive configuration
+- Kubernetes Secret for API tokens
+- Resource requests and limits for GKE Autopilot
+- Comprehensive testing and monitoring scripts
 
 ## CLI Tool
 

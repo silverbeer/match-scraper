@@ -550,6 +550,7 @@ class MatchAPIIntegrator:
                 "away_team_id": away_team_id,
                 "home_score": home_score,
                 "away_score": away_score,
+                "match_status": match.match_status,
                 "season_id": season_id,
                 "age_group_id": age_group_id,
                 "game_type_id": game_type_id,

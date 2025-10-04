@@ -1,8 +1,8 @@
 """
-AWS Powertools Logger configuration for structured logging.
+Structured Logger configuration for MLS Match Scraper.
 
-This module provides a centralized logger configuration using AWS Lambda Powertools
-with structured JSON logging, correlation ID handling, and context propagation.
+This module provides a centralized logger configuration with structured JSON logging,
+correlation ID handling, and context propagation.
 """
 
 import os
@@ -14,10 +14,10 @@ from aws_lambda_powertools.logging import correlation_paths
 
 class MLSScraperLogger:
     """
-    Centralized logger for MLS Match Scraper with AWS Powertools integration.
+    Centralized logger for MLS Match Scraper with structured logging.
 
-    Provides structured logging with automatic correlation IDs, Lambda context,
-    and consistent log formatting across the application.
+    Provides structured logging with automatic correlation IDs and
+    consistent log formatting across the application.
     """
 
     def __init__(self, service_name: str = "mls-match-scraper"):
@@ -37,26 +37,26 @@ class MLSScraperLogger:
 
     def get_logger(self) -> Logger:
         """
-        Get the configured AWS Powertools Logger instance.
+        Get the configured structured Logger instance.
 
         Returns:
             Configured Logger instance
         """
         return self._logger
 
-    def inject_lambda_context(self, lambda_handler):
+    def inject_context(self, handler):
         """
-        Decorator to inject Lambda context into logs.
+        Decorator to inject context into logs.
 
         Args:
-            lambda_handler: Lambda function to decorate
+            handler: Function to decorate
 
         Returns:
-            Decorated function with Lambda context injection
+            Decorated function with context injection
         """
         return self._logger.inject_lambda_context(
             correlation_id_path=correlation_paths.API_GATEWAY_REST, log_event=True
-        )(lambda_handler)
+        )(handler)
 
     def log_scraping_start(self, config: dict[str, Any]) -> None:
         """
@@ -198,7 +198,7 @@ def get_logger() -> Logger:
     """
     Get the global logger instance.
 
-    Returns:
-        Configured AWS Powertools Logger
-    """
+Returns:
+    Configured structured Logger
+"""
     return scraper_logger.get_logger()

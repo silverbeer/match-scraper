@@ -219,7 +219,7 @@ class MLSScraper:
                     extra={"attempt": attempt + 1, "max_retries": self.MAX_RETRIES + 1},
                 )
 
-                # Configure browser for Lambda environment
+                # Configure browser for container environment
                 browser_config = BrowserConfig(
                     headless=self.headless,
                     timeout=30000,  # 30 seconds

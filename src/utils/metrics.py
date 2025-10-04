@@ -45,7 +45,7 @@ class MLSScraperMetrics:
             {
                 "service.name": service_name,
                 "service.version": service_version,
-                "service.instance.id": os.getenv("AWS_LAMBDA_FUNCTION_NAME", "local"),
+                "service.instance.id": os.getenv("HOSTNAME", "local"),
             }
         )
 
@@ -156,10 +156,10 @@ class MLSScraperMetrics:
             unit="s",
         )
 
-        # Lambda execution histogram
-        self.lambda_duration_histogram = self.meter.create_histogram(
-            name="lambda_execution_duration_seconds",
-            description="Distribution of Lambda function execution times",
+        # Application execution histogram
+        self.execution_duration_histogram = self.meter.create_histogram(
+            name="application_execution_duration_seconds",
+            description="Distribution of application execution times",
             unit="s",
         )
 
@@ -291,11 +291,11 @@ class MLSScraperMetrics:
             self.scraping_duration_histogram.record(duration, attributes)
 
     @contextmanager
-    def time_lambda_execution(
+    def time_execution(
         self, labels: Optional[dict[str, str]] = None
     ) -> Generator[None, None, None]:
         """
-        Context manager to time Lambda function execution.
+        Context manager to time application execution.
 
         Args:
             labels: Additional labels for the metric
@@ -312,10 +312,10 @@ class MLSScraperMetrics:
             attributes.update(
                 {
                     "service": self.service_name,
-                    "function_name": os.getenv("AWS_LAMBDA_FUNCTION_NAME", "local"),
+                    "instance": os.getenv("HOSTNAME", "local"),
                 }
             )
-            self.lambda_duration_histogram.record(duration, attributes)
+            self.execution_duration_histogram.record(duration, attributes)
 
 
 # Global metrics instance

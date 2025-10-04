@@ -62,6 +62,12 @@ Thumbs.db
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+*.tfplan
+*.tfvars.backup
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # AWS
 .aws/
@@ -73,6 +79,7 @@ Thumbs.db
 .env.local
 .env.production
 .env.staging
+.env.dev
 
 # Lambda deployment packages
 *.zip

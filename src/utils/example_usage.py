@@ -27,7 +27,7 @@ def example_scraping_operation() -> dict[str, Any]:
     scraper_logger.log_scraping_start(config)
 
     # Time the entire operation
-    with metrics.time_lambda_execution({"version": "1.0.0"}):
+    with metrics.time_execution({"version": "1.0.0"}):
         # Simulate browser operations
         with metrics.time_operation("browser_setup"):
             time.sleep(0.1)  # Simulate browser initialization
