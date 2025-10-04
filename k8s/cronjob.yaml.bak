@@ -1,0 +1,93 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mls-scraper-cronjob
+  namespace: match-scraper
+  labels:
+    app: mls-scraper
+spec:
+  # Run daily at 6 AM UTC (matching AWS Lambda schedule)
+  schedule: "0 6 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: mls-scraper
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: mls-scraper
+            # Replace with your actual GCP Container Registry image
+            image: gcr.io/YOUR_PROJECT_ID/mls-scraper:latest
+            imagePullPolicy: Always
+            command: ["python", "-m", "src.cli.main"]
+            args: ["scrape-matches"]
+            env:
+            # Load from ConfigMap
+            - name: AGE_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: AGE_GROUP
+            - name: DIVISION
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: DIVISION
+            - name: MISSING_TABLE_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: MISSING_TABLE_API_BASE_URL
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: LOG_LEVEL
+            - name: HEADLESS
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: HEADLESS
+            - name: BROWSER_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: BROWSER_TIMEOUT
+            - name: MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: MAX_RETRIES
+            - name: RETRY_DELAY
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: RETRY_DELAY
+            # Load from Secret
+            - name: MISSING_TABLE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mls-scraper-secrets
+                  key: MISSING_TABLE_API_TOKEN
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+            # Security context for running as non-root
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false
+              capabilities:
+                drop:
+                - ALL

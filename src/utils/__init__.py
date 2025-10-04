@@ -1,7 +1,7 @@
 """
 Utility modules for MLS Match Scraper.
 
-This package provides logging and metrics infrastructure using AWS Powertools
+This package provides logging and metrics infrastructure using structured logging
 and OpenTelemetry for comprehensive observability.
 """
 

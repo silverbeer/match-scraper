@@ -2,7 +2,7 @@
 Browser automation utilities using Playwright for MLS website scraping.
 
 This module provides browser initialization, page navigation, element interaction,
-and resource cleanup functionality optimized for AWS Lambda execution.
+and resource cleanup functionality optimized for containerized execution.
 """
 
 import asyncio
@@ -46,7 +46,7 @@ class BrowserConfig:
 
 class BrowserManager:
     """
-    Manages Playwright browser lifecycle with Lambda-optimized configuration.
+    Manages Playwright browser lifecycle with container-optimized configuration.
 
     Provides browser initialization, page management, and resource cleanup
     with proper error handling and timeout management.
@@ -59,7 +59,7 @@ class BrowserManager:
         self._context: Optional[BrowserContext] = None
 
     async def initialize(self) -> None:
-        """Initialize Playwright browser with Lambda-optimized settings."""
+        """Initialize Playwright browser with container-optimized settings."""
         try:
             logger.info(
                 "Initializing Playwright browser",
@@ -71,7 +71,7 @@ class BrowserManager:
 
             self._playwright = await async_playwright().start()
 
-            # Launch browser with Lambda-optimized settings
+            # Launch browser with container-optimized settings
             self._browser = await self._playwright.chromium.launch(
                 headless=self.config.headless,
                 args=[
