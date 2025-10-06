@@ -69,12 +69,46 @@ spec:
                 configMapKeyRef:
                   name: mls-scraper-config
                   key: RETRY_DELAY
+            # Observability Configuration
+            - name: DEPLOYMENT_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: DEPLOYMENT_ENV
+            - name: K8S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: K8S_NAMESPACE
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: OTEL_METRIC_EXPORT_INTERVAL
+            - name: OTEL_METRIC_EXPORT_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: OTEL_METRIC_EXPORT_TIMEOUT
             # Load from Secret
             - name: MISSING_TABLE_API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: mls-scraper-secrets
                   key: MISSING_TABLE_API_TOKEN
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: mls-scraper-secrets
+                  key: OTEL_EXPORTER_OTLP_HEADERS
+            volumeMounts:
+            - name: logs
+              mountPath: /var/log/scraper
             resources:
               requests:
                 memory: "1Gi"
@@ -91,3 +125,40 @@ spec:
               capabilities:
                 drop:
                 - ALL
+
+          # Promtail sidecar for log forwarding to Grafana Loki
+          - name: promtail
+            image: grafana/promtail:2.9.3
+            args:
+            - -config.file=/etc/promtail/promtail.yaml
+            env:
+            - name: LOKI_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: mls-scraper-config
+                  key: LOKI_ENDPOINT
+            - name: GRAFANA_CLOUD_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mls-scraper-secrets
+                  key: GRAFANA_CLOUD_API_TOKEN
+            volumeMounts:
+            - name: logs
+              mountPath: /var/log/scraper
+              readOnly: true
+            - name: promtail-config
+              mountPath: /etc/promtail
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+
+          volumes:
+          - name: logs
+            emptyDir: {}
+          - name: promtail-config
+            configMap:
+              name: promtail-config

@@ -10,14 +10,31 @@ data:
   AGE_GROUP: "U14"
   DIVISION: "Northeast"
   MISSING_TABLE_API_BASE_URL: "https://dev.missingtable.com"
-  
+
   # Logging Configuration
   LOG_LEVEL: "DEBUG"
-  
+
   # Browser Configuration
   HEADLESS: "true"
   BROWSER_TIMEOUT: "30000"
-  
+
   # Scraping Configuration
   MAX_RETRIES: "3"
   RETRY_DELAY: "5"
+
+  # Observability Configuration
+  DEPLOYMENT_ENV: "production"
+  K8S_NAMESPACE: "match-scraper"
+
+  # OpenTelemetry Metrics Configuration (Grafana Cloud)
+  # Format: https://otlp-gateway-{zone}.grafana.net/otlp/v1/metrics
+  # Replace {GRAFANA_CLOUD_INSTANCE_ID} and {GRAFANA_CLOUD_ZONE} with your values
+  # Example: https://otlp-gateway-prod-us-central-0.grafana.net/otlp/v1/metrics
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-{GRAFANA_CLOUD_ZONE}.grafana.net/otlp/v1/metrics"
+  OTEL_METRIC_EXPORT_INTERVAL: "10000"
+  OTEL_METRIC_EXPORT_TIMEOUT: "30000"
+
+  # Grafana Loki Configuration (for Promtail)
+  # Format: https://logs-{zone}.grafana.net/loki/api/v1/push
+  # Example: https://logs-prod-us-central-0.grafana.net/loki/api/v1/push
+  LOKI_ENDPOINT: "https://logs-{GRAFANA_CLOUD_ZONE}.grafana.net/loki/api/v1/push"

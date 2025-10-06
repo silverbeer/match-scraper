@@ -40,34 +40,63 @@ class MLSScraperMetrics:
         self.service_name = service_name
         self.service_version = service_version
 
-        # Configure resource with service information
+        # Configure resource with service information including Grafana Cloud attributes
         resource = Resource.create(
             {
                 "service.name": service_name,
                 "service.version": service_version,
                 "service.instance.id": os.getenv("HOSTNAME", "local"),
+                "deployment.environment": os.getenv("DEPLOYMENT_ENV", "production"),
+                "k8s.namespace.name": os.getenv("K8S_NAMESPACE", "match-scraper"),
+                "k8s.pod.name": os.getenv("HOSTNAME", "local"),
+                "cloud.provider": "gcp",
+                "cloud.platform": "gcp_kubernetes_engine",
             }
         )
 
-        # Configure OTLP exporter for Grafana Cloud
-        otlp_exporter = OTLPMetricExporter(
-            endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
-            headers=self._parse_otlp_headers(),
-            timeout=30,
-        )
+        # Only configure OTLP exporter if endpoint is provided
+        metric_readers = []
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 
-        # Configure periodic metric reader
-        metric_reader = PeriodicExportingMetricReader(
-            exporter=otlp_exporter,
-            export_interval_millis=int(
-                os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "5000")
-            ),
-            export_timeout_millis=int(os.getenv("OTEL_METRIC_EXPORT_TIMEOUT", "30000")),
-        )
+        if otlp_endpoint:
+            try:
+                # Configure OTLP exporter for Grafana Cloud
+                otlp_exporter = OTLPMetricExporter(
+                    endpoint=otlp_endpoint,
+                    headers=self._parse_otlp_headers(),
+                    timeout=30,
+                )
+
+                # Configure periodic metric reader
+                metric_reader = PeriodicExportingMetricReader(
+                    exporter=otlp_exporter,
+                    export_interval_millis=int(
+                        os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "10000")
+                    ),
+                    export_timeout_millis=int(
+                        os.getenv("OTEL_METRIC_EXPORT_TIMEOUT", "30000")
+                    ),
+                )
+                metric_readers.append(metric_reader)
+
+                import logging
+                logging.getLogger(__name__).info(
+                    f"OpenTelemetry metrics configured for endpoint: {otlp_endpoint}"
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Failed to configure OTLP metrics exporter: {e}. Metrics will not be exported."
+                )
+        else:
+            import logging
+            logging.getLogger(__name__).info(
+                "OTEL_EXPORTER_OTLP_ENDPOINT not configured. Metrics will be collected but not exported."
+            )
 
         # Set up meter provider
         meter_provider = MeterProvider(
-            resource=resource, metric_readers=[metric_reader]
+            resource=resource, metric_readers=metric_readers
         )
         metrics.set_meter_provider(meter_provider)
 
