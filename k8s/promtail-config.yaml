@@ -15,14 +15,15 @@ data:
       filename: /tmp/positions.yaml
 
     clients:
-      - url: ${LOKI_ENDPOINT}
-        bearer_token: ${GRAFANA_CLOUD_API_TOKEN}
+      - url: https://logs-prod-036.grafana.net/loki/api/v1/push
+        basic_auth:
+          username: ${LOKI_USER_ID}
+          password: ${LOKI_API_KEY}
         batchwait: 1s
         batchsize: 1048576
         timeout: 10s
 
     scrape_configs:
-      # Scrape stdout/stderr from the main container
       - job_name: scraper-logs
         static_configs:
           - targets:
@@ -35,7 +36,6 @@ data:
               __path__: /var/log/scraper/*.log
 
         pipeline_stages:
-          # Parse JSON logs from AWS Lambda Powertools
           - json:
               expressions:
                 timestamp: timestamp
@@ -44,17 +44,13 @@ data:
                 service: service
                 operation: operation
 
-          # Set timestamp from log entry
           - timestamp:
               source: timestamp
               format: RFC3339
 
-          # Set log level
           - labels:
               level:
               service:
-              operation:
 
-          # Output the message
           - output:
               source: message

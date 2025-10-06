@@ -20,13 +20,40 @@ spec:
             app: mls-scraper
         spec:
           restartPolicy: OnFailure
+          initContainers:
+          - name: config-preprocessor
+            image: bhgedigital/envsubst:latest
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                envsubst < /etc/promtail-template/promtail.yaml > /etc/promtail-processed/promtail.yaml
+                echo "Promtail config processed successfully"
+                echo "Config file size: $(wc -c < /etc/promtail-processed/promtail.yaml) bytes"
+            env:
+            - name: LOKI_USER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mls-scraper-secrets
+                  key: LOKI_USER_ID
+            - name: LOKI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mls-scraper-secrets
+                  key: LOKI_API_KEY
+            volumeMounts:
+            - name: promtail-config
+              mountPath: /etc/promtail-template
+            - name: promtail-processed
+              mountPath: /etc/promtail-processed
           containers:
           - name: mls-scraper
             # Replace with your actual GCP Container Registry image
             image: gcr.io/missing-table/mls-scraper:latest
             imagePullPolicy: Always
-            command: ["python", "-m", "src.cli.main"]
-            args: ["scrape"]
+            command: ["/bin/sh"]
+            args:
+              - -c
+              - python -m src.cli.main scrape 2>&1 | tee -a /var/log/scraper/app.log
             env:
             # Load from ConfigMap
             - name: AGE_GROUP
@@ -131,22 +158,11 @@ spec:
             image: grafana/promtail:2.9.3
             args:
             - -config.file=/etc/promtail/promtail.yaml
-            env:
-            - name: LOKI_ENDPOINT
-              valueFrom:
-                configMapKeyRef:
-                  name: mls-scraper-config
-                  key: LOKI_ENDPOINT
-            - name: GRAFANA_CLOUD_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: mls-scraper-secrets
-                  key: GRAFANA_CLOUD_API_TOKEN
             volumeMounts:
             - name: logs
               mountPath: /var/log/scraper
               readOnly: true
-            - name: promtail-config
+            - name: promtail-processed
               mountPath: /etc/promtail
             resources:
               requests:
@@ -162,3 +178,5 @@ spec:
           - name: promtail-config
             configMap:
               name: promtail-config
+          - name: promtail-processed
+            emptyDir: {}

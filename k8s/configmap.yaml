@@ -30,11 +30,11 @@ data:
   # Format: https://otlp-gateway-{zone}.grafana.net/otlp/v1/metrics
   # Replace {GRAFANA_CLOUD_INSTANCE_ID} and {GRAFANA_CLOUD_ZONE} with your values
   # Example: https://otlp-gateway-prod-us-central-0.grafana.net/otlp/v1/metrics
-  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-{GRAFANA_CLOUD_ZONE}.grafana.net/otlp/v1/metrics"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-prod-us-east-2.grafana.net/otlp/v1/metrics"
   OTEL_METRIC_EXPORT_INTERVAL: "10000"
   OTEL_METRIC_EXPORT_TIMEOUT: "30000"
 
   # Grafana Loki Configuration (for Promtail)
   # Format: https://logs-{zone}.grafana.net/loki/api/v1/push
   # Example: https://logs-prod-us-central-0.grafana.net/loki/api/v1/push
-  LOKI_ENDPOINT: "https://logs-{GRAFANA_CLOUD_ZONE}.grafana.net/loki/api/v1/push"
+  LOKI_ENDPOINT: "https://logs-prod-036.grafana.net/loki/api/v1/push"
