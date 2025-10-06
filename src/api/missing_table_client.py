@@ -310,11 +310,11 @@ class MissingTableClient:
 
     async def update_score(self, game_id: str, score_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Update the score for an existing game.
+        Update the score for an existing game using PATCH.
 
         Args:
             game_id: ID of the game to update
-            score_data: Score information dictionary
+            score_data: Score information dictionary (can include home_score, away_score, match_status)
 
         Returns:
             Updated game data from API response
@@ -331,8 +331,8 @@ class MissingTableClient:
             }
         )
 
-        endpoint = f"api/games/{game_id}/score"
-        result = await self._make_request("PUT", endpoint, data=score_data)
+        endpoint = f"api/games/{game_id}"
+        result = await self._make_request("PATCH", endpoint, data=score_data)
 
         logger.info(
             "Score updated successfully",

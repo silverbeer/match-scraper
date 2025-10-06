@@ -174,9 +174,11 @@ class MatchAPIIntegrator:
             "errors": 0,
             "skipped": 0,
             "duplicates": 0,
+            "updated": 0,
             "failed_matches": [],
             "posted_matches": [],
-            "duplicate_matches": []
+            "duplicate_matches": [],
+            "updated_matches": []
         }
 
         for match in matches:
@@ -193,6 +195,58 @@ class MatchAPIIntegrator:
                 duplicate_key = self._create_game_duplicate_key(game_data)
                 if duplicate_key in existing_games_map:
                     existing_game = existing_games_map[duplicate_key]
+
+                    # Check if we need to update the score
+                    scraped_has_score = match.has_score()
+                    existing_home_score = existing_game.get("home_score")
+                    existing_away_score = existing_game.get("away_score")
+                    existing_has_score = (
+                        existing_home_score is not None
+                        and existing_away_score is not None
+                        and (existing_home_score > 0 or existing_away_score > 0)
+                    )
+
+                    # If scraped match has a score and existing game doesn't, update it
+                    if scraped_has_score and not existing_has_score:
+                        try:
+                            game_id = existing_game.get("id")
+                            score_data = {
+                                "home_score": game_data["home_score"],
+                                "away_score": game_data["away_score"],
+                                "match_status": game_data["match_status"]
+                            }
+
+                            await self.client.update_score(game_id, score_data)
+
+                            logger.info(
+                                f"Updated score for existing match {match.match_id}",
+                                extra={
+                                    "match_id": match.match_id,
+                                    "existing_game_id": game_id,
+                                    "home_score": score_data["home_score"],
+                                    "away_score": score_data["away_score"]
+                                }
+                            )
+
+                            results["updated"] += 1
+                            results["updated_matches"].append({
+                                "match_id": match.match_id,
+                                "existing_game_id": game_id,
+                                "home_team": match.home_team,
+                                "away_team": match.away_team,
+                                "home_score": score_data["home_score"],
+                                "away_score": score_data["away_score"]
+                            })
+                            continue
+
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to update score for match {match.match_id}: {e}",
+                                extra={"match_id": match.match_id, "game_id": game_id}
+                            )
+                            # Fall through to mark as duplicate
+
+                    # Game exists and no update needed
                     logger.info(
                         f"Skipping duplicate match {match.match_id}",
                         extra={

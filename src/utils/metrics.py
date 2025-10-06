@@ -49,25 +49,30 @@ class MLSScraperMetrics:
             }
         )
 
-        # Configure OTLP exporter for Grafana Cloud
-        otlp_exporter = OTLPMetricExporter(
-            endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
-            headers=self._parse_otlp_headers(),
-            timeout=30,
-        )
+        # Only configure OTLP exporter if endpoint is provided
+        metric_readers = []
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        if otlp_endpoint:
+            # Configure OTLP exporter for Grafana Cloud
+            otlp_exporter = OTLPMetricExporter(
+                endpoint=otlp_endpoint,
+                headers=self._parse_otlp_headers(),
+                timeout=30,
+            )
 
-        # Configure periodic metric reader
-        metric_reader = PeriodicExportingMetricReader(
-            exporter=otlp_exporter,
-            export_interval_millis=int(
-                os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "5000")
-            ),
-            export_timeout_millis=int(os.getenv("OTEL_METRIC_EXPORT_TIMEOUT", "30000")),
-        )
+            # Configure periodic metric reader
+            metric_reader = PeriodicExportingMetricReader(
+                exporter=otlp_exporter,
+                export_interval_millis=int(
+                    os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "5000")
+                ),
+                export_timeout_millis=int(os.getenv("OTEL_METRIC_EXPORT_TIMEOUT", "30000")),
+            )
+            metric_readers.append(metric_reader)
 
         # Set up meter provider
         meter_provider = MeterProvider(
-            resource=resource, metric_readers=[metric_reader]
+            resource=resource, metric_readers=metric_readers
         )
         metrics.set_meter_provider(meter_provider)
 
