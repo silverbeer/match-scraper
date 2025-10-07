@@ -23,8 +23,8 @@ on:
 
 env:
   GCP_REGION: us-central1
-  GKE_CLUSTER: missing-table-cluster
-  GKE_ZONE: us-central1-a
+  GKE_CLUSTER: missing-table-dev
+  GKE_ZONE: us-central1
   NAMESPACE: match-scraper
 
 permissions:
@@ -146,7 +146,7 @@ jobs:
       - name: Get GKE credentials
         run: |
           gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-            --zone ${{ env.GKE_ZONE }} \
+            --region ${{ env.GCP_REGION }} \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Verify cluster access

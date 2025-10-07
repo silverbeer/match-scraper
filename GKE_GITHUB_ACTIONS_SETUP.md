@@ -203,10 +203,12 @@ The workflow includes some default values that you may want to customize:
 ```yaml
 env:
   GCP_REGION: us-central1          # Your GCP region
-  GKE_CLUSTER: missing-table-cluster  # Your GKE cluster name
-  GKE_ZONE: us-central1-a          # Your GKE cluster zone
+  GKE_CLUSTER: missing-table-dev   # Your GKE cluster name
+  GKE_ZONE: us-central1            # Your GKE cluster zone/region
   NAMESPACE: match-scraper         # Kubernetes namespace
 ```
+
+**Note:** The current cluster is a **regional cluster** (not zonal), so the workflow uses `--region` instead of `--zone`.
 
 Edit `.github/workflows/gke-deploy.yml` if your values differ.
 
