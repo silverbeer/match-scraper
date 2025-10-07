@@ -8,8 +8,7 @@ error handling, and retry logic.
 
 import asyncio
 import os
-import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -22,6 +21,7 @@ logger = get_logger()
 
 class HealthStatus(BaseModel):
     """Health check response model."""
+
     status: str
     version: Optional[str] = None
     database: Optional[str] = None
@@ -31,7 +31,12 @@ class HealthStatus(BaseModel):
 class MissingTableAPIError(Exception):
     """Base exception for MissingTable API errors."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response_data: Optional[Dict] = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response_data: Optional[dict] = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.response_data = response_data
@@ -63,7 +68,9 @@ class MissingTableClient:
             max_retries: Maximum number of retry attempts
             retry_backoff_base: Base delay for exponential backoff
         """
-        self.base_url = base_url or os.getenv("MISSING_TABLE_API_BASE_URL", "http://localhost:8000")
+        self.base_url = base_url or os.getenv(
+            "MISSING_TABLE_API_BASE_URL", "http://localhost:8000"
+        )
         self.api_token = api_token or os.getenv("MISSING_TABLE_API_TOKEN")
         self.timeout = timeout
         self.max_retries = max_retries
@@ -74,10 +81,12 @@ class MissingTableClient:
             self.base_url += "/"
 
         if not self.api_token:
-            logger.warning("No API token provided. Set MISSING_TABLE_API_TOKEN environment variable.")
+            logger.warning(
+                "No API token provided. Set MISSING_TABLE_API_TOKEN environment variable."
+            )
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         """Get request headers with authentication."""
         headers = {
             "Content-Type": "application/json",
@@ -114,7 +123,7 @@ class MissingTableClient:
                 "endpoint": endpoint,
                 "url": url,
                 "full_check": full,
-            }
+            },
         )
 
         try:
@@ -134,7 +143,7 @@ class MissingTableClient:
                     extra={
                         "status_code": response.status_code,
                         "response": health_data,
-                    }
+                    },
                 )
 
                 return HealthStatus(**health_data)
@@ -146,26 +155,26 @@ class MissingTableClient:
                 extra={
                     "status_code": e.response.status_code,
                     "response_text": e.response.text,
-                }
+                },
             )
             raise MissingTableAPIError(
                 error_msg,
                 status_code=e.response.status_code,
-                response_data=e.response.json() if e.response.content else None
-            )
+                response_data=e.response.json() if e.response.content else None,
+            ) from e
 
         except httpx.RequestError as e:
             error_msg = f"Health check request failed: {str(e)}"
             logger.error(error_msg, extra={"error": str(e)})
-            raise MissingTableAPIError(error_msg)
+            raise MissingTableAPIError(error_msg) from e
 
     async def _make_request(
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        data: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Make an authenticated API request with retry logic.
 
@@ -182,7 +191,9 @@ class MissingTableClient:
             MissingTableAPIError: If request fails after all retries
         """
         if not self.api_token:
-            raise MissingTableAPIError("API token is required for authenticated requests")
+            raise MissingTableAPIError(
+                "API token is required for authenticated requests"
+            )
 
         url = urljoin(self.base_url, endpoint)
 
@@ -195,7 +206,7 @@ class MissingTableClient:
                         "max_retries": self.max_retries + 1,
                         "url": url,
                         "has_data": data is not None,
-                    }
+                    },
                 )
 
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -216,7 +227,7 @@ class MissingTableClient:
                             "endpoint": endpoint,
                             "status_code": response.status_code,
                             "attempt": attempt + 1,
-                        }
+                        },
                     )
 
                     return result
@@ -231,23 +242,23 @@ class MissingTableClient:
                             "status_code": e.response.status_code,
                             "response_text": e.response.text,
                             "attempt": attempt + 1,
-                        }
+                        },
                     )
                     raise MissingTableAPIError(
                         error_msg,
                         status_code=e.response.status_code,
-                        response_data=e.response.json() if e.response.content else None
-                    )
+                        response_data=e.response.json() if e.response.content else None,
+                    ) from e
 
                 # Server error, retry with backoff
-                delay = self.retry_backoff_base * (2 ** attempt)
+                delay = self.retry_backoff_base * (2**attempt)
                 logger.warning(
                     f"Server error on attempt {attempt + 1}, retrying in {delay}s",
                     extra={
                         "status_code": e.response.status_code,
                         "attempt": attempt + 1,
                         "delay": delay,
-                    }
+                    },
                 )
                 await asyncio.sleep(delay)
 
@@ -255,25 +266,29 @@ class MissingTableClient:
                 if attempt == self.max_retries:
                     error_msg = f"{method} {endpoint} request failed: {str(e)}"
                     # Log at debug level to avoid cluttering CLI output - higher level will show user-friendly error
-                    logger.debug(error_msg, extra={"error": str(e), "attempt": attempt + 1})
-                    raise MissingTableAPIError(error_msg)
+                    logger.debug(
+                        error_msg, extra={"error": str(e), "attempt": attempt + 1}
+                    )
+                    raise MissingTableAPIError(error_msg) from e
 
                 # Network error, retry with backoff
-                delay = self.retry_backoff_base * (2 ** attempt)
+                delay = self.retry_backoff_base * (2**attempt)
                 logger.warning(
                     f"Network error on attempt {attempt + 1}, retrying in {delay}s",
                     extra={
                         "error": str(e),
                         "attempt": attempt + 1,
                         "delay": delay,
-                    }
+                    },
                 )
                 await asyncio.sleep(delay)
 
         # Should not reach here
-        raise MissingTableAPIError(f"Request failed after {self.max_retries + 1} attempts")
+        raise MissingTableAPIError(
+            f"Request failed after {self.max_retries + 1} attempts"
+        )
 
-    async def create_game(self, game_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_game(self, game_data: dict[str, Any]) -> dict[str, Any]:
         """
         Create a new game in the missing-table API.
 
@@ -292,7 +307,7 @@ class MissingTableClient:
                 "home_team": game_data.get("home_team"),
                 "away_team": game_data.get("away_team"),
                 "game_date": game_data.get("game_date"),
-            }
+            },
         )
 
         result = await self._make_request("POST", "api/games", data=game_data)
@@ -303,12 +318,14 @@ class MissingTableClient:
                 "game_id": result.get("id"),
                 "home_team": result.get("home_team"),
                 "away_team": result.get("away_team"),
-            }
+            },
         )
 
         return result
 
-    async def update_score(self, game_id: str, score_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_score(
+        self, game_id: str, score_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Update the score for an existing game using PATCH.
 
@@ -328,7 +345,7 @@ class MissingTableClient:
                 "game_id": game_id,
                 "home_score": score_data.get("home_score"),
                 "away_score": score_data.get("away_score"),
-            }
+            },
         )
 
         endpoint = f"api/games/{game_id}"
@@ -340,12 +357,12 @@ class MissingTableClient:
                 "game_id": game_id,
                 "home_score": result.get("home_score"),
                 "away_score": result.get("away_score"),
-            }
+            },
         )
 
         return result
 
-    async def get_game(self, game_id: str) -> Dict[str, Any]:
+    async def get_game(self, game_id: str) -> dict[str, Any]:
         """
         Retrieve a game by ID.
 
@@ -365,7 +382,7 @@ class MissingTableClient:
 
         return result
 
-    async def list_games(self, **filters) -> List[Dict[str, Any]]:
+    async def list_games(self, **filters) -> list[dict[str, Any]]:
         """
         List games with optional filters.
 

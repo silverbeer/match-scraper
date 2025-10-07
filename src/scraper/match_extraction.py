@@ -924,7 +924,8 @@ class MLSMatchExtractor:
             if match_id_raw:
                 # Extract numeric match ID from raw text (format: "99963\t\t\t\n\t\t\tMALE")
                 import re
-                match_id_match = re.search(r'(\d+)', match_id_raw.strip())
+
+                match_id_match = re.search(r"(\d+)", match_id_raw.strip())
                 if match_id_match:
                     match_id = match_id_match.group(1)
                 else:
@@ -1199,10 +1200,12 @@ class MLSMatchExtractor:
                     if score_match:
                         home_score_val = int(score_match.group(1))
                         away_score_val = int(score_match.group(2))
-                        
+
                         # Check if this is a placeholder score for games without real scores
                         # Only treat 0-0 as a placeholder - other scores might be real
-                        placeholder_scores = [(0, 0)]  # TODO: Get from config when available
+                        placeholder_scores = [
+                            (0, 0)
+                        ]  # TODO: Get from config when available
                         if (home_score_val, away_score_val) in placeholder_scores:
                             # This is likely a placeholder - treat as TBD
                             home_score = "TBD"
@@ -1210,11 +1213,13 @@ class MLSMatchExtractor:
                             logger.info(
                                 "Detected placeholder score, treating as TBD",
                                 extra={
-                                    "match_date": match_date.isoformat() if match_date else None,
+                                    "match_date": match_date.isoformat()
+                                    if match_date
+                                    else None,
                                     "original_score": cleaned_score,
                                     "status_text": status_text,
-                                    "placeholder_score": f"{home_score_val}-{away_score_val}"
-                                }
+                                    "placeholder_score": f"{home_score_val}-{away_score_val}",
+                                },
                             )
                         else:
                             # Real scores
@@ -1223,11 +1228,13 @@ class MLSMatchExtractor:
                             logger.info(
                                 "Parsed real score",
                                 extra={
-                                    "match_date": match_date.isoformat() if match_date else None,
+                                    "match_date": match_date.isoformat()
+                                    if match_date
+                                    else None,
                                     "original_score": cleaned_score,
                                     "parsed_score": f"{home_score_val}-{away_score_val}",
-                                    "status_text": status_text
-                                }
+                                    "status_text": status_text,
+                                },
                             )
 
             return home_score, away_score, status

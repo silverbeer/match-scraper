@@ -29,42 +29,62 @@ class ScrapingConfig(BaseModel):
 
     # Team cache configuration
     enable_team_cache: bool = Field(default=True, description="Enable team caching")
-    cache_refresh_on_miss: bool = Field(default=True, description="Refresh cache on miss")
-    cache_preload_timeout: int = Field(default=30, ge=1, description="Cache preload timeout in seconds")
+    cache_refresh_on_miss: bool = Field(
+        default=True, description="Refresh cache on miss"
+    )
+    cache_preload_timeout: int = Field(
+        default=30, ge=1, description="Cache preload timeout in seconds"
+    )
 
     # Score parsing configuration
     placeholder_scores: list[tuple[int, int]] = Field(
-        default=[(0, 0)], 
-        description="Score combinations that should be treated as placeholders/TBD"
+        default=[(0, 0)],
+        description="Score combinations that should be treated as placeholders/TBD",
     )
 
     # OpenTelemetry configuration
-    otel_exporter_otlp_endpoint: Optional[str] = Field(default=None, description="OTLP exporter endpoint")
-    otel_exporter_otlp_headers: Optional[str] = Field(default=None, description="OTLP exporter headers")
-    otel_metrics_exporter: str = Field(default="otlp", description="Metrics exporter type")
-    otel_exporter_otlp_protocol: str = Field(default="http/protobuf", description="OTLP protocol")
-    otel_service_name: str = Field(default="mls-match-scraper", description="Service name for telemetry")
-    otel_service_version: str = Field(default="1.0.0", description="Service version for telemetry")
+    otel_exporter_otlp_endpoint: Optional[str] = Field(
+        default=None, description="OTLP exporter endpoint"
+    )
+    otel_exporter_otlp_headers: Optional[str] = Field(
+        default=None, description="OTLP exporter headers"
+    )
+    otel_metrics_exporter: str = Field(
+        default="otlp", description="Metrics exporter type"
+    )
+    otel_exporter_otlp_protocol: str = Field(
+        default="http/protobuf", description="OTLP protocol"
+    )
+    otel_service_name: str = Field(
+        default="mls-match-scraper", description="Service name for telemetry"
+    )
+    otel_service_version: str = Field(
+        default="1.0.0", description="Service version for telemetry"
+    )
 
-    @field_validator('age_group')
+    @field_validator("age_group")
     @classmethod
     def validate_age_group(cls, v: str) -> str:
         """Validate age group format."""
         valid_age_groups = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
         if v and v not in valid_age_groups:
-            raise ValueError(f"Invalid age_group: {v}. Must be one of {valid_age_groups}")
+            raise ValueError(
+                f"Invalid age_group: {v}. Must be one of {valid_age_groups}"
+            )
         return v
 
-    @field_validator('log_level')
+    @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
         """Validate log level."""
         valid_log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if v.upper() not in valid_log_levels:
-            raise ValueError(f"Invalid log_level: {v}. Must be one of {valid_log_levels}")
+            raise ValueError(
+                f"Invalid log_level: {v}. Must be one of {valid_log_levels}"
+            )
         return v.upper()
 
-    @field_validator('missing_table_api_url')
+    @field_validator("missing_table_api_url")
     @classmethod
     def validate_api_url(cls, v: str) -> str:
         """Validate API URL format."""
@@ -75,14 +95,15 @@ class ScrapingConfig(BaseModel):
             raise ValueError("missing_table_api_url must have a valid domain")
         return v
 
-    @model_validator(mode='after')
-    def validate_date_range(self) -> 'ScrapingConfig':
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "ScrapingConfig":
         """Validate that date range is logical."""
         validate_date_range(self.start_date, self.end_date)
         return self
 
     class Config:
         """Pydantic configuration."""
+
         # Allow arbitrary types for date objects
         arbitrary_types_allowed = True
         # JSON schema extra information
@@ -97,7 +118,7 @@ class ScrapingConfig(BaseModel):
                 "end_date": "2025-09-29",
                 "missing_table_api_url": "http://localhost:8000",
                 "missing_table_api_key": "your-api-key",
-                "log_level": "INFO"
+                "log_level": "INFO",
             }
         }
 
@@ -112,19 +133,21 @@ def load_config() -> ScrapingConfig:
         ValueError: If required environment variables are missing or invalid
     """
     # Required environment variables (support both old and new naming)
-    missing_table_api_url = (
-        os.getenv("MISSING_TABLE_API_BASE_URL") or
-        os.getenv("MISSING_TABLE_API_URL")
+    missing_table_api_url = os.getenv("MISSING_TABLE_API_BASE_URL") or os.getenv(
+        "MISSING_TABLE_API_URL"
     )
     if not missing_table_api_url:
-        raise ValueError("MISSING_TABLE_API_BASE_URL (or MISSING_TABLE_API_URL) environment variable is required")
+        raise ValueError(
+            "MISSING_TABLE_API_BASE_URL (or MISSING_TABLE_API_URL) environment variable is required"
+        )
 
-    missing_table_api_key = (
-        os.getenv("MISSING_TABLE_API_TOKEN") or
-        os.getenv("MISSING_TABLE_API_KEY")
+    missing_table_api_key = os.getenv("MISSING_TABLE_API_TOKEN") or os.getenv(
+        "MISSING_TABLE_API_KEY"
     )
     if not missing_table_api_key:
-        raise ValueError("MISSING_TABLE_API_TOKEN (or MISSING_TABLE_API_KEY) environment variable is required")
+        raise ValueError(
+            "MISSING_TABLE_API_TOKEN (or MISSING_TABLE_API_KEY) environment variable is required"
+        )
 
     # Optional environment variables with defaults
     age_group = os.getenv("AGE_GROUP", "U14")
@@ -155,7 +178,9 @@ def load_config() -> ScrapingConfig:
     otel_exporter_otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     otel_exporter_otlp_headers = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
     otel_metrics_exporter = os.getenv("OTEL_METRICS_EXPORTER", "otlp")
-    otel_exporter_otlp_protocol = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+    otel_exporter_otlp_protocol = os.getenv(
+        "OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"
+    )
     otel_service_name = os.getenv("OTEL_SERVICE_NAME", "mls-match-scraper")
     otel_service_version = os.getenv("OTEL_SERVICE_VERSION", "1.0.0")
 

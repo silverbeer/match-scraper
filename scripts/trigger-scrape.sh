@@ -90,5 +90,3 @@ if [[ "$CLEANUP" == "true" ]]; then
 fi
 
 exit $STATUS
-
-

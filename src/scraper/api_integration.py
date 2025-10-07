@@ -4,12 +4,11 @@ Handles converting scraped match data to the missing-table API format
 and posting matches to the API with proper team and entity management.
 """
 
-import asyncio
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Optional
 
-from src.api.missing_table_client import MissingTableClient, MissingTableAPIError
+from src.api.missing_table_client import MissingTableClient
 from src.scraper.models import Match
 from src.utils.logger import get_logger
 
@@ -23,9 +22,9 @@ class MatchAPIIntegrator:
         """Initialize the integrator with an API client."""
         self.client = api_client
         self.config = config
-        self._team_cache: Dict[str, int] = {}  # team_name -> team_id
-        self._age_group_cache: Dict[str, int] = {}  # age_group -> id
-        self._division_cache: Dict[str, int] = {}  # division -> id
+        self._team_cache: dict[str, int] = {}  # team_name -> team_id
+        self._age_group_cache: dict[str, int] = {}  # age_group -> id
+        self._division_cache: dict[str, int] = {}  # division -> id
 
         # New bulk cache system
         self._teams_cache_loaded: bool = False
@@ -42,7 +41,7 @@ class MatchAPIIntegrator:
         """Normalize team names using predefined mappings."""
         return self._team_name_mappings.get(team_name, team_name)
 
-    async def preload_teams_cache(self) -> Dict[str, any]:
+    async def preload_teams_cache(self) -> dict[str, any]:
         """
         Bulk load all teams from the API and build the cache.
 
@@ -53,7 +52,7 @@ class MatchAPIIntegrator:
             return {
                 "already_loaded": True,
                 "cache_size": len(self._team_cache),
-                "load_time": self._cache_load_time
+                "load_time": self._cache_load_time,
             }
 
         start_time = time.time()
@@ -82,14 +81,14 @@ class MatchAPIIntegrator:
 
             logger.info(
                 f"Successfully loaded {team_count} teams into cache",
-                extra={"team_count": team_count, "load_time": self._cache_load_time}
+                extra={"team_count": team_count, "load_time": self._cache_load_time},
             )
 
             return {
                 "success": True,
                 "team_count": team_count,
                 "load_time": self._cache_load_time,
-                "cache_size": len(self._team_cache)
+                "cache_size": len(self._team_cache),
             }
 
         except Exception as e:
@@ -97,10 +96,10 @@ class MatchAPIIntegrator:
             return {
                 "success": False,
                 "error": str(e),
-                "load_time": time.time() - start_time
+                "load_time": time.time() - start_time,
             }
 
-    def get_cache_stats(self) -> Dict[str, any]:
+    def get_cache_stats(self) -> dict[str, any]:
         """Get current cache statistics."""
         return {
             "loaded": self._teams_cache_loaded,
@@ -108,7 +107,8 @@ class MatchAPIIntegrator:
             "load_time": self._cache_load_time,
             "hit_count": self._cache_hit_count,
             "miss_count": self._cache_miss_count,
-            "hit_rate": self._cache_hit_count / max(1, self._cache_hit_count + self._cache_miss_count)
+            "hit_rate": self._cache_hit_count
+            / max(1, self._cache_hit_count + self._cache_miss_count),
         }
 
     def clear_cache(self) -> None:
@@ -120,7 +120,9 @@ class MatchAPIIntegrator:
         self._cache_miss_count = 0
         logger.info("Teams cache cleared")
 
-    async def post_matches(self, matches: List[Match], age_group: str, division: str) -> Dict[str, any]:
+    async def post_matches(
+        self, matches: list[Match], age_group: str, division: str
+    ) -> dict[str, any]:
         """
         Post a list of matches to the missing-table API.
 
@@ -138,7 +140,11 @@ class MatchAPIIntegrator:
 
         logger.info(
             f"Starting API integration for {len(matches)} matches",
-            extra={"match_count": len(matches), "age_group": age_group, "division": division}
+            extra={
+                "match_count": len(matches),
+                "age_group": age_group,
+                "division": division,
+            },
         )
 
         # Initialize entity IDs (preload cache first if enabled)
@@ -146,7 +152,9 @@ class MatchAPIIntegrator:
             # Preload teams cache for better performance if enabled
             if self.config and self.config.enable_team_cache:
                 cache_result = await self.preload_teams_cache()
-                if not cache_result.get("success", True):  # True for already_loaded case
+                if not cache_result.get(
+                    "success", True
+                ):  # True for already_loaded case
                     error_msg = cache_result.get("error", "Unknown cache preload error")
                     logger.error(f"Teams cache preload failed: {error_msg}")
                     raise RuntimeError(f"Cache preload failed: {error_msg}")
@@ -162,12 +170,18 @@ class MatchAPIIntegrator:
             # Check if it's a network connectivity issue
             error_str = str(e).lower()
             if "nodename nor servname" in error_str or "connection" in error_str:
-                raise Exception(f"Cannot connect to missing-table API server. Please check your network connection or API configuration. Teams involved: {', '.join(sorted(team_names)[:3])}{'...' if len(team_names) > 3 else ''}")
+                raise Exception(
+                    f"Cannot connect to missing-table API server. Please check your network connection or API configuration. Teams involved: {', '.join(sorted(team_names)[:3])}{'...' if len(team_names) > 3 else ''}"
+                ) from e
             else:
-                raise Exception(f"Failed to initialize API data for teams: {', '.join(sorted(team_names)[:3])}{'...' if len(team_names) > 3 else ''}. Error: {e}")
+                raise Exception(
+                    f"Failed to initialize API data for teams: {', '.join(sorted(team_names)[:3])}{'...' if len(team_names) > 3 else ''}. Error: {e}"
+                ) from e
 
         # Load existing games for deduplication
-        existing_games_map = await self._load_existing_games_for_deduplication(matches, age_group, division)
+        existing_games_map = await self._load_existing_games_for_deduplication(
+            matches, age_group, division
+        )
 
         results = {
             "posted": 0,
@@ -178,16 +192,20 @@ class MatchAPIIntegrator:
             "failed_matches": [],
             "posted_matches": [],
             "duplicate_matches": [],
-            "updated_matches": []
+            "updated_matches": [],
         }
 
         for match in matches:
             try:
                 # Convert match to API format
-                game_data = await self._convert_match_to_api_format(match, age_group, division)
+                game_data = await self._convert_match_to_api_format(
+                    match, age_group, division
+                )
 
                 if not game_data:
-                    logger.warning(f"Skipping match {match.match_id} - could not convert to API format")
+                    logger.warning(
+                        f"Skipping match {match.match_id} - could not convert to API format"
+                    )
                     results["skipped"] += 1
                     continue
 
@@ -213,7 +231,7 @@ class MatchAPIIntegrator:
                             score_data = {
                                 "home_score": game_data["home_score"],
                                 "away_score": game_data["away_score"],
-                                "match_status": game_data["match_status"]
+                                "match_status": game_data["match_status"],
                             }
 
                             await self.client.update_score(game_id, score_data)
@@ -224,25 +242,27 @@ class MatchAPIIntegrator:
                                     "match_id": match.match_id,
                                     "existing_game_id": game_id,
                                     "home_score": score_data["home_score"],
-                                    "away_score": score_data["away_score"]
-                                }
+                                    "away_score": score_data["away_score"],
+                                },
                             )
 
                             results["updated"] += 1
-                            results["updated_matches"].append({
-                                "match_id": match.match_id,
-                                "existing_game_id": game_id,
-                                "home_team": match.home_team,
-                                "away_team": match.away_team,
-                                "home_score": score_data["home_score"],
-                                "away_score": score_data["away_score"]
-                            })
+                            results["updated_matches"].append(
+                                {
+                                    "match_id": match.match_id,
+                                    "existing_game_id": game_id,
+                                    "home_team": match.home_team,
+                                    "away_team": match.away_team,
+                                    "home_score": score_data["home_score"],
+                                    "away_score": score_data["away_score"],
+                                }
+                            )
                             continue
 
                         except Exception as e:
                             logger.error(
                                 f"Failed to update score for match {match.match_id}: {e}",
-                                extra={"match_id": match.match_id, "game_id": game_id}
+                                extra={"match_id": match.match_id, "game_id": game_id},
                             )
                             # Fall through to mark as duplicate
 
@@ -254,28 +274,32 @@ class MatchAPIIntegrator:
                             "existing_game_id": existing_game.get("id"),
                             "home_team": match.home_team,
                             "away_team": match.away_team,
-                            "game_date": game_data["game_date"]
-                        }
+                            "game_date": game_data["game_date"],
+                        },
                     )
                     results["duplicates"] += 1
-                    results["duplicate_matches"].append({
-                        "match_id": match.match_id,
-                        "existing_game_id": existing_game.get("id"),
-                        "home_team": match.home_team,
-                        "away_team": match.away_team,
-                        "game_date": game_data["game_date"]
-                    })
+                    results["duplicate_matches"].append(
+                        {
+                            "match_id": match.match_id,
+                            "existing_game_id": existing_game.get("id"),
+                            "home_team": match.home_team,
+                            "away_team": match.away_team,
+                            "game_date": game_data["game_date"],
+                        }
+                    )
                     continue
 
                 # Post to API (only if not a duplicate)
                 api_result = await self.client.create_game(game_data)
                 results["posted"] += 1
-                results["posted_matches"].append({
-                    "match_id": match.match_id,
-                    "api_game_id": api_result.get("id"),
-                    "home_team": match.home_team,
-                    "away_team": match.away_team
-                })
+                results["posted_matches"].append(
+                    {
+                        "match_id": match.match_id,
+                        "api_game_id": api_result.get("id"),
+                        "home_team": match.home_team,
+                        "away_team": match.away_team,
+                    }
+                )
 
                 logger.info(
                     f"Successfully posted match {match.match_id} to API",
@@ -283,35 +307,39 @@ class MatchAPIIntegrator:
                         "match_id": match.match_id,
                         "api_game_id": api_result.get("id"),
                         "home_team": match.home_team,
-                        "away_team": match.away_team
-                    }
+                        "away_team": match.away_team,
+                    },
                 )
 
             except Exception as e:
                 logger.error(
                     f"Failed to post match {match.match_id} to API: {e}",
-                    extra={"match_id": match.match_id, "error": str(e)}
+                    extra={"match_id": match.match_id, "error": str(e)},
                 )
                 results["errors"] += 1
-                results["failed_matches"].append({
-                    "match_id": match.match_id,
-                    "error": str(e),
-                    "home_team": match.home_team,
-                    "away_team": match.away_team
-                })
+                results["failed_matches"].append(
+                    {
+                        "match_id": match.match_id,
+                        "error": str(e),
+                        "home_team": match.home_team,
+                        "away_team": match.away_team,
+                    }
+                )
 
         logger.info(
             "API integration completed",
             extra={
                 "posted": results["posted"],
                 "errors": results["errors"],
-                "skipped": results["skipped"]
-            }
+                "skipped": results["skipped"],
+            },
         )
 
         return results
 
-    async def _initialize_entity_ids(self, matches: List[Match], age_group: str, division: str):
+    async def _initialize_entity_ids(
+        self, matches: list[Match], age_group: str, division: str
+    ):
         """Initialize and cache entity IDs needed for API calls."""
         logger.info("Initializing entity IDs for API integration")
 
@@ -328,7 +356,9 @@ class MatchAPIIntegrator:
         await self._cache_age_group_id(age_group)
         await self._cache_division_id(division)
 
-    async def _ensure_teams_exist(self, team_names: Set[str], age_group: str, division: str):
+    async def _ensure_teams_exist(
+        self, team_names: set[str], age_group: str, division: str
+    ):
         """Ensure all teams exist in the API and cache their IDs."""
         logger.info(f"Ensuring {len(team_names)} teams exist in API")
 
@@ -351,14 +381,18 @@ class MatchAPIIntegrator:
 
             except Exception as e:
                 logger.error(f"Failed to ensure team exists: {team_name} - {e}")
-                raise RuntimeError(f"Team creation/lookup failed for '{team_name}': {e}") from e
+                raise RuntimeError(
+                    f"Team creation/lookup failed for '{team_name}': {e}"
+                ) from e
 
     async def _find_team_by_name(self, team_name: str) -> Optional[int]:
         """Find a team by name using cache or API fallback."""
         normalized_name = self._normalize_team_name(team_name)
 
         # Try cache first if it's loaded and enabled
-        if self._teams_cache_loaded and (not self.config or self.config.enable_team_cache):
+        if self._teams_cache_loaded and (
+            not self.config or self.config.enable_team_cache
+        ):
             if normalized_name in self._team_cache:
                 self._cache_hit_count += 1
                 return self._team_cache[normalized_name]
@@ -423,7 +457,7 @@ class MatchAPIIntegrator:
             "city": "Unknown",  # We don't have city info from scraping
             "age_group_ids": [age_group_id] if age_group_id else [],
             "division_ids": [division_id] if division_id else [],
-            "academy_team": False
+            "academy_team": False,
         }
 
         response = await self.client._make_request("POST", "api/teams", data=team_data)
@@ -433,7 +467,9 @@ class MatchAPIIntegrator:
         if self._teams_cache_loaded and team_id:
             normalized_name = self._normalize_team_name(team_name)
             self._team_cache[normalized_name] = team_id
-            logger.info(f"Added newly created team to cache: {team_name} (ID: {team_id})")
+            logger.info(
+                f"Added newly created team to cache: {team_name} (ID: {team_id})"
+            )
 
         return team_id
 
@@ -466,7 +502,9 @@ class MatchAPIIntegrator:
 
             # If not found, create it
             age_group_data = {"name": age_group}
-            response = await self.client._make_request("POST", "api/age-groups", data=age_group_data)
+            response = await self.client._make_request(
+                "POST", "api/age-groups", data=age_group_data
+            )
             return response.get("id")
 
         except Exception as e:
@@ -488,7 +526,9 @@ class MatchAPIIntegrator:
 
             # If not found, create it
             division_data = {"name": division}
-            response = await self.client._make_request("POST", "api/divisions", data=division_data)
+            response = await self.client._make_request(
+                "POST", "api/divisions", data=division_data
+            )
             return response.get("id")
 
         except Exception as e:
@@ -511,7 +551,10 @@ class MatchAPIIntegrator:
             for season in seasons:
                 # Check if season name contains current year or next year
                 season_name = season.get("name", "")
-                if str(current_year) in season_name or str(current_year + 1) in season_name:
+                if (
+                    str(current_year) in season_name
+                    or str(current_year + 1) in season_name
+                ):
                     # Additional check: if we have start/end dates, verify current date is in range
                     start_date_str = season.get("start_date")
                     end_date_str = season.get("end_date")
@@ -522,7 +565,7 @@ class MatchAPIIntegrator:
                             end_date = datetime.fromisoformat(end_date_str).date()
                             if start_date <= current_date <= end_date:
                                 return season.get("id")
-                        except:
+                        except Exception:
                             pass  # If date parsing fails, just use year matching
 
                     # If no date range or parsing failed, use this season
@@ -563,7 +606,9 @@ class MatchAPIIntegrator:
             logger.warning(f"Error getting game type: {e}")
             return 1  # Default fallback
 
-    async def _convert_match_to_api_format(self, match: Match, age_group: str, division: str) -> Optional[Dict]:
+    async def _convert_match_to_api_format(
+        self, match: Match, age_group: str, division: str
+    ) -> Optional[dict]:
         """Convert a Match object to the API format."""
         try:
             # Get team IDs using normalized team names
@@ -608,7 +653,7 @@ class MatchAPIIntegrator:
                 "season_id": season_id,
                 "age_group_id": age_group_id,
                 "game_type_id": game_type_id,
-                "division_id": division_id
+                "division_id": division_id,
             }
 
             return api_data
@@ -617,7 +662,9 @@ class MatchAPIIntegrator:
             logger.error(f"Error converting match {match.match_id} to API format: {e}")
             return None
 
-    async def _load_existing_games_for_deduplication(self, matches: List[Match], age_group: str, division: str) -> Dict[str, Dict]:
+    async def _load_existing_games_for_deduplication(
+        self, matches: list[Match], age_group: str, division: str
+    ) -> dict[str, dict]:
         """
         Load existing games from API for deduplication checking.
 
@@ -633,7 +680,9 @@ class MatchAPIIntegrator:
             logger.info("Loading existing games for deduplication")
 
             # Get date range from matches
-            dates = [match.match_datetime.date() for match in matches if match.match_datetime]
+            dates = [
+                match.match_datetime.date() for match in matches if match.match_datetime
+            ]
             if not dates:
                 logger.warning("No valid dates found in matches for deduplication")
                 return {}
@@ -667,7 +716,10 @@ class MatchAPIIntegrator:
 
             logger.info(
                 f"Loaded {len(existing_games)} existing games for deduplication",
-                extra={"date_range": f"{start_date} to {end_date}", "existing_games_count": len(existing_games)}
+                extra={
+                    "date_range": f"{start_date} to {end_date}",
+                    "existing_games_count": len(existing_games),
+                },
             )
 
             return existing_games_map
@@ -677,7 +729,7 @@ class MatchAPIIntegrator:
             # Continue without deduplication rather than failing completely
             return {}
 
-    def _create_game_duplicate_key(self, game_data: Dict[str, Any]) -> str:
+    def _create_game_duplicate_key(self, game_data: dict[str, Any]) -> str:
         """
         Create a unique key for game deduplication.
 

@@ -32,12 +32,12 @@ case $ACTION in
     "logs")
         echo "📋 Fetching logs from test run..."
         POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l job-name="$JOB_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-        
+
         if [ -z "$POD_NAME" ]; then
             echo "❌ No test job pod found. Run '$0 trigger' first."
             exit 1
         fi
-        
+
         echo "Pod: $POD_NAME"
         echo "=== Recent Logs ==="
         kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=50

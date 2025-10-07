@@ -718,7 +718,9 @@ class TestMatchExtractionIntegration:
             assert completed_match.away_score == 1
 
             # Check in-progress match
-            in_progress_match = next(m for m in result if m.match_status == "in_progress")
+            in_progress_match = next(
+                m for m in result if m.match_status == "in_progress"
+            )
             assert in_progress_match.home_team == "Team E"
             assert in_progress_match.home_score == 1
             assert in_progress_match.away_score == 0

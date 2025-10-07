@@ -10,7 +10,7 @@ import asyncio
 import time
 from typing import Optional
 
-from ..api.missing_table_client import MissingTableClient, MissingTableAPIError
+from ..api.missing_table_client import MissingTableClient
 from ..utils.logger import get_logger
 from ..utils.metrics import get_metrics
 from .api_integration import MatchAPIIntegrator
@@ -48,7 +48,12 @@ class MLSScraper:
     RETRY_DELAY_BASE = 1.0  # Base delay in seconds
     RETRY_BACKOFF_MULTIPLIER = 2.0
 
-    def __init__(self, config: ScrapingConfig, headless: bool = True, enable_api_integration: bool = True):
+    def __init__(
+        self,
+        config: ScrapingConfig,
+        headless: bool = True,
+        enable_api_integration: bool = True,
+    ):
         """
         Initialize MLS scraper with configuration.
 
@@ -79,7 +84,7 @@ class MLSScraper:
             try:
                 api_client = MissingTableClient(
                     base_url=config.missing_table_api_url,
-                    api_token=config.missing_table_api_key
+                    api_token=config.missing_table_api_key,
                 )
                 self.api_integrator = MatchAPIIntegrator(api_client, config)
                 logger.info("API integration enabled")
@@ -155,8 +160,12 @@ class MLSScraper:
                     self.api_results = api_results
 
                     # Update metrics
-                    self.execution_metrics.api_calls_successful += api_results.get("posted", 0) + api_results.get("updated", 0)
-                    self.execution_metrics.api_calls_failed += api_results.get("errors", 0)
+                    self.execution_metrics.api_calls_successful += api_results.get(
+                        "posted", 0
+                    ) + api_results.get("updated", 0)
+                    self.execution_metrics.api_calls_failed += api_results.get(
+                        "errors", 0
+                    )
 
                     logger.info(
                         "API integration completed",
@@ -164,8 +173,8 @@ class MLSScraper:
                             "posted": api_results.get("posted", 0),
                             "errors": api_results.get("errors", 0),
                             "skipped": api_results.get("skipped", 0),
-                            "duplicates": api_results.get("duplicates", 0)
-                        }
+                            "duplicates": api_results.get("duplicates", 0),
+                        },
                     )
                 except Exception as e:
                     # Log technical details only in verbose mode

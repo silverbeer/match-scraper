@@ -113,7 +113,7 @@ The project includes several wrapper scripts to simplify deployment:
 
 ### `deploy-gke-complete.sh`
 - **Purpose**: Complete automated deployment using terraform/dev.tfvars
-- **Features**: 
+- **Features**:
   - Reads configuration from existing terraform/dev.tfvars
   - Handles build, deploy, and test in one command
   - Interactive prompts for missing values
