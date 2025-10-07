@@ -282,6 +282,63 @@ To remove the container image:
 gcloud container images delete gcr.io/YOUR_PROJECT_ID/mls-scraper:latest
 ```
 
+## Observability
+
+The scraper includes comprehensive observability using Grafana Cloud. See [OBSERVABILITY.md](OBSERVABILITY.md) for detailed setup instructions.
+
+### Quick Setup
+
+1. **Prerequisites**:
+   - Grafana Cloud account (free tier available)
+   - API tokens for metrics (OTLP) and logs (Loki)
+
+2. **Configure Endpoints**:
+   Edit `k8s/configmap.yaml`:
+   ```yaml
+   OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-{zone}.grafana.net/otlp/v1/metrics"
+   LOKI_ENDPOINT: "https://logs-{zone}.grafana.net/loki/api/v1/push"
+   ```
+
+3. **Configure Credentials**:
+   Edit `k8s/secret.yaml` with base64-encoded tokens:
+   ```bash
+   # OTLP headers
+   echo -n "instanceID:token" | base64
+   echo -n "Authorization=Basic YOUR_BASE64" | base64
+
+   # Loki token
+   echo -n "your-loki-token" | base64
+   ```
+
+4. **Deploy**:
+   ```bash
+   kubectl apply -f k8s/configmap.yaml
+   kubectl apply -f k8s/secret.yaml
+   kubectl apply -f k8s/promtail-config.yaml
+   kubectl apply -f k8s/cronjob.yaml
+   ```
+
+5. **Import Dashboards**:
+   - Log into Grafana Cloud
+   - Import `grafana/dashboards/scraper-overview.json`
+   - Import `grafana/dashboards/scraper-errors.json`
+
+### Available Metrics
+
+- `games_scheduled_total` - Matches found
+- `games_scored_total` - Matches with scores
+- `api_calls_total` - API call counts and latency
+- `scraping_errors_total` - Error tracking
+- `application_execution_duration_seconds` - Execution time
+
+### Viewing Logs
+
+Logs are automatically forwarded to Grafana Loki:
+```logql
+{job="mls-match-scraper"}
+{job="mls-match-scraper"} |= "ERROR"
+```
+
 ## Migration from AWS Lambda
 
 After successful GKE deployment and testing:
@@ -290,6 +347,7 @@ After successful GKE deployment and testing:
    - Run multiple test jobs
    - Confirm data is being sent to the API
    - Monitor for any errors
+   - Check metrics in Grafana Cloud
 
 2. **Clean Up AWS Resources**:
    ```bash

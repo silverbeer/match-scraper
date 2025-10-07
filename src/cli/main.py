@@ -26,19 +26,26 @@ from rich.text import Text
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.scraper.config import ScrapingConfig  # noqa: E402
-from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
-from src.scraper.models import Match  # noqa: E402
-from src.api.missing_table_client import MissingTableClient, MissingTableAPIError  # noqa: E402
+from src.api.missing_table_client import (  # noqa: E402
+    MissingTableAPIError,
+    MissingTableClient,
+)
 from src.cli.env_config import (  # noqa: E402
     display_current_config,
     interactive_setup,
     set_variable,
     validate_config,
 )
+from src.scraper.config import ScrapingConfig  # noqa: E402
+from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
+from src.scraper.models import Match  # noqa: E402
 
 # Initialize Rich console and Typer app
-console = Console()
+# Respect NO_COLOR env var for cleaner container logs in Kubernetes
+console = Console(
+    no_color=os.getenv("NO_COLOR") is not None,
+    force_terminal=os.getenv("NO_COLOR") is None,
+)
 app = typer.Typer(
     name="mls-scraper",
     help="⚽ MLS Match Scraper - Beautiful terminal interface for MLS match data",
@@ -49,7 +56,7 @@ app = typer.Typer(
 DEFAULT_AGE_GROUP = "U14"
 DEFAULT_DIVISION = "Northeast"
 DEFAULT_START_OFFSET = 1  # 1 day backward from today = Yesterday
-DEFAULT_END_OFFSET = 1    # 1 day forward from today = Tomorrow
+DEFAULT_END_OFFSET = 1  # 1 day forward from today = Tomorrow
 DEFAULT_DAYS = 3  # Keep for upcoming command backward compatibility
 
 # Valid options
@@ -83,6 +90,7 @@ def setup_environment(verbose: bool = False):
     # Load .env file first
     try:
         from dotenv import load_dotenv
+
         load_dotenv()
     except ImportError:
         pass  # dotenv not available, use system env vars
@@ -96,6 +104,7 @@ def setup_environment(verbose: bool = False):
 
     # Update the existing logger level immediately
     from src.utils.logger import scraper_logger
+
     logger = scraper_logger.get_logger()
     logger.setLevel(log_level)
 
@@ -156,14 +165,18 @@ async def check_missing_table_api(verbose: bool = False) -> bool:
             if e.status_code:
                 console.print(f"   Status: {e.status_code}")
         else:
-            console.print("⚠️  Missing-table API not available (continuing with scraping only)")
+            console.print(
+                "⚠️  Missing-table API not available (continuing with scraping only)"
+            )
         return False
 
     except Exception as e:
         if verbose:
             console.print(f"💥 Unexpected API error: {e}")
         else:
-            console.print("⚠️  Missing-table API check failed (continuing with scraping only)")
+            console.print(
+                "⚠️  Missing-table API check failed (continuing with scraping only)"
+            )
         return False
 
 
@@ -187,16 +200,20 @@ def create_config(
             start_date = date.fromisoformat(from_date)
             end_date = date.fromisoformat(to_date)
         except ValueError as e:
-            raise ValueError(f"Invalid date format. Use YYYY-MM-DD format: {e}")
+            raise ValueError(f"Invalid date format. Use YYYY-MM-DD format: {e}") from e
 
     elif from_date or to_date:
         # Only one absolute date provided - error
-        raise ValueError("Both --from and --to must be provided when using absolute dates")
+        raise ValueError(
+            "Both --from and --to must be provided when using absolute dates"
+        )
 
     else:
         # Use relative offsets (enhanced with negative support for --end)
         today = date.today()
-        start_date = today - timedelta(days=start_offset)  # --start: backward from today
+        start_date = today - timedelta(
+            days=start_offset
+        )  # --start: backward from today
 
         # --end: positive = forward, negative = backward from today
         if end_offset >= 0:
@@ -209,7 +226,9 @@ def create_config(
         club=club,
         competition=competition,
         division=division,
-        look_back_days=abs(start_offset) if start_offset < 0 else 0,  # Keep for backwards compatibility
+        look_back_days=abs(start_offset)
+        if start_offset < 0
+        else 0,  # Keep for backwards compatibility
         start_date=start_date,
         end_date=end_date,
         missing_table_api_url=os.getenv(
@@ -217,10 +236,10 @@ def create_config(
         ),
         missing_table_api_key=os.getenv("MISSING_TABLE_API_TOKEN", ""),
         log_level="DEBUG" if verbose else "ERROR",  # Verbose or quiet for CLI
-
         # Team cache configuration
         enable_team_cache=os.getenv("ENABLE_TEAM_CACHE", "true").lower() == "true",
-        cache_refresh_on_miss=os.getenv("CACHE_REFRESH_ON_MISS", "true").lower() == "true",
+        cache_refresh_on_miss=os.getenv("CACHE_REFRESH_ON_MISS", "true").lower()
+        == "true",
         cache_preload_timeout=int(os.getenv("CACHE_PRELOAD_TIMEOUT", "30")),
     )
 
@@ -341,7 +360,9 @@ def display_matches_table(matches: list[Match]):
         venue = match.location or "TBD"
 
         # Format match_id (show last 8 characters for readability)
-        match_id_display = match.match_id[-8:] if len(match.match_id) > 8 else match.match_id
+        match_id_display = (
+            match.match_id[-8:] if len(match.match_id) > 8 else match.match_id
+        )
 
         table.add_row(
             match_id_display,
@@ -396,7 +417,10 @@ def display_statistics(matches: list[Match]):
     matches_with_scores = len([m for m in matches if m.has_score()])
     matches_with_venues = len([m for m in matches if m.location])
     unique_teams = len(
-        set([normalize_team_name_for_display(m.home_team) for m in matches] + [normalize_team_name_for_display(m.away_team) for m in matches])
+        set(
+            [normalize_team_name_for_display(m.home_team) for m in matches]
+            + [normalize_team_name_for_display(m.away_team) for m in matches]
+        )
     )
 
     # Create statistics table
@@ -441,17 +465,21 @@ def display_api_results(api_results: dict, api_healthy: bool):
     """Display API integration results in a prominent panel."""
     if not api_results:
         if api_healthy:
-            console.print(Panel(
-                "[yellow]⚠️  API was available but no matches were posted[/yellow]",
-                title="📡 Missing-table API Integration",
-                border_style="yellow"
-            ))
+            console.print(
+                Panel(
+                    "[yellow]⚠️  API was available but no matches were posted[/yellow]",
+                    title="📡 Missing-table API Integration",
+                    border_style="yellow",
+                )
+            )
         else:
-            console.print(Panel(
-                "[dim]⚠️  API not available - matches not posted[/dim]",
-                title="📡 Missing-table API Integration",
-                border_style="dim"
-            ))
+            console.print(
+                Panel(
+                    "[dim]⚠️  API not available - matches not posted[/dim]",
+                    title="📡 Missing-table API Integration",
+                    border_style="dim",
+                )
+            )
         return
 
     posted = api_results.get("posted", 0)
@@ -462,11 +490,13 @@ def display_api_results(api_results: dict, api_healthy: bool):
 
     # If there's a specific API error, show it prominently
     if api_error:
-        console.print(Panel(
-            f"[red]❌ API Connection Failed[/red]\n\n{api_error}\n\n[dim]Matches were scraped successfully but could not be posted to missing-table API.[/dim]",
-            title="📡 Missing-table API Integration - Connection Error",
-            border_style="red"
-        ))
+        console.print(
+            Panel(
+                f"[red]❌ API Connection Failed[/red]\n\n{api_error}\n\n[dim]Matches were scraped successfully but could not be posted to missing-table API.[/dim]",
+                title="📡 Missing-table API Integration - Connection Error",
+                border_style="red",
+            )
+        )
         return
 
     # Create API results table
@@ -555,7 +585,9 @@ def display_upcoming_games(matches: list[Match], limit: int = 5):
             console.print()
 
 
-def save_matches_to_file(matches: list[Match], file_path: str, age_group: str, division: str) -> bool:
+def save_matches_to_file(
+    matches: list[Match], file_path: str, age_group: str, division: str
+) -> bool:
     """Save matches to JSON file for later processing."""
     try:
         # Convert matches to JSON-serializable format
@@ -582,11 +614,11 @@ def save_matches_to_file(matches: list[Match], file_path: str, age_group: str, d
                 "scraped_at": date.today().isoformat(),
                 "total_matches": len(matches),
             },
-            "matches": matches_data
+            "matches": matches_data,
         }
 
         # Save to file
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             json.dump(output_data, f, indent=2)
 
         return True
@@ -597,7 +629,10 @@ def save_matches_to_file(matches: list[Match], file_path: str, age_group: str, d
 
 
 async def run_scraper(
-    config: ScrapingConfig, verbose: bool = False, headless: bool = True, enable_api_integration: bool = True
+    config: ScrapingConfig,
+    verbose: bool = False,
+    headless: bool = True,
+    enable_api_integration: bool = True,
 ) -> tuple[list[Match], bool, dict]:
     """Run the scraper with progress indication and API health check.
 
@@ -633,7 +668,9 @@ async def run_scraper(
             if api_healthy:
                 progress.update(health_task, description="✅ API ready for integration")
             else:
-                progress.update(health_task, description="⚠️  API not available (scraping only)")
+                progress.update(
+                    health_task, description="⚠️  API not available (scraping only)"
+                )
         except Exception as e:
             progress.update(health_task, description="❌ API check failed")
             if verbose:
@@ -646,17 +683,20 @@ async def run_scraper(
         scrape_task = progress.add_task("🌐 Initializing browser...", total=None)
 
         try:
-            scraper = MLSScraper(config, headless=headless, enable_api_integration=enable_api_integration)
+            scraper = MLSScraper(
+                config, headless=headless, enable_api_integration=enable_api_integration
+            )
 
             progress.update(scrape_task, description="🔍 Scraping matches...")
             matches = await scraper.scrape_matches()
 
-            # Get API results from scraper (includes posted, errors, skipped, duplicates)
+            # Get API results from scraper (includes posted, errors, skipped, duplicates, updated)
             api_results = scraper.api_results if scraper.api_results else {
                 "posted": 0,
                 "errors": 0,
                 "skipped": 0,
-                "duplicates": 0
+                "duplicates": 0,
+                "updated": 0
             }
 
             progress.update(scrape_task, description="✅ Scraping completed!")
@@ -668,13 +708,15 @@ async def run_scraper(
         except Exception as e:
             error_str = str(e).lower()
             if "cannot connect to missing-table api" in error_str:
-                progress.update(scrape_task, description="⚠️  API connection failed, continuing...")
+                progress.update(
+                    scrape_task, description="⚠️  API connection failed, continuing..."
+                )
                 # Still return matches, just without API integration
                 api_results = {
                     "posted": 0,
                     "errors": scraper.execution_metrics.api_calls_failed,
                     "skipped": 0,
-                    "api_error": str(e)
+                    "api_error": str(e),
                 }
                 return matches, False, api_results
             else:
@@ -695,13 +737,16 @@ def scrape(
     start: Annotated[
         int,
         typer.Option(
-            "--start", help="Days backward from today (0=today, 1=yesterday, 7=week ago)"
+            "--start",
+            help="Days backward from today (0=today, 1=yesterday, 7=week ago)",
         ),
     ] = DEFAULT_START_OFFSET,
     end: Annotated[
         int,
         typer.Option(
-            "--end", "-e", help="Days from today: positive=forward, negative=backward (2=tomorrow, -7=week ago)"
+            "--end",
+            "-e",
+            help="Days from today: positive=forward, negative=backward (2=tomorrow, -7=week ago)",
         ),
     ] = DEFAULT_END_OFFSET,
     from_date: Annotated[
@@ -747,11 +792,15 @@ def scrape(
     ] = True,
     api_integration: Annotated[
         bool,
-        typer.Option("--api/--no-api", help="Enable posting matches to missing-table API"),
+        typer.Option(
+            "--api/--no-api", help="Enable posting matches to missing-table API"
+        ),
     ] = True,
     save_file: Annotated[
         Optional[str],
-        typer.Option("--save", help="Save matches to JSON file (e.g., --save games.json)"),
+        typer.Option(
+            "--save", help="Save matches to JSON file (e.g., --save games.json)"
+        ),
     ] = None,
 ):
     """
@@ -779,7 +828,9 @@ def scrape(
         display_header()
 
     # Create configuration
-    config = create_config(age_group, division, start, end, club, competition, verbose, from_date, to_date)
+    config = create_config(
+        age_group, division, start, end, club, competition, verbose, from_date, to_date
+    )
 
     if not quiet:
         display_config_summary(config)
@@ -787,7 +838,9 @@ def scrape(
 
     try:
         # Run scraper
-        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose, headless, api_integration))
+        matches, api_healthy, api_results = asyncio.run(
+            run_scraper(config, verbose, headless, api_integration)
+        )
 
         # Filter for upcoming only if requested
         if upcoming_only:
@@ -853,7 +906,9 @@ def scrape(
             # Save matches to file if requested
             if save_file and matches:
                 if save_matches_to_file(matches, save_file, age_group, division):
-                    console.print(f"[green]💾 Saved {len(matches)} matches to {save_file}[/green]")
+                    console.print(
+                        f"[green]💾 Saved {len(matches)} matches to {save_file}[/green]"
+                    )
 
     except MLSScraperError as e:
         console.print(f"[red]❌ Scraping failed: {e}[/red]")
@@ -975,8 +1030,15 @@ def interactive(
     division = Prompt.ask("Division", default=DEFAULT_DIVISION, choices=VALID_DIVISIONS)
 
     # Date range selection
-    start_offset = int(Prompt.ask("Start date offset from today (0=today, -1=yesterday)", default="-1"))
-    end_offset = int(Prompt.ask("End date offset from today (0=today, 1=tomorrow, 7=week from now)", default="1"))
+    start_offset = int(
+        Prompt.ask("Start date offset from today (0=today, -1=yesterday)", default="-1")
+    )
+    end_offset = int(
+        Prompt.ask(
+            "End date offset from today (0=today, 1=tomorrow, 7=week from now)",
+            default="1",
+        )
+    )
 
     # Optional filters
     club = Prompt.ask("Club filter (optional)", default="")
@@ -988,7 +1050,9 @@ def interactive(
     console.print("\n" + "=" * 50)
 
     # Create and display configuration
-    config = create_config(age_group, division, start_offset, end_offset, club, competition, verbose=False)
+    config = create_config(
+        age_group, division, start_offset, end_offset, club, competition, verbose=False
+    )
     display_config_summary(config)
 
     if not Confirm.ask("\nProceed with scraping?", default=True):
@@ -1116,11 +1180,19 @@ def cache_load(
 
                 stats_table.add_row("Teams loaded", str(stats["team_count"]))
                 stats_table.add_row("Load time", f"{stats['load_time']:.3f}s")
-                stats_table.add_row("Cache status", "✅ Loaded" if stats["loaded"] else "❌ Not loaded")
+                stats_table.add_row(
+                    "Cache status", "✅ Loaded" if stats["loaded"] else "❌ Not loaded"
+                )
 
-                console.print(Panel(stats_table, title="📊 Cache Statistics", border_style="green"))
+                console.print(
+                    Panel(
+                        stats_table, title="📊 Cache Statistics", border_style="green"
+                    )
+                )
             else:
-                console.print(f"[red]❌ Cache loading failed: {result.get('error', 'Unknown error')}[/red]")
+                console.print(
+                    f"[red]❌ Cache loading failed: {result.get('error', 'Unknown error')}[/red]"
+                )
 
         except Exception as e:
             console.print(f"[red]❌ Error loading cache: {e}[/red]")
@@ -1157,7 +1229,9 @@ def cache_status(
             status_table.add_column("Metric", style="cyan")
             status_table.add_column("Value", style="white")
 
-            status_table.add_row("Cache loaded", "✅ Yes" if stats["loaded"] else "❌ No")
+            status_table.add_row(
+                "Cache loaded", "✅ Yes" if stats["loaded"] else "❌ No"
+            )
             status_table.add_row("Teams in cache", str(stats["team_count"]))
             if stats["load_time"]:
                 status_table.add_row("Last load time", f"{stats['load_time']:.3f}s")
@@ -1168,7 +1242,11 @@ def cache_status(
 
             # Determine border color based on status
             border_color = "green" if stats["loaded"] else "red"
-            title = "📊 Cache Status - ✅ Active" if stats["loaded"] else "📊 Cache Status - ❌ Not Loaded"
+            title = (
+                "📊 Cache Status - ✅ Active"
+                if stats["loaded"]
+                else "📊 Cache Status - ❌ Not Loaded"
+            )
 
             console.print(Panel(status_table, title=title, border_style=border_color))
 
@@ -1226,9 +1304,10 @@ def cache_test(
 
     async def test_teams():
         try:
+            import time
+
             from src.api.missing_table_client import MissingTableClient
             from src.scraper.api_integration import MatchAPIIntegrator
-            import time
 
             # Create API client and integrator
             client = MissingTableClient()
@@ -1245,7 +1324,9 @@ def cache_test(
             cache_result = await integrator.preload_teams_cache()
 
             if not cache_result.get("success", True):
-                console.print(f"[yellow]⚠️ Cache loading failed, testing without cache[/yellow]")
+                console.print(
+                    "[yellow]⚠️ Cache loading failed, testing without cache[/yellow]"
+                )
 
             # Test each team
             results_table = Table(show_header=True, header_style="bold magenta")
@@ -1264,14 +1345,11 @@ def cache_test(
                         team_name,
                         "✅ Yes",
                         str(team_id),
-                        f"Found in {lookup_time:.3f}s"
+                        f"Found in {lookup_time:.3f}s",
                     )
                 else:
                     results_table.add_row(
-                        team_name,
-                        "❌ No",
-                        "-",
-                        f"Not found ({lookup_time:.3f}s)"
+                        team_name, "❌ No", "-", f"Not found ({lookup_time:.3f}s)"
                     )
 
             console.print(Panel(results_table, title="🧪 Team Lookup Test Results"))
@@ -1279,7 +1357,7 @@ def cache_test(
             # Show final cache stats
             stats = integrator.get_cache_stats()
             if stats["hit_count"] > 0 or stats["miss_count"] > 0:
-                console.print(f"\n📊 Cache Performance:")
+                console.print("\n📊 Cache Performance:")
                 console.print(f"   Hits: {stats['hit_count']}")
                 console.print(f"   Misses: {stats['miss_count']}")
                 console.print(f"   Hit Rate: {stats['hit_rate']:.1%}")
@@ -1293,7 +1371,8 @@ def cache_test(
 @cache_app.command("benchmark")
 def cache_benchmark(
     teams: Annotated[
-        str, typer.Option("--teams", help="Comma-separated list of team names to benchmark")
+        str,
+        typer.Option("--teams", help="Comma-separated list of team names to benchmark"),
     ] = "Boston Bolts,New York City FC,IFA,Austin FC Academy,Real Salt Lake Academy",
     iterations: Annotated[
         int, typer.Option("--iterations", help="Number of iterations per test")
@@ -1310,9 +1389,10 @@ def cache_benchmark(
 
     async def benchmark():
         try:
+            import time
+
             from src.api.missing_table_client import MissingTableClient
             from src.scraper.api_integration import MatchAPIIntegrator
-            import time
 
             # Create API client and integrator
             client = MissingTableClient()
@@ -1320,7 +1400,7 @@ def cache_benchmark(
 
             team_list = [team.strip() for team in teams.split(",")]
 
-            console.print(f"🏁 Benchmarking cache performance...")
+            console.print("🏁 Benchmarking cache performance...")
             console.print(f"Teams: {len(team_list)} | Iterations: {iterations}")
             console.print()
 
@@ -1339,7 +1419,7 @@ def cache_benchmark(
 
                 iteration_time = time.time() - start_time
                 traditional_times.append(iteration_time)
-                console.print(f"   Iteration {i+1}: {iteration_time:.3f}s")
+                console.print(f"   Iteration {i + 1}: {iteration_time:.3f}s")
 
             avg_traditional = sum(traditional_times) / len(traditional_times)
 
@@ -1360,7 +1440,7 @@ def cache_benchmark(
 
                 iteration_time = time.time() - start_time
                 cached_times.append(iteration_time)
-                console.print(f"   Iteration {i+1}: {iteration_time:.3f}s")
+                console.print(f"   Iteration {i + 1}: {iteration_time:.3f}s")
 
             avg_cached = sum(cached_times) / len(cached_times)
 
@@ -1382,7 +1462,7 @@ def cache_benchmark(
                 f"{avg_traditional:.3f}s",
                 f"{min(traditional_times):.3f}s",
                 f"{max(traditional_times):.3f}s",
-                "Baseline"
+                "Baseline",
             )
 
             results_table.add_row(
@@ -1390,22 +1470,34 @@ def cache_benchmark(
                 f"{avg_cached:.3f}s",
                 f"{min(cached_times):.3f}s",
                 f"{max(cached_times):.3f}s",
-                f"{speedup:.1f}x faster" if improvement > 0 else f"{abs(speedup):.1f}x slower"
+                f"{speedup:.1f}x faster"
+                if improvement > 0
+                else f"{abs(speedup):.1f}x slower",
             )
 
             console.print(Panel(results_table, title="🏁 Benchmark Results"))
 
             # Summary
             if improvement > 0:
-                console.print(f"\n🎉 [green]Cache optimization achieved {improvement:.1f}% improvement![/green]")
-                console.print(f"   Cache method is {speedup:.1f}x faster than traditional lookups")
+                console.print(
+                    f"\n🎉 [green]Cache optimization achieved {improvement:.1f}% improvement![/green]"
+                )
+                console.print(
+                    f"   Cache method is {speedup:.1f}x faster than traditional lookups"
+                )
             else:
-                console.print(f"\n⚠️ [yellow]Cache method was {abs(improvement):.1f}% slower[/yellow]")
-                console.print("   Consider investigating network conditions or API response times")
+                console.print(
+                    f"\n⚠️ [yellow]Cache method was {abs(improvement):.1f}% slower[/yellow]"
+                )
+                console.print(
+                    "   Consider investigating network conditions or API response times"
+                )
 
             # Show final cache stats
             stats = integrator.get_cache_stats()
-            console.print(f"\n📊 Final cache stats: {stats['hit_count']} hits, {stats['miss_count']} misses")
+            console.print(
+                f"\n📊 Final cache stats: {stats['hit_count']} hits, {stats['miss_count']} misses"
+            )
 
         except Exception as e:
             console.print(f"[red]❌ Benchmark failed: {e}[/red]")
@@ -2194,7 +2286,9 @@ def config_validate():
     if validate_config():
         console.print("\n[green]🎉 Configuration is valid and ready to use![/green]")
     else:
-        console.print("\n[yellow]💡 Run 'mls-scraper config setup' to fix configuration issues.[/yellow]")
+        console.print(
+            "\n[yellow]💡 Run 'mls-scraper config setup' to fix configuration issues.[/yellow]"
+        )
         raise typer.Exit(1)
 
 
