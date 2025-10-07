@@ -8,8 +8,11 @@ CLI tool for manually triggering match-scraper jobs on GKE with custom parameter
 # Basic usage with defaults (today to +13 days, U14 Northeast)
 ./scripts/trigger-gke-job.sh
 
-# Custom date range
+# Custom date range (offset-based)
 ./scripts/trigger-gke-job.sh --start=0 --end=13
+
+# Absolute date range (no math required!)
+./scripts/trigger-gke-job.sh --from=2025-10-01 --to=2025-11-01
 
 # Last 7 days
 ./scripts/trigger-gke-job.sh --start=-7 --end=0
@@ -24,11 +27,15 @@ CLI tool for manually triggering match-scraper jobs on GKE with custom parameter
 |--------|-------------|---------|
 | `--start N` | Start date offset (0=today, negative=past) | 0 |
 | `--end N` | End date offset | 13 |
+| `--from DATE` | Absolute start date (YYYY-MM-DD) | - |
+| `--to DATE` | Absolute end date (YYYY-MM-DD) | - |
 | `--age-group GROUP` | Age group to scrape | U14 |
 | `--division DIV` | Division to scrape | Northeast |
 | `--namespace NS` | Kubernetes namespace | match-scraper |
 | `--no-follow` | Don't follow logs (just create job) | false |
 | `-h, --help` | Show help message | - |
+
+**Note:** Use either `--start`/`--end` (offset-based) OR `--from`/`--to` (absolute dates), not both.
 
 ## Features
 
@@ -58,6 +65,11 @@ CLI tool for manually triggering match-scraper jobs on GKE with custom parameter
 ### U16 Southeast Division
 ```bash
 ./scripts/trigger-gke-job.sh --age-group=U16 --division=Southeast --start=0 --end=14
+```
+
+### Absolute Date Range (Oct 1 to Nov 1)
+```bash
+./scripts/trigger-gke-job.sh --from=2025-10-01 --to=2025-11-01
 ```
 
 ### Create Job Without Watching Logs
