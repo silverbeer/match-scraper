@@ -17,9 +17,7 @@ from pathlib import Path
 
 def run_command(cmd: str) -> tuple[int, str, str]:
     """Run a shell command and return exit code, stdout, stderr."""
-    result = subprocess.run(
-        cmd.split(), capture_output=True, text=True, cwd=Path.cwd()
-    )
+    result = subprocess.run(cmd.split(), capture_output=True, text=True, cwd=Path.cwd())
     return result.returncode, result.stdout, result.stderr
 
 
@@ -37,7 +35,9 @@ def get_recent_changes():
 def check_test_status():
     """Check current test status."""
     print("🧪 Running test suite...")
-    code, stdout, stderr = run_command("uv run python -m pytest tests/unit/ -v --tb=short")
+    code, stdout, stderr = run_command(
+        "uv run python -m pytest tests/unit/ -v --tb=short"
+    )
 
     if code == 0:
         print("✅ All tests passing!")
@@ -51,7 +51,9 @@ def check_test_status():
 def analyze_coverage():
     """Analyze test coverage."""
     print("📈 Analyzing test coverage...")
-    run_command("uv run python -m pytest tests/unit/ --cov=src --cov-report=term-missing")
+    run_command(
+        "uv run python -m pytest tests/unit/ --cov=src --cov-report=term-missing"
+    )
 
 
 def main():
@@ -68,7 +70,9 @@ def main():
         get_recent_changes()
         print("\n" + "=" * 50)
         check_test_status()
-        print("\n💡 Tip: Use '/agents test-guardian' in Claude Code for detailed analysis")
+        print(
+            "\n💡 Tip: Use '/agents test-guardian' in Claude Code for detailed analysis"
+        )
 
     elif command == "fix":
         if not check_test_status():
