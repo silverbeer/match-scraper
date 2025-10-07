@@ -82,8 +82,15 @@ class MLSScraperLogger:
                 underlying_logger = logging.getLogger(self._logger.name)
                 underlying_logger.handlers.clear()
 
+                # Create JSON formatter compatible with Powertools Logger
+                from pythonjsonlogger import jsonlogger
+
                 file_handler = logging.FileHandler(log_file_path)
-                file_handler.setFormatter(self._logger._get_log_formatter())
+                json_formatter = jsonlogger.JsonFormatter(
+                    '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
+                    timestamp=True
+                )
+                file_handler.setFormatter(json_formatter)
                 underlying_logger.addHandler(file_handler)
 
                 # Also log to stderr for kubectl logs visibility (without JSON formatting)
