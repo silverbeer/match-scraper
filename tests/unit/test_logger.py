@@ -6,7 +6,7 @@ Tests structured logging configuration and log formatting.
 
 import logging
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from src.utils.logger import MLSScraperLogger, get_logger, scraper_logger
 
