@@ -71,7 +71,7 @@ class MLSScraperMetrics:
                 metric_reader = PeriodicExportingMetricReader(
                     exporter=otlp_exporter,
                     export_interval_millis=int(
-                        os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "10000")
+                        os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "5000")
                     ),
                     export_timeout_millis=int(
                         os.getenv("OTEL_METRIC_EXPORT_TIMEOUT", "30000")

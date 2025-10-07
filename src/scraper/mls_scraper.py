@@ -70,6 +70,9 @@ class MLSScraper:
             errors_encountered=0,
         )
 
+        # Store API integration results
+        self.api_results: dict = {}
+
         # Initialize API integration if enabled
         self.api_integrator: Optional[MatchAPIIntegrator] = None
         if self.enable_api_integration:
@@ -148,8 +151,11 @@ class MLSScraper:
                         matches, self.config.age_group, self.config.division
                     )
 
+                    # Store the full API results for later retrieval
+                    self.api_results = api_results
+
                     # Update metrics
-                    self.execution_metrics.api_calls_successful += api_results.get("posted", 0)
+                    self.execution_metrics.api_calls_successful += api_results.get("posted", 0) + api_results.get("updated", 0)
                     self.execution_metrics.api_calls_failed += api_results.get("errors", 0)
 
                     logger.info(
@@ -597,7 +603,7 @@ class MLSScraper:
 
             # Group matches by status for better organization
             scheduled_matches = [m for m in matches if m.match_status == "scheduled"]
-            completed_matches = [m for m in matches if m.match_status == "completed"]
+            played_matches = [m for m in matches if m.match_status == "played"]
             tbd_matches = [m for m in matches if m.match_status == "TBD"]
             in_progress_matches = [
                 m for m in matches if m.match_status == "in_progress"
@@ -622,13 +628,13 @@ class MLSScraper:
                         },
                     )
 
-            # Log completed matches with scores
-            if completed_matches:
-                logger.info(f"=== COMPLETED MATCHES ({len(completed_matches)}) ===")
-                for i, match in enumerate(completed_matches, 1):
+            # Log played matches with scores
+            if played_matches:
+                logger.info(f"=== PLAYED MATCHES ({len(played_matches)}) ===")
+                for i, match in enumerate(played_matches, 1):
                     score_info = match.get_score_string() or "Score unknown"
                     logger.info(
-                        f"COMPLETED #{i}: {match.home_team} vs {match.away_team} - {score_info}",
+                        f"PLAYED #{i}: {match.home_team} vs {match.away_team} - {score_info}",
                         extra={
                             "match_id": match.match_id,
                             "date": str(match.match_datetime.date())
@@ -693,7 +699,7 @@ class MLSScraper:
                 extra={
                     "total_matches": len(matches),
                     "scheduled_matches": len(scheduled_matches),
-                    "completed_matches": len(completed_matches),
+                    "played_matches": len(played_matches),
                     "tbd_matches": len(tbd_matches),
                     "in_progress_matches": len(in_progress_matches),
                     "matches_with_scores": len([m for m in matches if m.has_score()]),

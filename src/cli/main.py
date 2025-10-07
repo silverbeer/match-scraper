@@ -328,7 +328,7 @@ def display_matches_table(matches: list[Match]):
         # Format score/status
         if match.has_score():
             score_text = match.get_score_string()
-            if match.match_status == "completed":
+            if match.match_status == "played":
                 score_status = f"[green]{score_text}[/green]"
             elif match.match_status == "in_progress":
                 score_status = f"[yellow]🔄 {score_text}[/yellow]"
@@ -412,7 +412,7 @@ def display_statistics(matches: list[Match]):
     # Calculate statistics
     total_matches = len(matches)
     scheduled_matches = len([m for m in matches if m.match_status == "scheduled"])
-    completed_matches = len([m for m in matches if m.match_status == "completed"])
+    played_matches = len([m for m in matches if m.match_status == "played"])
     in_progress_matches = len([m for m in matches if m.match_status == "in_progress"])
     matches_with_scores = len([m for m in matches if m.has_score()])
     matches_with_venues = len([m for m in matches if m.location])
@@ -436,9 +436,9 @@ def display_statistics(matches: list[Match]):
         f"{scheduled_matches / total_matches * 100:.0f}%",
     )
     stats_table.add_row(
-        "✅ Completed",
-        str(completed_matches),
-        f"{completed_matches / total_matches * 100:.0f}%",
+        "✅ Played",
+        str(played_matches),
+        f"{played_matches / total_matches * 100:.0f}%",
     )
     if in_progress_matches > 0:
         stats_table.add_row(
@@ -504,8 +504,12 @@ def display_api_results(api_results: dict, api_healthy: bool):
     api_table.add_column("Status", style="cyan", width=20)
     api_table.add_column("Count", style="white", justify="right", width=8)
 
+    updated = api_results.get("updated", 0)
+
     if posted > 0:
         api_table.add_row("✅ Successfully posted", str(posted))
+    if updated > 0:
+        api_table.add_row("📝 Scores updated", str(updated))
     if duplicates > 0:
         api_table.add_row("🔄 Skipped duplicates", str(duplicates))
     if errors > 0:
@@ -513,17 +517,17 @@ def display_api_results(api_results: dict, api_healthy: bool):
     if skipped > 0:
         api_table.add_row("⏭️  Skipped (other)", str(skipped))
 
-    if not posted and not errors and not skipped and not duplicates:
+    if not posted and not errors and not skipped and not duplicates and not updated:
         api_table.add_row("ℹ️  No action taken", "0")
 
     # Determine panel style based on results
-    if errors > 0 and posted == 0:
+    if errors > 0 and posted == 0 and updated == 0:
         title_style = "red"
         title = "📡 Missing-table API Integration - ❌ Failed"
     elif errors > 0:
         title_style = "yellow"
         title = "📡 Missing-table API Integration - ⚠️  Partial Success"
-    elif posted > 0 or duplicates > 0:
+    elif posted > 0 or duplicates > 0 or updated > 0:
         title_style = "green"
         title = "📡 Missing-table API Integration - ✅ Success"
     else:
@@ -671,6 +675,9 @@ async def run_scraper(
             progress.update(health_task, description="❌ API check failed")
             if verbose:
                 console.print(f"API health check error: {e}")
+        finally:
+            # Remove the health check task to prevent it from being repeatedly displayed
+            progress.remove_task(health_task)
 
         # Add scraping progress task
         scrape_task = progress.add_task("🌐 Initializing browser...", total=None)
@@ -683,16 +690,17 @@ async def run_scraper(
             progress.update(scrape_task, description="🔍 Scraping matches...")
             matches = await scraper.scrape_matches()
 
-            # Extract API results from scraper metrics
-            api_results = {
-                "posted": scraper.execution_metrics.api_calls_successful,
-                "errors": scraper.execution_metrics.api_calls_failed,
-                "skipped": 0,  # Will be populated by the actual API integration
+            # Get API results from scraper (includes posted, errors, skipped, duplicates, updated)
+            api_results = scraper.api_results if scraper.api_results else {
+                "posted": 0,
+                "errors": 0,
+                "skipped": 0,
+                "duplicates": 0,
+                "updated": 0
             }
 
-            progress.update(
-                scrape_task, description="✅ Scraping completed!", completed=True
-            )
+            progress.update(scrape_task, description="✅ Scraping completed!")
+            progress.remove_task(scrape_task)
 
         except MLSScraperError as e:
             progress.update(scrape_task, description=f"❌ Scraping failed: {e}")
@@ -854,7 +862,7 @@ def scrape(
             for match in matches:
                 status = (
                     "✅"
-                    if match.match_status == "completed"
+                    if match.match_status == "played"
                     else "⏰"
                     if match.match_status == "scheduled"
                     else "🔄"
@@ -1108,7 +1116,7 @@ def test_quiet():
     for match in sample_matches:
         status = (
             "✅"
-            if match.match_status == "completed"
+            if match.match_status == "played"
             else "⏰"
             if match.match_status == "scheduled"
             else "🔄"
