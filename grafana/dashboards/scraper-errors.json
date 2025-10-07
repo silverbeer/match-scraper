@@ -15,7 +15,7 @@
     "panels": [
       {
         "id": 1,
-        "title": "Total Errors (Last Hour)",
+        "title": "Total Errors",
         "type": "stat",
         "gridPos": {
           "h": 4,
@@ -25,7 +25,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(scraping_errors_total{service=\"mls-match-scraper\"}[1h]))",
+            "expr": "sum(increase(scraping_errors_total{service=\"mls-match-scraper\"}[$__range]))",
             "legendFormat": "Errors"
           }
         ],
@@ -53,7 +53,7 @@
       },
       {
         "id": 2,
-        "title": "Failed API Calls (Last Hour)",
+        "title": "Failed API Calls",
         "type": "stat",
         "gridPos": {
           "h": 4,
@@ -63,7 +63,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(api_calls_total{service=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[1h]))",
+            "expr": "sum(increase(api_calls_total{service=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[$__range]))",
             "legendFormat": "Failed Calls"
           }
         ],
@@ -101,7 +101,7 @@
         },
         "targets": [
           {
-            "expr": "(sum(rate(scraping_errors_total{service=\"mls-match-scraper\"}[5m])) / sum(rate(browser_operations_total{service=\"mls-match-scraper\"}[5m]))) * 100",
+            "expr": "(sum(rate(scraping_errors_total{service=\"mls-match-scraper\"}[$__rate_interval])) / sum(rate(browser_operations_total{service=\"mls-match-scraper\"}[$__rate_interval]))) * 100",
             "legendFormat": "Error %"
           }
         ],
@@ -178,7 +178,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (error_type) (rate(scraping_errors_total{service=\"mls-match-scraper\"}[5m]))",
+            "expr": "sum by (error_type) (rate(scraping_errors_total{service=\"mls-match-scraper\"}[$__rate_interval]))",
             "legendFormat": "{{error_type}}"
           }
         ],
@@ -223,7 +223,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (endpoint, method, status_code) (increase(api_calls_total{service=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[6h]))",
+            "expr": "sum by (endpoint, method, status_code) (increase(api_calls_total{service=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[$__range]))",
             "format": "table",
             "instant": true
           }
@@ -272,7 +272,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (operation) (increase(browser_operations_total{service=\"mls-match-scraper\",success=\"false\"}[6h]))",
+            "expr": "sum by (operation) (increase(browser_operations_total{service=\"mls-match-scraper\",success=\"false\"}[$__range]))",
             "format": "table",
             "instant": true
           }

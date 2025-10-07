@@ -25,7 +25,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(application_execution_duration_seconds_count{service=\"mls-match-scraper\"}[24h]))",
+            "expr": "sum(increase(application_execution_duration_seconds_count{service=\"mls-match-scraper\"}[$__range]))",
             "legendFormat": "Total Runs"
           }
         ],
@@ -68,7 +68,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(games_scheduled_total{service=\"mls-match-scraper\"}[24h]))",
+            "expr": "sum(increase(games_scheduled_total{service=\"mls-match-scraper\"}[$__range]))",
             "legendFormat": "Matches"
           }
         ],
@@ -111,7 +111,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(games_scored_total{service=\"mls-match-scraper\"}[24h]))",
+            "expr": "sum(increase(games_scored_total{service=\"mls-match-scraper\"}[$__range]))",
             "legendFormat": "Scored Matches"
           }
         ],
@@ -154,7 +154,7 @@
         },
         "targets": [
           {
-            "expr": "sum(rate(api_calls_total{service=\"mls-match-scraper\",status_class=\"2xx\"}[5m])) / sum(rate(api_calls_total{service=\"mls-match-scraper\"}[5m])) * 100",
+            "expr": "sum(rate(api_calls_total{service=\"mls-match-scraper\",status_class=\"2xx\"}[$__rate_interval])) / sum(rate(api_calls_total{service=\"mls-match-scraper\"}[$__rate_interval])) * 100",
             "legendFormat": "Success Rate"
           }
         ],
@@ -199,11 +199,11 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(games_scheduled_total{service=\"mls-match-scraper\"}[1h]))",
+            "expr": "sum(increase(games_scheduled_total{service=\"mls-match-scraper\"}[$__interval]))",
             "legendFormat": "Scheduled Matches"
           },
           {
-            "expr": "sum(increase(games_scored_total{service=\"mls-match-scraper\"}[1h]))",
+            "expr": "sum(increase(games_scored_total{service=\"mls-match-scraper\"}[$__interval]))",
             "legendFormat": "Matches with Scores"
           }
         ],
@@ -268,15 +268,15 @@
         },
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(application_execution_duration_seconds_bucket{service=\"mls-match-scraper\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.50, sum(rate(application_execution_duration_seconds_bucket{service=\"mls-match-scraper\"}[$__rate_interval])) by (le))",
             "legendFormat": "p50"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(application_execution_duration_seconds_bucket{service=\"mls-match-scraper\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.95, sum(rate(application_execution_duration_seconds_bucket{service=\"mls-match-scraper\"}[$__rate_interval])) by (le))",
             "legendFormat": "p95"
           },
           {
-            "expr": "histogram_quantile(0.99, sum(rate(application_execution_duration_seconds_bucket{service=\"mls-match-scraper\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.99, sum(rate(application_execution_duration_seconds_bucket{service=\"mls-match-scraper\"}[$__rate_interval])) by (le))",
             "legendFormat": "p99"
           }
         ],
@@ -320,7 +320,7 @@
         },
         "targets": [
           {
-            "expr": "sum(rate(api_call_duration_seconds_bucket{service=\"mls-match-scraper\"}[5m])) by (le, endpoint)",
+            "expr": "sum(rate(api_call_duration_seconds_bucket{service=\"mls-match-scraper\"}[$__rate_interval])) by (le, endpoint)",
             "format": "heatmap",
             "legendFormat": "{{endpoint}}"
           }
@@ -350,7 +350,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (error_type) (rate(scraping_errors_total{service=\"mls-match-scraper\"}[5m]))",
+            "expr": "sum by (error_type) (rate(scraping_errors_total{service=\"mls-match-scraper\"}[$__rate_interval]))",
             "legendFormat": "{{error_type}}"
           }
         ],
@@ -388,7 +388,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (operation, success) (increase(browser_operations_total{service=\"mls-match-scraper\"}[24h]))",
+            "expr": "sum by (operation, success) (increase(browser_operations_total{service=\"mls-match-scraper\"}[$__range]))",
             "format": "table",
             "instant": true
           }

@@ -852,10 +852,14 @@ def scrape(
         console.print()
 
     try:
-        # Run scraper
-        matches, api_healthy, api_results = asyncio.run(
-            run_scraper(config, verbose, headless, api_integration)
-        )
+        # Run scraper with execution time tracking
+        from src.utils.metrics import get_metrics
+        metrics = get_metrics()
+
+        with metrics.time_execution():
+            matches, api_healthy, api_results = asyncio.run(
+                run_scraper(config, verbose, headless, api_integration)
+            )
 
         # Filter for upcoming only if requested
         if upcoming_only:
