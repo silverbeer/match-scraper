@@ -1,5 +1,6 @@
 {
   "dashboard": {
+    "uid": "mls-scraper-overview",
     "title": "MLS Match Scraper - Overview",
     "description": "Overview dashboard for MLS Match Scraper monitoring",
     "tags": ["mls-scraper", "observability", "overview"],
