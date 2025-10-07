@@ -5,8 +5,9 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
-from src.scraper.config import ScrapingConfig, load_config, validate_config
+from src.scraper.config import ScrapingConfig, load_config
 
 
 class TestLoadConfig:
@@ -81,7 +82,7 @@ class TestLoadConfig:
         with patch.dict(os.environ, env_vars, clear=True):
             with pytest.raises(
                 ValueError,
-                match="MISSING_TABLE_API_URL environment variable is required",
+                match="MISSING_TABLE_API_BASE_URL .* environment variable is required",
             ):
                 load_config()
 
@@ -94,7 +95,7 @@ class TestLoadConfig:
         with patch.dict(os.environ, env_vars, clear=True):
             with pytest.raises(
                 ValueError,
-                match="MISSING_TABLE_API_KEY environment variable is required",
+                match="MISSING_TABLE_API_TOKEN .* environment variable is required",
             ):
                 load_config()
 
@@ -144,6 +145,7 @@ class TestValidateConfig:
 
     def test_validate_config_valid(self):
         """Test validation with valid configuration."""
+        # Should not raise any exception during creation
         config = ScrapingConfig(
             age_group="U14",
             club="Test Club",
@@ -156,30 +158,27 @@ class TestValidateConfig:
             missing_table_api_key="test-key",
             log_level="INFO",
         )
-
-        # Should not raise any exception
-        validate_config(config)
+        assert config.age_group == "U14"
 
     def test_validate_config_invalid_age_group(self):
         """Test validation with invalid age group."""
-        config = ScrapingConfig(
-            age_group="U12",  # Invalid age group
-            club="",
-            competition="",
-            division="Northeast",
-            look_back_days=1,
-            start_date=date.today() - timedelta(days=1),
-            end_date=date.today(),
-            missing_table_api_url="https://api.example.com",
-            missing_table_api_key="test-key",
-            log_level="INFO",
-        )
-
-        with pytest.raises(ValueError, match="Invalid age_group: U12"):
-            validate_config(config)
+        with pytest.raises(ValidationError, match="Invalid age_group: U12"):
+            ScrapingConfig(
+                age_group="U12",  # Invalid age group
+                club="",
+                competition="",
+                division="Northeast",
+                look_back_days=1,
+                start_date=date.today() - timedelta(days=1),
+                end_date=date.today(),
+                missing_table_api_url="https://api.example.com",
+                missing_table_api_key="test-key",
+                log_level="INFO",
+            )
 
     def test_validate_config_empty_age_group(self):
         """Test validation with empty age group (should be valid)."""
+        # Should not raise any exception during creation
         config = ScrapingConfig(
             age_group="",  # Empty age group should be valid
             club="",
@@ -192,68 +191,64 @@ class TestValidateConfig:
             missing_table_api_key="test-key",
             log_level="INFO",
         )
-
-        # Should not raise any exception
-        validate_config(config)
+        assert config.age_group == ""
 
     def test_validate_config_invalid_date_range(self):
         """Test validation with invalid date range."""
-        config = ScrapingConfig(
-            age_group="U14",
-            club="",
-            competition="",
-            division="Northeast",
-            look_back_days=1,
-            start_date=date.today(),
-            end_date=date.today() - timedelta(days=1),  # End before start
-            missing_table_api_url="https://api.example.com",
-            missing_table_api_key="test-key",
-            log_level="INFO",
-        )
-
-        with pytest.raises(ValueError, match="start_date .* cannot be after end_date"):
-            validate_config(config)
+        with pytest.raises(
+            ValidationError, match="start_date .* cannot be after end_date"
+        ):
+            ScrapingConfig(
+                age_group="U14",
+                club="",
+                competition="",
+                division="Northeast",
+                look_back_days=1,
+                start_date=date.today(),
+                end_date=date.today() - timedelta(days=1),  # End before start
+                missing_table_api_url="https://api.example.com",
+                missing_table_api_key="test-key",
+                log_level="INFO",
+            )
 
     def test_validate_config_invalid_log_level(self):
         """Test validation with invalid log level."""
-        config = ScrapingConfig(
-            age_group="U14",
-            club="",
-            competition="",
-            division="Northeast",
-            look_back_days=1,
-            start_date=date.today() - timedelta(days=1),
-            end_date=date.today(),
-            missing_table_api_url="https://api.example.com",
-            missing_table_api_key="test-key",
-            log_level="INVALID",  # Invalid log level
-        )
-
-        with pytest.raises(ValueError, match="Invalid log_level: INVALID"):
-            validate_config(config)
+        with pytest.raises(ValidationError, match="Invalid log_level: INVALID"):
+            ScrapingConfig(
+                age_group="U14",
+                club="",
+                competition="",
+                division="Northeast",
+                look_back_days=1,
+                start_date=date.today() - timedelta(days=1),
+                end_date=date.today(),
+                missing_table_api_url="https://api.example.com",
+                missing_table_api_key="test-key",
+                log_level="INVALID",  # Invalid log level
+            )
 
     def test_validate_config_invalid_api_url(self):
         """Test validation with invalid API URL."""
-        config = ScrapingConfig(
-            age_group="U14",
-            club="",
-            competition="",
-            division="Northeast",
-            look_back_days=1,
-            start_date=date.today() - timedelta(days=1),
-            end_date=date.today(),
-            missing_table_api_url="invalid-url",  # Invalid URL format
-            missing_table_api_key="test-key",
-            log_level="INFO",
-        )
-
         with pytest.raises(
-            ValueError, match="missing_table_api_url must be a valid HTTP/HTTPS URL"
+            ValidationError,
+            match="missing_table_api_url must be a valid HTTP/HTTPS URL",
         ):
-            validate_config(config)
+            ScrapingConfig(
+                age_group="U14",
+                club="",
+                competition="",
+                division="Northeast",
+                look_back_days=1,
+                start_date=date.today() - timedelta(days=1),
+                end_date=date.today(),
+                missing_table_api_url="invalid-url",  # Invalid URL format
+                missing_table_api_key="test-key",
+                log_level="INFO",
+            )
 
     def test_validate_config_case_insensitive_log_level(self):
         """Test validation with case-insensitive log level."""
+        # Should not raise any exception during creation
         config = ScrapingConfig(
             age_group="U14",
             club="",
@@ -266,6 +261,4 @@ class TestValidateConfig:
             missing_table_api_key="test-key",
             log_level="debug",  # Lowercase should work
         )
-
-        # Should not raise any exception
-        validate_config(config)
+        assert config.log_level == "DEBUG"  # Should be normalized to uppercase
