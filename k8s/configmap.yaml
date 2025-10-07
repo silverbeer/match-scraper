@@ -13,6 +13,8 @@ data:
 
   # Logging Configuration
   LOG_LEVEL: "DEBUG"
+  # Disable ANSI colors and Rich markup in container logs (makes kubectl logs cleaner)
+  NO_COLOR: "1"
 
   # Browser Configuration
   HEADLESS: "true"

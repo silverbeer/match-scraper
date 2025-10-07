@@ -1,0 +1,224 @@
+name: Deploy to GKE
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'k8s/**'
+      - 'Dockerfile.gke'
+      - 'pyproject.toml'
+      - 'uv.lock'
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip test run before deployment'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  GCP_REGION: us-central1
+  GKE_CLUSTER: missing-table-cluster
+  GKE_ZONE: us-central1-a
+  NAMESPACE: match-scraper
+
+permissions:
+  contents: read
+  id-token: write  # Required for Workload Identity Federation
+
+jobs:
+  # Run tests before deploying (can be skipped with workflow_dispatch)
+  test:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.skip_tests != 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run linting
+        run: uv run ruff check .
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -v
+
+  # Build and push Docker image to GCR
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+
+    outputs:
+      image-tag: ${{ steps.build-info.outputs.image-tag }}
+      image-uri: ${{ steps.build-info.outputs.image-uri }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Set build info
+        id: build-info
+        run: |
+          # Use short SHA as image tag for traceability
+          IMAGE_TAG="${GITHUB_SHA::7}"
+          IMAGE_URI="gcr.io/${{ secrets.GCP_PROJECT_ID }}/mls-scraper:${IMAGE_TAG}"
+
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "image-uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+
+          echo "Building image: ${IMAGE_URI}"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f Dockerfile.gke \
+            -t ${{ steps.build-info.outputs.image-uri }} \
+            -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/mls-scraper:latest \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            .
+
+      - name: Push to Google Container Registry
+        run: |
+          # Push tagged version
+          docker push ${{ steps.build-info.outputs.image-uri }}
+
+          # Push latest tag
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mls-scraper:latest
+
+          echo "✅ Image pushed to GCR"
+
+      - name: Image summary
+        run: |
+          echo "### 🐳 Docker Image Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.build-info.outputs.image-uri }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:** \`${{ steps.build-info.outputs.image-tag }}\`, \`latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** Google Container Registry" >> $GITHUB_STEP_SUMMARY
+
+  # Deploy to GKE cluster
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --zone ${{ env.GKE_ZONE }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Verify cluster access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Update image in CronJob manifest
+        run: |
+          # Update the image in cronjob.yaml to use the new image
+          sed -i "s|image: gcr.io/.*/mls-scraper:.*|image: ${{ needs.build-and-push.outputs.image-uri }}|g" k8s/cronjob.yaml
+
+          echo "Updated CronJob to use image: ${{ needs.build-and-push.outputs.image-uri }}"
+
+      - name: Apply Kubernetes manifests
+        run: |
+          # Apply in order: namespace, configmap, promtail-config, secrets (if needed), cronjob
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/promtail-config.yaml
+
+          # Only apply secrets if they don't exist (don't overwrite existing secrets)
+          if ! kubectl get secret mls-scraper-secrets -n ${{ env.NAMESPACE }} &>/dev/null; then
+            echo "⚠️  Secret mls-scraper-secrets does not exist. Please create it manually."
+            echo "Run: kubectl create secret generic mls-scraper-secrets -n ${{ env.NAMESPACE }} --from-literal=..."
+          fi
+
+          kubectl apply -f k8s/cronjob.yaml
+
+          echo "✅ Manifests applied successfully"
+
+      - name: Verify deployment
+        run: |
+          echo "📋 Checking CronJob status..."
+          kubectl get cronjob -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "📦 Checking ConfigMap..."
+          kubectl get configmap -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "🔐 Checking Secrets..."
+          kubectl get secret -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "📊 Recent Jobs..."
+          kubectl get jobs -n ${{ env.NAMESPACE }} --sort-by=.metadata.creationTimestamp | tail -5 || echo "No jobs yet"
+
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 GKE Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** \`${{ env.GKE_CLUSTER }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Zone:** \`${{ env.GKE_ZONE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace:** \`${{ env.NAMESPACE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ needs.build-and-push.outputs.image-uri }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed at:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor CronJob: \`kubectl get cronjob -n ${{ env.NAMESPACE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- View logs: \`kubectl logs -n ${{ env.NAMESPACE }} -l app=mls-scraper --tail=100\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Check Grafana Loki for structured logs" >> $GITHUB_STEP_SUMMARY
+          echo "- Trigger manual run: \`kubectl create job --from=cronjob/mls-scraper-cronjob test-\$(date +%s) -n ${{ env.NAMESPACE }}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "### ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Troubleshooting:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Verify GCP credentials are configured correctly" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check that the GKE cluster exists and is accessible" >> $GITHUB_STEP_SUMMARY
+          echo "3. Ensure all required secrets are created in the cluster" >> $GITHUB_STEP_SUMMARY

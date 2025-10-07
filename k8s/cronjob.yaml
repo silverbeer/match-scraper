@@ -50,10 +50,7 @@ spec:
             # Replace with your actual GCP Container Registry image
             image: gcr.io/missing-table/mls-scraper:latest
             imagePullPolicy: Always
-            command: ["/bin/sh"]
-            args:
-              - -c
-              - python -m src.cli.main scrape 2>&1 | tee -a /var/log/scraper/app.log
+            command: ["python", "-m", "src.cli.main", "scrape"]
             env:
             # Load from ConfigMap
             - name: AGE_GROUP

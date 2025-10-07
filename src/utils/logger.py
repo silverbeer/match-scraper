@@ -3,9 +3,15 @@ Structured Logger configuration for MLS Match Scraper.
 
 This module provides a centralized logger configuration with structured JSON logging,
 correlation ID handling, and context propagation.
+
+Environment-aware logging:
+- In Kubernetes: Writes JSON logs to /var/log/scraper/app.log for Promtail collection
+- Locally: Writes JSON logs to stdout for interactive debugging
 """
 
+import logging
 import os
+import sys
 from typing import Any, Optional
 
 from aws_lambda_powertools import Logger
@@ -24,16 +30,84 @@ class MLSScraperLogger:
         """
         Initialize the logger with service configuration.
 
+        Environment-aware configuration:
+        - In Kubernetes: Logs written to /var/log/scraper/app.log (for Promtail → Loki)
+        - Locally: Logs written to stdout (for terminal visibility with --verbose)
+
         Args:
             service_name: Name of the service for log identification
         """
         self.service_name = service_name
+        self.is_kubernetes = self._detect_kubernetes()
+
+        # Create the base logger
         self._logger = Logger(
             service=service_name,
             level=os.getenv("LOG_LEVEL", "INFO"),
             use_datetime_directive=True,
             json_serializer=self._custom_serializer,
         )
+
+        # Configure handler based on environment
+        self._configure_handler()
+
+    @staticmethod
+    def _detect_kubernetes() -> bool:
+        """
+        Detect if running in Kubernetes environment.
+
+        Returns:
+            True if running in Kubernetes, False otherwise
+        """
+        # Kubernetes sets this environment variable in all pods
+        return os.getenv("KUBERNETES_SERVICE_HOST") is not None
+
+    def _configure_handler(self) -> None:
+        """
+        Configure the appropriate log handler based on environment.
+
+        In Kubernetes: Use FileHandler to write to /var/log/scraper/app.log
+        Locally: Keep default StreamHandler (stdout)
+        """
+        if self.is_kubernetes:
+            # In Kubernetes: Write logs to file for Promtail to collect
+            log_file_path = "/var/log/scraper/app.log"
+
+            try:
+                # Ensure log directory exists
+                os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+
+                # Remove default handlers and add FileHandler
+                # AWS Lambda Powertools Logger uses standard Python logging under the hood
+                underlying_logger = logging.getLogger(self._logger.name)
+                underlying_logger.handlers.clear()
+
+                file_handler = logging.FileHandler(log_file_path)
+                file_handler.setFormatter(self._logger._get_log_formatter())
+                underlying_logger.addHandler(file_handler)
+
+                # Also log to stderr for kubectl logs visibility (without JSON formatting)
+                stderr_handler = logging.StreamHandler(sys.stderr)
+                stderr_handler.setLevel(
+                    logging.WARNING
+                )  # Only warnings and errors to stderr
+                stderr_formatter = logging.Formatter("%(levelname)s - %(message)s")
+                stderr_handler.setFormatter(stderr_formatter)
+                underlying_logger.addHandler(stderr_handler)
+
+            except (PermissionError, OSError) as e:
+                # If we can't write to /var/log/scraper (e.g., local testing with K8s env vars),
+                # fall back to stderr
+                import warnings
+
+                warnings.warn(
+                    f"Cannot write to {log_file_path}: {e}. "
+                    f"Falling back to stderr. This is expected when testing locally with "
+                    f"KUBERNETES_SERVICE_HOST set.",
+                    stacklevel=2,
+                )
+                # Keep default handlers (stdout)
+        # else: Keep default stdout handler for local development
 
     def get_logger(self) -> Logger:
         """
@@ -57,6 +131,9 @@ class MLSScraperLogger:
         return self._logger.inject_lambda_context(
             correlation_id_path=correlation_paths.API_GATEWAY_REST, log_event=True
         )(handler)
+
+    # Alias for backward compatibility
+    inject_lambda_context = inject_context
 
     def log_scraping_start(self, config: dict[str, Any]) -> None:
         """
@@ -196,9 +273,9 @@ scraper_logger = MLSScraperLogger()
 # Convenience function to get logger
 def get_logger() -> Logger:
     """
-    Get the global logger instance.
+        Get the global logger instance.
 
-Returns:
-    Configured structured Logger
-"""
+    Returns:
+        Configured structured Logger
+    """
     return scraper_logger.get_logger()
