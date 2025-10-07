@@ -42,9 +42,12 @@ from src.scraper.models import Match  # noqa: E402
 
 # Initialize Rich console and Typer app
 # Respect NO_COLOR env var for cleaner container logs in Kubernetes
+# When NO_COLOR is set, disable colors AND disable forced terminal mode
+# This ensures clean JSON logs in container environments
+use_rich = os.getenv("NO_COLOR") is None
 console = Console(
-    no_color=os.getenv("NO_COLOR") is not None,
-    force_terminal=os.getenv("NO_COLOR") is None,
+    no_color=not use_rich,
+    force_terminal=use_rich,
 )
 app = typer.Typer(
     name="mls-scraper",
@@ -246,6 +249,9 @@ def create_config(
 
 def display_header():
     """Display the application header."""
+    if not use_rich:
+        return  # Skip header in container environments
+
     header = Text("⚽ MLS Match Scraper", style="bold blue")
     subtitle = Text("Beautiful terminal interface for MLS match data", style="dim")
 
@@ -259,6 +265,9 @@ def display_header():
 
 def display_config_summary(config: ScrapingConfig):
     """Display configuration summary."""
+    if not use_rich:
+        return  # Skip config display in container environments
+
     config_table = Table(show_header=False, box=None, padding=(0, 1))
     config_table.add_column("Setting", style="cyan")
     config_table.add_column("Value", style="white")
@@ -655,11 +664,13 @@ async def run_scraper(
     matches = []
     api_healthy = False
 
+    # Disable progress spinner in container environments (NO_COLOR=1)
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
         transient=True,
+        disable=not use_rich,  # Disable progress bar when NO_COLOR is set
     ) as progress:
         # Check API health first
         health_task = progress.add_task("🏥 Checking missing-table API...", total=None)

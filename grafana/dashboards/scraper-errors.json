@@ -1,5 +1,6 @@
 {
   "dashboard": {
+    "uid": "mls-scraper-errors",
     "title": "MLS Match Scraper - Errors & Debugging",
     "description": "Error tracking and debugging dashboard for MLS Match Scraper",
     "tags": ["mls-scraper", "errors", "debugging"],

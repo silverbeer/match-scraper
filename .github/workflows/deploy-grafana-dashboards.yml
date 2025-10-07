@@ -38,10 +38,15 @@ jobs:
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
         run: |
           echo "Deploying scraper-overview.json..."
+
+          # Add overwrite flag to update existing dashboard instead of creating duplicates
+          dashboard_json=$(cat grafana/dashboards/scraper-overview.json)
+          payload=$(echo "$dashboard_json" | jq '. + {"overwrite": true}')
+
           response=$(curl -s -w "\n%{http_code}" -X POST "$GRAFANA_URL/api/dashboards/db" \
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
             -H "Content-Type: application/json" \
-            -d @grafana/dashboards/scraper-overview.json)
+            -d "$payload")
 
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
@@ -61,10 +66,15 @@ jobs:
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
         run: |
           echo "Deploying scraper-errors.json..."
+
+          # Add overwrite flag to update existing dashboard instead of creating duplicates
+          dashboard_json=$(cat grafana/dashboards/scraper-errors.json)
+          payload=$(echo "$dashboard_json" | jq '. + {"overwrite": true}')
+
           response=$(curl -s -w "\n%{http_code}" -X POST "$GRAFANA_URL/api/dashboards/db" \
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
             -H "Content-Type: application/json" \
-            -d @grafana/dashboards/scraper-errors.json)
+            -d "$payload")
 
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
