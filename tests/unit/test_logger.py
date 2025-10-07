@@ -1,15 +1,12 @@
 """
 Unit tests for the logging infrastructure.
 
-Tests AWS Powertools Logger configuration, structured logging,
-correlation ID handling, and context propagation.
+Tests structured logging configuration and log formatting.
 """
 
+import logging
 import os
 from unittest.mock import Mock, patch
-
-from aws_lambda_powertools import Logger
-from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from src.utils.logger import MLSScraperLogger, get_logger, scraper_logger
 
@@ -21,7 +18,7 @@ class TestMLSScraperLogger:
         """Test logger initialization with default service name."""
         logger = MLSScraperLogger()
         assert logger.service_name == "mls-match-scraper"
-        assert isinstance(logger.get_logger(), Logger)
+        assert isinstance(logger.get_logger(), logging.Logger)
 
     def test_init_custom_service_name(self):
         """Test logger initialization with custom service name."""
@@ -35,24 +32,14 @@ class TestMLSScraperLogger:
             logger = MLSScraperLogger()
             # Verify logger is created successfully with environment variable set
             assert logger.get_logger() is not None
-            assert isinstance(logger.get_logger(), Logger)
+            assert isinstance(logger.get_logger(), logging.Logger)
 
-    def test_get_logger_returns_powertools_logger(self):
-        """Test that get_logger returns AWS Powertools Logger instance."""
+    def test_get_logger_returns_standard_logger(self):
+        """Test that get_logger returns standard Python Logger instance."""
         logger = MLSScraperLogger()
-        powertools_logger = logger.get_logger()
-        assert isinstance(powertools_logger, Logger)
+        python_logger = logger.get_logger()
+        assert isinstance(python_logger, logging.Logger)
 
-    def test_inject_lambda_context_decorator(self):
-        """Test Lambda context injection decorator."""
-        logger = MLSScraperLogger()
-
-        @logger.inject_lambda_context
-        def mock_handler(event, context):
-            return {"statusCode": 200}
-
-        # The decorator should return a callable
-        assert callable(mock_handler)
 
     def test_log_scraping_start(self):
         """Test logging scraping start with configuration."""
@@ -66,9 +53,10 @@ class TestMLSScraperLogger:
             mock_info.assert_called_once()
             call_args = mock_info.call_args
             assert "Starting MLS match scraping operation" in call_args[0][0]
-            assert call_args[1]["extra"]["operation"] == "scraping_start"
-            assert call_args[1]["extra"]["config"] == config
-            assert call_args[1]["extra"]["service"] == "mls-match-scraper"
+            extra = call_args[1]["extra"]
+            assert extra["operation"] == "scraping_start"
+            assert extra["config"] == config
+            assert extra["service"] == "mls-match-scraper"
 
     def test_log_scraping_complete(self):
         """Test logging scraping completion with metrics."""
@@ -82,8 +70,9 @@ class TestMLSScraperLogger:
             mock_info.assert_called_once()
             call_args = mock_info.call_args
             assert "MLS match scraping operation completed" in call_args[0][0]
-            assert call_args[1]["extra"]["operation"] == "scraping_complete"
-            assert call_args[1]["extra"]["metrics"] == metrics
+            extra = call_args[1]["extra"]
+            assert extra["operation"] == "scraping_complete"
+            assert extra["metrics"] == metrics
 
     def test_log_api_call_success(self):
         """Test logging successful API call."""
@@ -171,39 +160,15 @@ class TestMLSScraperLogger:
             assert extra["success"] is False
             assert extra["error"] == "Element not found"
 
-    def test_custom_serializer_datetime(self):
-        """Test custom serializer handles datetime objects."""
-        from datetime import datetime
-
-        dt = datetime(2023, 1, 1, 12, 0, 0)
-        result = MLSScraperLogger._custom_serializer(dt)
-        assert result == "2023-01-01T12:00:00"
-
-    def test_custom_serializer_object_with_dict(self):
-        """Test custom serializer handles objects with __dict__."""
-
-        class TestObj:
-            def __init__(self):
-                self.name = "test"
-                self.value = 42
-
-        obj = TestObj()
-        result = MLSScraperLogger._custom_serializer(obj)
-        assert result == {"name": "test", "value": 42}
-
-    def test_custom_serializer_fallback_to_str(self):
-        """Test custom serializer falls back to str() for other objects."""
-        result = MLSScraperLogger._custom_serializer(42)
-        assert result == "42"
 
 
 class TestGlobalLoggerFunctions:
     """Test cases for global logger functions."""
 
-    def test_get_logger_returns_powertools_logger(self):
-        """Test that get_logger function returns AWS Powertools Logger."""
+    def test_get_logger_returns_standard_logger(self):
+        """Test that get_logger function returns standard Python Logger."""
         logger = get_logger()
-        assert isinstance(logger, Logger)
+        assert isinstance(logger, logging.Logger)
 
     def test_scraper_logger_is_mls_scraper_logger_instance(self):
         """Test that scraper_logger is an MLSScraperLogger instance."""
@@ -218,24 +183,21 @@ class TestLoggerIntegration:
         """Test logger configuration with environment variables."""
         with patch.dict(
             os.environ,
-            {"LOG_LEVEL": "DEBUG", "AWS_LAMBDA_FUNCTION_NAME": "test-function"},
+            {"LOG_LEVEL": "DEBUG"},
         ):
             logger = MLSScraperLogger()
 
             # Should create logger successfully with environment variables
             assert logger.get_logger() is not None
-            assert isinstance(logger.get_logger(), Logger)
+            assert isinstance(logger.get_logger(), logging.Logger)
 
-    def test_logger_context_propagation(self):
-        """Test that logger properly handles context propagation."""
-        logger = MLSScraperLogger()
+    def test_logger_kubernetes_detection(self):
+        """Test that logger properly detects Kubernetes environment."""
+        # Test without Kubernetes env var
+        logger_local = MLSScraperLogger()
+        assert logger_local.is_kubernetes is False
 
-        # Mock Lambda context
-        mock_context = Mock(spec=LambdaContext)
-        mock_context.aws_request_id = "test-request-id"
-        mock_context.function_name = "test-function"
-
-        # The logger should be able to handle Lambda context
-        # This is more of a smoke test since actual context injection
-        # happens at runtime with the decorator
-        assert logger.get_logger() is not None
+        # Test with Kubernetes env var
+        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
+            logger_k8s = MLSScraperLogger(service_name="test-k8s-logger")
+            assert logger_k8s.is_kubernetes is True
