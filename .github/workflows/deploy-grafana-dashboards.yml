@@ -1,0 +1,89 @@
+name: Deploy Grafana Dashboards
+
+on:
+  # Trigger on push to main when dashboard files change
+  push:
+    branches:
+      - main
+    paths:
+      - 'grafana/dashboards/*.json'
+      - '.github/workflows/deploy-grafana-dashboards.yml'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  deploy-dashboards:
+    name: Deploy Dashboards to Grafana Cloud
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate dashboard JSON
+        run: |
+          echo "Validating dashboard JSON files..."
+          for file in grafana/dashboards/*.json; do
+            if [ -f "$file" ]; then
+              echo "Validating $file..."
+              jq empty "$file" || exit 1
+            fi
+          done
+          echo "✅ All dashboard files are valid JSON"
+
+      - name: Deploy Overview Dashboard
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
+        run: |
+          echo "Deploying scraper-overview.json..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "$GRAFANA_URL/api/dashboards/db" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @grafana/dashboards/scraper-overview.json)
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response: $body"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Overview dashboard deployed successfully"
+          else
+            echo "❌ Failed to deploy overview dashboard (HTTP $http_code)"
+            exit 1
+          fi
+
+      - name: Deploy Errors Dashboard
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
+        run: |
+          echo "Deploying scraper-errors.json..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "$GRAFANA_URL/api/dashboards/db" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @grafana/dashboards/scraper-errors.json)
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response: $body"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Errors dashboard deployed successfully"
+          else
+            echo "❌ Failed to deploy errors dashboard (HTTP $http_code)"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Dashboard Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following dashboards were deployed to Grafana Cloud:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ MLS Match Scraper - Overview" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ MLS Match Scraper - Errors & Debugging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View your dashboards at: ${{ secrets.GRAFANA_URL }}" >> $GITHUB_STEP_SUMMARY

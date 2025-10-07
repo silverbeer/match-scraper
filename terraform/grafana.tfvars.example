@@ -1,0 +1,6 @@
+# Grafana Configuration for Terraform
+# Copy this file to grafana.tfvars and fill in your values
+
+grafana_url       = "https://stack-1184667-hm-prod-us-east-2.grafana.net"
+grafana_api_token = "glsa_xxxxxxxxxxxxx"  # Service account token with Admin or Editor role
+grafana_folder_title = "MLS Match Scraper"

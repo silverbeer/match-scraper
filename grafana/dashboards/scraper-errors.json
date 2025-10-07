@@ -24,7 +24,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(scraping_errors_total{service_name=\"mls-match-scraper\"}[1h]))",
+            "expr": "sum(increase(scraping_errors_total{service=\"mls-match-scraper\"}[1h]))",
             "legendFormat": "Errors"
           }
         ],
@@ -62,7 +62,7 @@
         },
         "targets": [
           {
-            "expr": "sum(increase(api_calls_total{service_name=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[1h]))",
+            "expr": "sum(increase(api_calls_total{service=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[1h]))",
             "legendFormat": "Failed Calls"
           }
         ],
@@ -100,7 +100,7 @@
         },
         "targets": [
           {
-            "expr": "(sum(rate(scraping_errors_total{service_name=\"mls-match-scraper\"}[5m])) / sum(rate(browser_operations_total{service_name=\"mls-match-scraper\"}[5m]))) * 100",
+            "expr": "(sum(rate(scraping_errors_total{service=\"mls-match-scraper\"}[5m])) / sum(rate(browser_operations_total{service=\"mls-match-scraper\"}[5m]))) * 100",
             "legendFormat": "Error %"
           }
         ],
@@ -177,7 +177,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (error_type) (rate(scraping_errors_total{service_name=\"mls-match-scraper\"}[5m]))",
+            "expr": "sum by (error_type) (rate(scraping_errors_total{service=\"mls-match-scraper\"}[5m]))",
             "legendFormat": "{{error_type}}"
           }
         ],
@@ -222,7 +222,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (endpoint, method, status_code) (increase(api_calls_total{service_name=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[6h]))",
+            "expr": "sum by (endpoint, method, status_code) (increase(api_calls_total{service=\"mls-match-scraper\",status_class=~\"4xx|5xx\"}[6h]))",
             "format": "table",
             "instant": true
           }
@@ -271,7 +271,7 @@
         },
         "targets": [
           {
-            "expr": "sum by (operation) (increase(browser_operations_total{service_name=\"mls-match-scraper\",success=\"false\"}[6h]))",
+            "expr": "sum by (operation) (increase(browser_operations_total{service=\"mls-match-scraper\",success=\"false\"}[6h]))",
             "format": "table",
             "instant": true
           }

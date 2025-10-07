@@ -1,0 +1,23 @@
+# Grizzly Configuration for GitOps Dashboard Management
+# https://grafana.github.io/grizzly/
+
+# Configure targets
+targets:
+  default:
+    grafana:
+      url: "${GRAFANA_URL}"
+      token: "${GRAFANA_TOKEN}"
+
+# Dashboard configurations
+dashboards:
+  folder: "MLS Match Scraper"
+
+  # Overview Dashboard
+  - name: "mls-scraper-overview"
+    path: "scraper-overview.json"
+    uid: "mls-scraper-overview"
+
+  # Errors Dashboard
+  - name: "mls-scraper-errors"
+    path: "scraper-errors.json"
+    uid: "mls-scraper-errors"

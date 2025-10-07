@@ -1,0 +1,38 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: mls-scraper-overview
+  namespace: match-scraper
+  labels:
+    app: mls-match-scraper
+    dashboard: overview
+spec:
+  # Reference to Grafana instance (configure based on your setup)
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+
+  # Dashboard JSON
+  json: |
+    $(cat grafana/dashboards/scraper-overview.json | jq -c '.dashboard')
+
+  # Alternative: Load from ConfigMap
+  # configMapRef:
+  #   name: grafana-dashboard-overview
+  #   key: dashboard.json
+
+  # Datasources mapping
+  datasources:
+    - inputName: "DS_PROMETHEUS"
+      datasourceName: "Prometheus"
+    - inputName: "DS_LOKI"
+      datasourceName: "Loki"
+
+  # Folder in Grafana
+  folderTitle: "MLS Match Scraper"
+
+  # Allow updates
+  allowCrossNamespaceImport: false
+
+  # Resync period
+  resyncPeriod: 5m
