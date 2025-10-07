@@ -14,6 +14,8 @@ AGE_GROUP="U14"
 DIVISION="Northeast"
 START="0"
 END="13"
+FROM_DATE=""
+TO_DATE=""
 FOLLOW_LOGS=true
 
 # Parse command line arguments
@@ -59,6 +61,22 @@ while [[ $# -gt 0 ]]; do
             NAMESPACE="$2"
             shift 2
             ;;
+        --from=*)
+            FROM_DATE="${1#*=}"
+            shift
+            ;;
+        --from)
+            FROM_DATE="$2"
+            shift 2
+            ;;
+        --to=*)
+            TO_DATE="${1#*=}"
+            shift
+            ;;
+        --to)
+            TO_DATE="$2"
+            shift 2
+            ;;
         --no-follow)
             FOLLOW_LOGS=false
             shift
@@ -69,6 +87,8 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --start N           Start date offset (default: 0 = today)"
             echo "  --end N             End date offset (default: 13)"
+            echo "  --from DATE         Absolute start date (YYYY-MM-DD, e.g., 2025-10-01)"
+            echo "  --to DATE           Absolute end date (YYYY-MM-DD, e.g., 2025-11-01)"
             echo "  --age-group GROUP   Age group (default: U14)"
             echo "  --division DIV      Division (default: Northeast)"
             echo "  --namespace NS      Kubernetes namespace (default: match-scraper)"
@@ -78,6 +98,7 @@ while [[ $# -gt 0 ]]; do
             echo "Examples:"
             echo "  $0 --start 0 --end 13"
             echo "  $0 --start -7 --end 0  # Last 7 days"
+            echo "  $0 --from 2025-10-01 --to 2025-11-01  # Absolute dates"
             echo "  $0 --age-group U16 --division Southeast"
             exit 0
             ;;
@@ -100,7 +121,11 @@ echo -e "  Job Name:    ${GREEN}${JOB_NAME}${NC}"
 echo -e "  Namespace:   ${GREEN}${NAMESPACE}${NC}"
 echo -e "  Age Group:   ${GREEN}${AGE_GROUP}${NC}"
 echo -e "  Division:    ${GREEN}${DIVISION}${NC}"
-echo -e "  Date Range:  ${GREEN}--start=${START} --end=${END}${NC}"
+if [ -n "$FROM_DATE" ] && [ -n "$TO_DATE" ]; then
+    echo -e "  Date Range:  ${GREEN}--from=${FROM_DATE} --to=${TO_DATE}${NC}"
+else
+    echo -e "  Date Range:  ${GREEN}--start=${START} --end=${END}${NC}"
+fi
 echo ""
 
 # Check if kubectl is available
@@ -119,6 +144,13 @@ fi
 
 # Get the project ID
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null || echo "missing-table")
+
+# Build the CLI command with appropriate date flags
+if [ -n "$FROM_DATE" ] && [ -n "$TO_DATE" ]; then
+    CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --from=${FROM_DATE} --to=${TO_DATE} 2>&1 | tee -a /var/log/scraper/app.log"
+else
+    CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --start=${START} --end=${END} 2>&1 | tee -a /var/log/scraper/app.log"
+fi
 
 echo -e "${BLUE}📦 Creating job from CronJob template...${NC}"
 
@@ -146,7 +178,7 @@ spec:
         image: gcr.io/${PROJECT_ID}/mls-scraper:latest
         command: ["/bin/sh", "-c"]
         args:
-        - "python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --start=${START} --end=${END} 2>&1 | tee -a /var/log/scraper/app.log"
+        - "${CLI_CMD}"
         envFrom:
         - configMapRef:
             name: mls-scraper-config
