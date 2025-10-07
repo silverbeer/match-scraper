@@ -160,10 +160,15 @@ jobs:
 
       - name: Update image in CronJob manifest
         run: |
+          echo "Original CronJob image line:"
+          grep "image: gcr.io" k8s/cronjob.yaml | head -1
+
           # Update the image in cronjob.yaml to use the new image
           sed -i "s|image: gcr.io/.*/mls-scraper:.*|image: ${{ needs.build-and-push.outputs.image-uri }}|g" k8s/cronjob.yaml
 
-          echo "Updated CronJob to use image: ${{ needs.build-and-push.outputs.image-uri }}"
+          echo "Updated CronJob image line:"
+          grep "image: gcr.io" k8s/cronjob.yaml | head -1
+          echo "Using image: ${{ needs.build-and-push.outputs.image-uri }}"
 
       - name: Apply Kubernetes manifests
         run: |
