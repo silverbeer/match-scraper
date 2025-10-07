@@ -146,10 +146,12 @@ fi
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null || echo "missing-table")
 
 # Build the CLI command with appropriate date flags
+# Note: Rich CLI output goes to stdout/stderr for terminal visibility
+# Structured JSON logs are written to /var/log/scraper/app.log by the logger
 if [ -n "$FROM_DATE" ] && [ -n "$TO_DATE" ]; then
-    CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --from=${FROM_DATE} --to=${TO_DATE} 2>&1 | tee -a /var/log/scraper/app.log"
+    CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --from=${FROM_DATE} --to=${TO_DATE}"
 else
-    CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --start=${START} --end=${END} 2>&1 | tee -a /var/log/scraper/app.log"
+    CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --start=${START} --end=${END}"
 fi
 
 echo -e "${BLUE}📦 Creating job from CronJob template...${NC}"

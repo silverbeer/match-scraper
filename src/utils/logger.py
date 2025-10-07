@@ -1,8 +1,8 @@
 """
 Structured Logger configuration for MLS Match Scraper.
 
-This module provides a centralized logger configuration with structured JSON logging,
-correlation ID handling, and context propagation.
+This module provides a centralized logger configuration with structured JSON logging
+and context propagation.
 
 Environment-aware logging:
 - In Kubernetes: Writes JSON logs to /var/log/scraper/app.log for Promtail collection
@@ -14,16 +14,15 @@ import os
 import sys
 from typing import Any, Optional
 
-from aws_lambda_powertools import Logger
-from aws_lambda_powertools.logging import correlation_paths
+from pythonjsonlogger import jsonlogger
 
 
 class MLSScraperLogger:
     """
     Centralized logger for MLS Match Scraper with structured logging.
 
-    Provides structured logging with automatic correlation IDs and
-    consistent log formatting across the application.
+    Provides structured logging with consistent log formatting
+    across the application.
     """
 
     def __init__(self, service_name: str = "mls-match-scraper"):
@@ -41,15 +40,12 @@ class MLSScraperLogger:
         self.is_kubernetes = self._detect_kubernetes()
 
         # Create the base logger
-        self._logger = Logger(
-            service=service_name,
-            level=os.getenv("LOG_LEVEL", "INFO"),
-            use_datetime_directive=True,
-            json_serializer=self._custom_serializer,
-        )
+        self._logger = logging.getLogger(service_name)
+        self._logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
-        # Configure handler based on environment
-        self._configure_handler()
+        # Prevent duplicate handlers
+        if not self._logger.handlers:
+            self._configure_handler()
 
     @staticmethod
     def _detect_kubernetes() -> bool:
@@ -67,7 +63,7 @@ class MLSScraperLogger:
         Configure the appropriate log handler based on environment.
 
         In Kubernetes: Use FileHandler to write to /var/log/scraper/app.log
-        Locally: Keep default StreamHandler (stdout)
+        Locally: Use StreamHandler (stdout) with JSON formatting
         """
         if self.is_kubernetes:
             # In Kubernetes: Write logs to file for Promtail to collect
@@ -77,21 +73,14 @@ class MLSScraperLogger:
                 # Ensure log directory exists
                 os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
 
-                # Remove default handlers and add FileHandler
-                # AWS Lambda Powertools Logger uses standard Python logging under the hood
-                underlying_logger = logging.getLogger(self._logger.name)
-                underlying_logger.handlers.clear()
-
-                # Create JSON formatter compatible with Powertools Logger
-                from pythonjsonlogger import jsonlogger
-
+                # Create JSON formatter
                 file_handler = logging.FileHandler(log_file_path)
                 json_formatter = jsonlogger.JsonFormatter(
                     '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
                     timestamp=True
                 )
                 file_handler.setFormatter(json_formatter)
-                underlying_logger.addHandler(file_handler)
+                self._logger.addHandler(file_handler)
 
                 # Also log to stderr for kubectl logs visibility (without JSON formatting)
                 stderr_handler = logging.StreamHandler(sys.stderr)
@@ -100,7 +89,7 @@ class MLSScraperLogger:
                 )  # Only warnings and errors to stderr
                 stderr_formatter = logging.Formatter("%(levelname)s - %(message)s")
                 stderr_handler.setFormatter(stderr_formatter)
-                underlying_logger.addHandler(stderr_handler)
+                self._logger.addHandler(stderr_handler)
 
             except (PermissionError, OSError) as e:
                 # If we can't write to /var/log/scraper (e.g., local testing with K8s env vars),
@@ -113,10 +102,25 @@ class MLSScraperLogger:
                     f"KUBERNETES_SERVICE_HOST set.",
                     stacklevel=2,
                 )
-                # Keep default handlers (stdout)
-        # else: Keep default stdout handler for local development
+                # Use default stdout handler
+                handler = logging.StreamHandler(sys.stdout)
+                json_formatter = jsonlogger.JsonFormatter(
+                    '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
+                    timestamp=True
+                )
+                handler.setFormatter(json_formatter)
+                self._logger.addHandler(handler)
+        else:
+            # Local development: Use stdout with JSON formatting
+            handler = logging.StreamHandler(sys.stdout)
+            json_formatter = jsonlogger.JsonFormatter(
+                '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
+                timestamp=True
+            )
+            handler.setFormatter(json_formatter)
+            self._logger.addHandler(handler)
 
-    def get_logger(self) -> Logger:
+    def get_logger(self) -> logging.Logger:
         """
         Get the configured structured Logger instance.
 
@@ -125,22 +129,39 @@ class MLSScraperLogger:
         """
         return self._logger
 
-    def inject_context(self, handler):
+    def _add_service_context(self, extra: Optional[dict] = None) -> dict:
         """
-        Decorator to inject context into logs.
+        Add service context to log extra fields.
 
         Args:
-            handler: Function to decorate
+            extra: Additional fields to include in log
 
         Returns:
-            Decorated function with context injection
+            Extra fields with service context added
         """
-        return self._logger.inject_lambda_context(
-            correlation_id_path=correlation_paths.API_GATEWAY_REST, log_event=True
-        )(handler)
+        context = extra or {}
+        context.setdefault('service', self.service_name)
+        return context
 
-    # Alias for backward compatibility
-    inject_lambda_context = inject_context
+    def info(self, message: str, **kwargs) -> None:
+        """Log info message with context."""
+        extra = self._add_service_context(kwargs.get('extra'))
+        self._logger.info(message, extra=extra)
+
+    def debug(self, message: str, **kwargs) -> None:
+        """Log debug message with context."""
+        extra = self._add_service_context(kwargs.get('extra'))
+        self._logger.debug(message, extra=extra)
+
+    def warning(self, message: str, **kwargs) -> None:
+        """Log warning message with context."""
+        extra = self._add_service_context(kwargs.get('extra'))
+        self._logger.warning(message, extra=extra)
+
+    def error(self, message: str, **kwargs) -> None:
+        """Log error message with context."""
+        extra = self._add_service_context(kwargs.get('extra'))
+        self._logger.error(message, extra=extra)
 
     def log_scraping_start(self, config: dict[str, Any]) -> None:
         """
@@ -149,12 +170,11 @@ class MLSScraperLogger:
         Args:
             config: Scraping configuration parameters
         """
-        self._logger.info(
+        self.info(
             "Starting MLS match scraping operation",
             extra={
                 "operation": "scraping_start",
                 "config": config,
-                "service": self.service_name,
             },
         )
 
@@ -165,12 +185,11 @@ class MLSScraperLogger:
         Args:
             metrics: Scraping operation metrics
         """
-        self._logger.info(
+        self.info(
             "MLS match scraping operation completed",
             extra={
                 "operation": "scraping_complete",
                 "metrics": metrics,
-                "service": self.service_name,
             },
         )
 
@@ -196,7 +215,6 @@ class MLSScraperLogger:
             "operation": "api_call",
             "endpoint": endpoint,
             "method": method,
-            "service": self.service_name,
         }
 
         if status_code is not None:
@@ -207,11 +225,9 @@ class MLSScraperLogger:
             log_data["error"] = error
 
         if error or (status_code and status_code >= 400):
-            self._logger.error(f"API call failed: {method} {endpoint}", extra=log_data)
+            self.error(f"API call failed: {method} {endpoint}", extra=log_data)
         else:
-            self._logger.info(
-                f"API call successful: {method} {endpoint}", extra=log_data
-            )
+            self.info(f"API call successful: {method} {endpoint}", extra=log_data)
 
     def log_browser_operation(
         self,
@@ -233,7 +249,6 @@ class MLSScraperLogger:
             "operation": "browser_operation",
             "browser_operation": operation,
             "success": success,
-            "service": self.service_name,
         }
 
         if duration_ms is not None:
@@ -242,35 +257,9 @@ class MLSScraperLogger:
             log_data["error"] = error
 
         if success:
-            self._logger.info(
-                f"Browser operation successful: {operation}", extra=log_data
-            )
+            self.info(f"Browser operation successful: {operation}", extra=log_data)
         else:
-            self._logger.error(f"Browser operation failed: {operation}", extra=log_data)
-
-    @staticmethod
-    def _custom_serializer(obj: Any) -> Any:
-        """
-        Custom JSON serializer for complex objects including Pydantic models.
-
-        Args:
-            obj: Object to serialize
-
-        Returns:
-            Serializable representation of the object
-        """
-        if hasattr(obj, "isoformat"):
-            return obj.isoformat()
-        elif hasattr(obj, "model_dump"):
-            # Pydantic v2 models
-            return obj.model_dump()
-        elif hasattr(obj, "dict"):
-            # Pydantic v1 models (fallback)
-            return obj.dict()
-        elif hasattr(obj, "__dict__"):
-            return obj.__dict__
-        else:
-            return str(obj)
+            self.error(f"Browser operation failed: {operation}", extra=log_data)
 
 
 # Global logger instance
@@ -278,9 +267,9 @@ scraper_logger = MLSScraperLogger()
 
 
 # Convenience function to get logger
-def get_logger() -> Logger:
+def get_logger() -> logging.Logger:
     """
-        Get the global logger instance.
+    Get the global logger instance.
 
     Returns:
         Configured structured Logger
