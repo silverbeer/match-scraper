@@ -10,7 +10,6 @@ Environment Variables:
     GRAFANA_TOKEN: Grafana API token (service account or API key)
 """
 
-import json
 import os
 import sys
 from pathlib import Path
