@@ -14,7 +14,7 @@ Before our fixes, the scraper was posting games with 0-0 scores as "completed" g
 We've created a script to fix the existing data in your database. The script will:
 1. Find all games with 0-0 scores marked as "completed"
 2. Update them to the correct status based on date logic:
-   - Games today or in the past → "TBD" 
+   - Games today or in the past → "TBD"
    - Games in the future → "scheduled"
 3. Clear the placeholder scores (set to null)
 
@@ -68,7 +68,7 @@ You can set these in:
 
 The script identifies games that match these criteria:
 - `home_score = 0`
-- `away_score = 0` 
+- `away_score = 0`
 - `status = "completed"`
 
 These games will be updated to:

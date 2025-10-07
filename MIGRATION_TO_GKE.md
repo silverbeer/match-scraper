@@ -4,7 +4,7 @@ This document outlines the complete migration plan from AWS Lambda to Google Kub
 
 ## 🎯 **Migration Overview**
 
-**Current State:** AWS Lambda + EventBridge + ECR + Terraform  
+**Current State:** AWS Lambda + EventBridge + ECR + Terraform
 **Target State:** GKE CronJob + Container Registry + Kubernetes manifests
 
 ## 📋 **Migration Steps**
@@ -151,5 +151,3 @@ This document outlines the complete migration plan from AWS Lambda to Google Kub
 ---
 
 **Ready to start?** Let's begin with Phase 1, Step 1: Auditing the current infrastructure.
-
-

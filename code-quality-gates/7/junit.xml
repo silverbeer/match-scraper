@@ -3,7 +3,7 @@
     def test_debug_command_help(self):
         """Test debug command help (avoids async issues)."""
         result = self.runner.invoke(app, ["debug", "--help"])
-    
+
         assert result.exit_code == 0
 &gt;       assert "--timeout" in result.stdout
 E       AssertionError: assert '--timeout' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'
@@ -14,7 +14,7 @@ tests/unit/test_cli.py:216: AssertionError</failure></testcase><testcase classna
     def test_inspect_command_help(self):
         """Test inspect command help (avoids async issues)."""
         result = self.runner.invoke(app, ["inspect", "--help"])
-    
+
         assert result.exit_code == 0
 &gt;       assert "--timeout" in result.stdout
 E       AssertionError: assert '--timeout' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1...   \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'
@@ -25,7 +25,7 @@ tests/unit/test_cli.py:236: AssertionError</failure></testcase><testcase classna
     def test_scrape_help(self):
         """Test that scrape command help displays correctly."""
         result = self.runner.invoke(app, ["scrape", "--help"])
-    
+
         assert result.exit_code == 0
 &gt;       assert "--age-group" in result.stdout
 E       AssertionError: assert '--age-group' in '\x1b[1m                                                                                \x1b[0m\n\x1b[1m \x1b[0m\x1b[1....  \x1b[2m│\x1b[0m\n\x1b[2m╰──────────────────────────────────────────────────────────────────────────────╯\x1b[0m\n\n'
@@ -43,7 +43,7 @@ filter_applicator = &lt;src.scraper.filter_application.MLSFilterApplicator objec
             # Mock first selector failing, second succeeding
             def mock_wait_for_element(selector, timeout=None):
                 return selector == 'select[name*="age" i]'
-    
+
             with (
                 patch.object(
                     filter_applicator.interactor,
@@ -87,7 +87,7 @@ sample_config = ScrapingConfig(age_group='U14', club='Test Club', competition='T
             ),
         ):
             await filter_applicator.apply_all_filters(sample_config)
-    
+
             # Should have 3 sleep calls (between the 4 filter applications)
 &gt;           assert mock_sleep.call_count == 3
 E           AssertionError: assert 5 == 3
@@ -103,7 +103,7 @@ sample_config = ScrapingConfig(age_group='U14', club='Test Club', competition='T
     ):
         """Test complete filter application workflow."""
         applicator = MLSFilterApplicator(mock_page_with_elements)
-    
+
         with (
             patch.object(applicator.interactor, "wait_for_element", return_value=True),
             patch.object(
@@ -113,7 +113,7 @@ sample_config = ScrapingConfig(age_group='U14', club='Test Club', competition='T
             # Test the complete workflow
             validation_results = await applicator.validate_filters(sample_config)
             assert isinstance(validation_results, dict)
-    
+
             filter_success = await applicator.apply_all_filters(sample_config)
 &gt;           assert filter_success is True
 E           assert False is True
@@ -133,7 +133,7 @@ mock_page = &lt;AsyncMock id='140610022070256'&gt;
         ):
             mock_wait.return_value = True
             mock_check_no_results.return_value = False
-    
+
             # Mock successful table extraction
 &gt;           mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -167,7 +167,7 @@ mock_page = &lt;AsyncMock id='140610022074624'&gt;
             mock_wait.return_value = True
             mock_check_no_results.return_value = False
             mock_extract_table.return_value = []  # Table extraction fails
-    
+
             # Mock successful card extraction
 &gt;           mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -192,9 +192,9 @@ mock_page = &lt;AsyncMock id='140610022835600'&gt;
         """Test successful waiting for results."""
         with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
-    
+
             result = await match_extractor._wait_for_results()
-    
+
 &gt;           assert result is True
 E           assert False is True
 
@@ -207,9 +207,9 @@ mock_page = &lt;AsyncMock id='140610022845344'&gt;
         """Test detection of no results message."""
         with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
-    
+
             result = await match_extractor._check_no_results()
-    
+
 &gt;           assert result is True
 E           assert False is True
 
@@ -224,9 +224,9 @@ mock_page = &lt;AsyncMock id='140610022845008'&gt;
         mock_table = AsyncMock()
         mock_row = AsyncMock()
         mock_table.query_selector_all.return_value = [mock_row]
-    
+
         mock_page.query_selector.return_value = mock_table
-    
+
         with (
             patch.object(match_extractor.interactor, "wait_for_element") as mock_wait,
             patch.object(
@@ -234,7 +234,7 @@ mock_page = &lt;AsyncMock id='140610022845008'&gt;
             ) as mock_extract_row,
         ):
             mock_wait.return_value = True
-    
+
             # Mock successful match extraction from row
 &gt;           mock_match = Match(
                 match_id="U14_Northeast_0_20241219",
@@ -260,7 +260,7 @@ mock_page = &lt;AsyncMock id='140610024598768'&gt;
         # Mock card elements
         mock_card = AsyncMock()
         mock_page.query_selector_all.return_value = [mock_card]
-    
+
         with patch.object(
             match_extractor, "_extract_match_from_card"
         ) as mock_extract_card:
@@ -289,21 +289,21 @@ mock_page = &lt;AsyncMock id='140610024602800'&gt;
         # Mock row element with cells
         mock_row = AsyncMock()
         mock_cells = [AsyncMock() for _ in range(5)]
-    
+
         # Mock cell content
         mock_cells[0].text_content.return_value = "12/19/2024"  # date
         mock_cells[1].text_content.return_value = "3:00 PM"  # time
         mock_cells[2].text_content.return_value = "Team A"  # home
         mock_cells[3].text_content.return_value = "Team B"  # away
         mock_cells[4].text_content.return_value = "2 - 1"  # score
-    
+
         mock_row.query_selector_all.return_value = mock_cells
         mock_row.query_selector.return_value = None  # No specific selectors found
-    
+
         result = await match_extractor._extract_match_from_row(
             mock_row, 0, "U14", "Northeast", None
         )
-    
+
 &gt;       assert result is not None
 E       assert None is not None
 
@@ -315,20 +315,20 @@ mock_page = &lt;AsyncMock id='140610022069584'&gt;
     async def test_extract_match_from_card_success(self, match_extractor, mock_page):
         """Test successful match extraction from card."""
         mock_card = AsyncMock()
-    
+
         # Mock card elements
         mock_date_elem = AsyncMock()
         mock_date_elem.text_content.return_value = "12/19/2024"
-    
+
         mock_home_elem = AsyncMock()
         mock_home_elem.text_content.return_value = "Team A"
-    
+
         mock_away_elem = AsyncMock()
         mock_away_elem.text_content.return_value = "Team B"
-    
+
         mock_score_elem = AsyncMock()
         mock_score_elem.text_content.return_value = "vs"
-    
+
         # Mock query_selector to return elements for specific selectors
         def mock_query_selector(selector):
             if ".date" in selector or ".match-date" in selector:
@@ -340,21 +340,21 @@ mock_page = &lt;AsyncMock id='140610022069584'&gt;
             elif ".score" in selector or ".result" in selector:
                 return mock_score_elem
             return None
-    
+
         mock_card.query_selector.side_effect = mock_query_selector
-    
+
         result = await match_extractor._extract_match_from_card(
             mock_card, 0, "U14", "Northeast", None
         )
-    
+
         assert result is not None
         assert result.home_team == "Team A"
         assert result.away_team == "Team B"
 &gt;       assert result.status == "scheduled"
                ^^^^^^^^^^^^^
 
-tests/unit/test_match_extraction.py:336: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/unit/test_match_extraction.py:336:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = Match(match_id='U14_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 0, 0), location=None, competition='Unknown', home_team='Team A', away_team='Team B', home_score='TBD', away_score='TBD', match_status='TBD')
 item = 'status'
@@ -365,7 +365,7 @@ item = 'status'
             attribute = private_attributes[item]
             if hasattr(attribute, '__get__'):
                 return attribute.__get__(self, type(self))  # type: ignore
-    
+
             try:
                 # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
                 return self.__pydantic_private__[item]  # type: ignore
@@ -378,7 +378,7 @@ item = 'status'
                 pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
             except AttributeError:
                 pydantic_extra = None
-    
+
             if pydantic_extra:
                 try:
                     return pydantic_extra[item]
@@ -398,9 +398,9 @@ match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0
     def test_parse_row_text(self, match_extractor):
         """Test parsing match data from row text."""
         text = "12/19/2024 3:00 PM Team A Team B 2 - 1 Stadium A"
-    
+
         result = match_extractor._parse_row_text(text)
-    
+
         assert "12/19/2024" in result["date"]
 &gt;       assert "3:00 PM" in result["time"]
                             ^^^^^^^^^^^^^^
@@ -414,7 +414,7 @@ match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0
         home_score, away_score, status = match_extractor._parse_score_and_status(
             "vs", "scheduled"
         )
-    
+
 &gt;       assert home_score is None
 E       AssertionError: assert 'TBD' is None
 
@@ -426,13 +426,13 @@ match_extractor = &lt;src.scraper.match_extraction.MLSMatchExtractor object at 0
         home_score, away_score, status = match_extractor._parse_score_and_status(
             "3 - 2", ""
         )
-    
+
         assert home_score == 3
         assert away_score == 2
 &gt;       assert status == "completed"  # Should infer completed from score
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E       AssertionError: assert 'scheduled' == 'completed'
-E         
+E
 E         - completed
 E         + scheduled
 
@@ -452,11 +452,11 @@ mock_page = &lt;AsyncMock id='140610022069584'&gt;
             "venue": "Stadium A",
             "status": "completed",
         }
-    
+
         result = await match_extractor._create_match_from_data(
             data, 0, "U14", "Northeast", "MLS Next"
         )
-    
+
         assert result is not None
         assert result.home_team == "Team A"
         assert result.away_team == "Team B"
@@ -465,8 +465,8 @@ mock_page = &lt;AsyncMock id='140610022069584'&gt;
 &gt;       assert result.status == "completed"
                ^^^^^^^^^^^^^
 
-tests/unit/test_match_extraction.py:467: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/unit/test_match_extraction.py:467:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = Match(match_id='U14_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 15, 0), location='Stadium A', competition='MLS Next', home_team='Team A', away_team='Team B', home_score=2, away_score=1, match_status='completed')
 item = 'status'
@@ -477,7 +477,7 @@ item = 'status'
             attribute = private_attributes[item]
             if hasattr(attribute, '__get__'):
                 return attribute.__get__(self, type(self))  # type: ignore
-    
+
             try:
                 # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
                 return self.__pydantic_private__[item]  # type: ignore
@@ -490,7 +490,7 @@ item = 'status'
                 pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
             except AttributeError:
                 pydantic_extra = None
-    
+
             if pydantic_extra:
                 try:
                     return pydantic_extra[item]
@@ -517,12 +517,12 @@ mock_page = &lt;AsyncMock id='140610022838960'&gt;
             "home_team": "Team A",
             "away_team": "Team B",
         }
-    
+
         # This should handle the validation error gracefully
         result = await match_extractor._create_match_from_data(
             data, 0, "InvalidAge", "Northeast", None
         )
-    
+
 &gt;       assert result is None
 E       AssertionError: assert Match(match_id='InvalidAge_Northeast_0_20250924', match_datetime=datetime.datetime(2024, 12, 19, 0, 0), location=None, competition='Unknown', home_team='Team A', away_team='Team B', home_score=None, away_score=None, match_status='TBD') is None
 
@@ -537,24 +537,24 @@ mock_page = &lt;AsyncMock id='140610022069920'&gt;
         mock_table = AsyncMock()
         mock_row = AsyncMock()
         mock_cells = [AsyncMock() for _ in range(5)]
-    
+
         # Set up cell content
         mock_cells[0].text_content.return_value = "12/19/2024"
         mock_cells[1].text_content.return_value = "3:00 PM"
         mock_cells[2].text_content.return_value = "Team A"
         mock_cells[3].text_content.return_value = "Team B"
         mock_cells[4].text_content.return_value = "vs"
-    
+
         mock_row.query_selector_all.return_value = mock_cells
         mock_row.query_selector.return_value = None
         mock_table.query_selector_all.return_value = [mock_row]
         mock_page.query_selector.return_value = mock_table
-    
+
         with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
-    
+
             result = await match_extractor.extract_matches("U14", "Northeast")
-    
+
 &gt;           assert len(result) == 1
 E           assert 0 == 1
 E            +  where 0 = len([])
@@ -570,18 +570,18 @@ mock_page = &lt;AsyncMock id='140610021331968'&gt;
         mock_card = AsyncMock()
         mock_page.query_selector.return_value = None  # No table found
         mock_page.query_selector_all.return_value = [mock_card]
-    
+
         # Mock card text content
         mock_card.text_content.return_value = (
             "12/19/2024 3:00 PM Team A vs Team B Stadium A"
         )
         mock_card.query_selector.return_value = None  # No specific selectors
-    
+
         with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
-    
+
             result = await match_extractor.extract_matches("U14", "Northeast")
-    
+
 &gt;           assert len(result) == 1
 E           assert 0 == 1
 E            +  where 0 = len([])
@@ -598,7 +598,7 @@ mock_page = &lt;AsyncMock id='140610021342720'&gt;
         # Mock multiple rows with different statuses
         mock_table = AsyncMock()
         mock_rows = [AsyncMock() for _ in range(3)]
-    
+
         # Row 1: Scheduled match
         mock_cells_1 = [AsyncMock() for _ in range(5)]
         mock_cells_1[0].text_content.return_value = "12/19/2024"
@@ -608,7 +608,7 @@ mock_page = &lt;AsyncMock id='140610021342720'&gt;
         mock_cells_1[4].text_content.return_value = "vs"
         mock_rows[0].query_selector_all.return_value = mock_cells_1
         mock_rows[0].query_selector.return_value = None
-    
+
         # Row 2: Completed match
         mock_cells_2 = [AsyncMock() for _ in range(5)]
         mock_cells_2[0].text_content.return_value = "12/18/2024"
@@ -618,7 +618,7 @@ mock_page = &lt;AsyncMock id='140610021342720'&gt;
         mock_cells_2[4].text_content.return_value = "2 - 1"
         mock_rows[1].query_selector_all.return_value = mock_cells_2
         mock_rows[1].query_selector.return_value = None
-    
+
         # Row 3: In-progress match
         mock_cells_3 = [AsyncMock() for _ in range(6)]
         mock_cells_3[0].text_content.return_value = "12/19/2024"
@@ -629,15 +629,15 @@ mock_page = &lt;AsyncMock id='140610021342720'&gt;
         mock_cells_3[5].text_content.return_value = "live"
         mock_rows[2].query_selector_all.return_value = mock_cells_3
         mock_rows[2].query_selector.return_value = None
-    
+
         mock_table.query_selector_all.return_value = mock_rows
         mock_page.query_selector.return_value = mock_table
-    
+
         with patch.object(match_extractor.interactor, "wait_for_element") as mock_wait:
             mock_wait.return_value = True
-    
+
             result = await match_extractor.extract_matches("U14", "Northeast")
-    
+
 &gt;           assert len(result) == 3
 E           assert 0 == 3
 E            +  where 0 = len([])

@@ -105,11 +105,13 @@ class TestMLSFilterApplicator:
         # Make count() async and return 1
         async def async_count():
             return 1
+
         mock_select.count = async_count
 
         # Make select_option() async
         async def async_select_option(value=None):
             return None
+
         mock_select.select_option = async_select_option
 
         # Mock locator to return our select mock
@@ -162,11 +164,13 @@ class TestMLSFilterApplicator:
         # Make count() async and return 1
         async def async_count():
             return 1
+
         mock_select.count = async_count
 
         # Make select_option() async
         async def async_select_option(label=None):
             return None
+
         mock_select.select_option = async_select_option
 
         # Mock locator to return our select mock
@@ -177,7 +181,9 @@ class TestMLSFilterApplicator:
                 filter_applicator, "_validate_filter_option", return_value=True
             ),
             patch.object(
-                filter_applicator, "_get_iframe_content", return_value=mock_iframe_content
+                filter_applicator,
+                "_get_iframe_content",
+                return_value=mock_iframe_content,
             ),
         ):
             result = await filter_applicator.apply_club_filter("Test Club")
@@ -201,11 +207,13 @@ class TestMLSFilterApplicator:
         # Make count() async and return 1
         async def async_count():
             return 1
+
         mock_select.count = async_count
 
         # Make select_option() async
         async def async_select_option(label=None):
             return None
+
         mock_select.select_option = async_select_option
 
         # Mock locator to return our select mock
@@ -216,7 +224,9 @@ class TestMLSFilterApplicator:
                 filter_applicator, "_validate_filter_option", return_value=True
             ),
             patch.object(
-                filter_applicator, "_get_iframe_content", return_value=mock_iframe_content
+                filter_applicator,
+                "_get_iframe_content",
+                return_value=mock_iframe_content,
             ),
         ):
             result = await filter_applicator.apply_competition_filter(
@@ -237,20 +247,24 @@ class TestMLSFilterApplicator:
         mock_select_elements = []
         for _ in range(4):  # Division filter needs at least 4 select elements
             mock_select = MagicMock()
+
             # Make select_option() async
             async def async_select_option(value=None, label=None):
                 return None
+
             mock_select.select_option = async_select_option
             mock_select_elements.append(mock_select)
 
         # Make all() async and return list of select elements
         async def async_all():
             return mock_select_elements
+
         mock_locator.all = async_all
 
         # Make count() async and return 1
         async def async_count():
             return 1
+
         mock_locator.count = async_count
 
         # Mock locator to return our locator mock
@@ -261,7 +275,9 @@ class TestMLSFilterApplicator:
                 filter_applicator, "_validate_filter_option", return_value=True
             ),
             patch.object(
-                filter_applicator, "_get_iframe_content", return_value=mock_iframe_content
+                filter_applicator,
+                "_get_iframe_content",
+                return_value=mock_iframe_content,
             ),
         ):
             result = await filter_applicator.apply_division_filter("Northeast")
@@ -596,7 +612,9 @@ class TestMLSFilterApplicator:
 
         with (
             patch.object(
-                filter_applicator, "_get_iframe_content", return_value=mock_iframe_content
+                filter_applicator,
+                "_get_iframe_content",
+                return_value=mock_iframe_content,
             ),
             patch.object(
                 filter_applicator, "_validate_filter_option", return_value=True
@@ -605,7 +623,8 @@ class TestMLSFilterApplicator:
             patch.object(
                 filter_applicator.interactor,
                 "wait_for_element",
-                side_effect=lambda selector, timeout=None: selector == 'select[name*="age" i]',
+                side_effect=lambda selector, timeout=None: selector
+                == 'select[name*="age" i]',
             ),
             patch.object(
                 filter_applicator.interactor,

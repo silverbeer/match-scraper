@@ -80,24 +80,25 @@ class MLSScraperMetrics:
                 metric_readers.append(metric_reader)
 
                 import logging
+
                 logging.getLogger(__name__).info(
                     f"OpenTelemetry metrics configured for endpoint: {otlp_endpoint}"
                 )
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).warning(
                     f"Failed to configure OTLP metrics exporter: {e}. Metrics will not be exported."
                 )
         else:
             import logging
+
             logging.getLogger(__name__).info(
                 "OTEL_EXPORTER_OTLP_ENDPOINT not configured. Metrics will be collected but not exported."
             )
 
         # Set up meter provider
-        meter_provider = MeterProvider(
-            resource=resource, metric_readers=metric_readers
-        )
+        meter_provider = MeterProvider(resource=resource, metric_readers=metric_readers)
         metrics.set_meter_provider(meter_provider)
 
         # Get meter instance

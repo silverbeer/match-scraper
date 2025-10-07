@@ -691,13 +691,17 @@ async def run_scraper(
             matches = await scraper.scrape_matches()
 
             # Get API results from scraper (includes posted, errors, skipped, duplicates, updated)
-            api_results = scraper.api_results if scraper.api_results else {
-                "posted": 0,
-                "errors": 0,
-                "skipped": 0,
-                "duplicates": 0,
-                "updated": 0
-            }
+            api_results = (
+                scraper.api_results
+                if scraper.api_results
+                else {
+                    "posted": 0,
+                    "errors": 0,
+                    "skipped": 0,
+                    "duplicates": 0,
+                    "updated": 0,
+                }
+            )
 
             progress.update(scrape_task, description="✅ Scraping completed!")
             progress.remove_task(scrape_task)

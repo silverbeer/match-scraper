@@ -46,6 +46,7 @@ def create_test_config(**overrides):
     defaults.update(overrides)
     return ScrapingConfig(**defaults)
 
+
 logger = get_logger()
 
 # Test configuration
@@ -235,9 +236,13 @@ class TestMatchExtractionE2E:
         browser_config.headless = True  # Run headless for speed
 
         test_cases = [
-            create_test_config(age_group="U15", division="Southeast", look_back_days=14),
+            create_test_config(
+                age_group="U15", division="Southeast", look_back_days=14
+            ),
             create_test_config(age_group="U16", division="Central", look_back_days=7),
-            create_test_config(age_group="U17", division="Southwest", look_back_days=21),
+            create_test_config(
+                age_group="U17", division="Southwest", look_back_days=21
+            ),
         ]
 
         async with get_browser_manager(browser_config) as browser_manager:

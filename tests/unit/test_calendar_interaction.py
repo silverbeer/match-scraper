@@ -193,7 +193,9 @@ class TestMLSCalendarInteractor:
         assert calendar_interactor.iframe_content is None
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Complex mock setup - needs refactoring for proper async mock support")
+    @pytest.mark.skip(
+        reason="Complex mock setup - needs refactoring for proper async mock support"
+    )
     async def test_set_date_range_direct_input_success(self, calendar_interactor):
         """Test successful direct date input."""
         # Mock iframe content
@@ -205,11 +207,13 @@ class TestMLSCalendarInteractor:
         # Make count() async and return 1
         async def async_count():
             return 1
+
         mock_locator.count = async_count
 
         # Make click() async
         async def async_click():
             return None
+
         mock_locator.click = async_click
         mock_locator.first = MagicMock()
         mock_locator.first.click = async_click
@@ -292,7 +296,11 @@ class TestMLSCalendarInteractor:
     async def test_get_current_month_year_success(self, calendar_interactor):
         """Test successful current month/year retrieval."""
         # Mock the interactor's get_text_content method to return the test value
-        with patch.object(calendar_interactor.interactor, 'get_text_content', return_value="January 2024"):
+        with patch.object(
+            calendar_interactor.interactor,
+            "get_text_content",
+            return_value="January 2024",
+        ):
             month, year = await calendar_interactor._get_current_month_year()
 
         assert month == 1
@@ -324,7 +332,9 @@ class TestMLSCalendarInteractor:
     async def test_navigation_button_clicks(self, calendar_interactor):
         """Test calendar navigation button click methods."""
         # Mock the interactor's click_element method to return success
-        with patch.object(calendar_interactor.interactor, 'click_element', return_value=True):
+        with patch.object(
+            calendar_interactor.interactor, "click_element", return_value=True
+        ):
             # Test next month click
             result = await calendar_interactor._click_next_month()
             assert result is True
@@ -333,19 +343,25 @@ class TestMLSCalendarInteractor:
             calendar_interactor.interactor.click_element.assert_called()
 
         # Test prev month click
-        with patch.object(calendar_interactor.interactor, 'click_element', return_value=True):
+        with patch.object(
+            calendar_interactor.interactor, "click_element", return_value=True
+        ):
             result = await calendar_interactor._click_prev_month()
             assert result is True
             calendar_interactor.interactor.click_element.assert_called()
 
         # Test next year click
-        with patch.object(calendar_interactor.interactor, 'click_element', return_value=True):
+        with patch.object(
+            calendar_interactor.interactor, "click_element", return_value=True
+        ):
             result = await calendar_interactor._click_next_year()
             assert result is True
             calendar_interactor.interactor.click_element.assert_called()
 
         # Test prev year click
-        with patch.object(calendar_interactor.interactor, 'click_element', return_value=True):
+        with patch.object(
+            calendar_interactor.interactor, "click_element", return_value=True
+        ):
             result = await calendar_interactor._click_prev_year()
             assert result is True
             calendar_interactor.interactor.click_element.assert_called()
@@ -354,23 +370,31 @@ class TestMLSCalendarInteractor:
     async def test_navigation_button_clicks_no_elements(self, calendar_interactor):
         """Test navigation button clicks when no elements are found."""
         # Mock the interactor's click_element method to return False (no elements found)
-        with patch.object(calendar_interactor.interactor, 'click_element', return_value=False):
+        with patch.object(
+            calendar_interactor.interactor, "click_element", return_value=False
+        ):
             assert await calendar_interactor._click_next_month() is False
             assert await calendar_interactor._click_prev_month() is False
             assert await calendar_interactor._click_next_year() is False
             assert await calendar_interactor._click_prev_year() is False
 
     @pytest.mark.asyncio
-    async def test_navigation_button_clicks_no_button_found_duplicate(self, calendar_interactor):
+    async def test_navigation_button_clicks_no_button_found_duplicate(
+        self, calendar_interactor
+    ):
         """Test navigation button clicks when button not found (duplicate test - should be removed)."""
         # This test duplicates the previous test and should be skipped or removed
-        pytest.skip("Duplicate test - same as test_navigation_button_clicks_no_elements")
+        pytest.skip(
+            "Duplicate test - same as test_navigation_button_clicks_no_elements"
+        )
 
     @pytest.mark.asyncio
     async def test_apply_date_filter_no_button_found(self, calendar_interactor):
         """Test apply date filter when no apply button is found."""
         # Mock the interactor's click_element method to return False (no button found)
-        with patch.object(calendar_interactor.interactor, 'click_element', return_value=False):
+        with patch.object(
+            calendar_interactor.interactor, "click_element", return_value=False
+        ):
             result = await calendar_interactor.apply_date_filter()
             assert result is False
 
