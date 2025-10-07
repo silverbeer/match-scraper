@@ -8,6 +8,7 @@ error handling, and retry logic.
 
 import asyncio
 import os
+import time
 from typing import Any, Optional
 from urllib.parse import urljoin
 
@@ -15,8 +16,10 @@ import httpx
 from pydantic import BaseModel
 
 from ..utils.logger import get_logger
+from ..utils.metrics import get_metrics
 
 logger = get_logger()
+metrics = get_metrics()
 
 
 class HealthStatus(BaseModel):
@@ -196,6 +199,7 @@ class MissingTableClient:
             )
 
         url = urljoin(self.base_url, endpoint)
+        start_time = time.time()
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -221,6 +225,16 @@ class MissingTableClient:
                     response.raise_for_status()
 
                     result = response.json()
+
+                    # Record successful API call metrics
+                    duration = time.time() - start_time
+                    metrics.record_api_call(
+                        endpoint=endpoint,
+                        method=method,
+                        status_code=response.status_code,
+                        duration_seconds=duration,
+                    )
+
                     logger.info(
                         f"{method} request successful",
                         extra={
@@ -233,6 +247,15 @@ class MissingTableClient:
                     return result
 
             except httpx.HTTPStatusError as e:
+                # Record failed API call metrics
+                duration = time.time() - start_time
+                metrics.record_api_call(
+                    endpoint=endpoint,
+                    method=method,
+                    status_code=e.response.status_code,
+                    duration_seconds=duration,
+                )
+
                 if e.response.status_code < 500 or attempt == self.max_retries:
                     # Don't retry client errors (4xx) or if we've exhausted retries
                     error_msg = f"{method} {endpoint} failed with status {e.response.status_code}"
@@ -263,6 +286,15 @@ class MissingTableClient:
                 await asyncio.sleep(delay)
 
             except httpx.RequestError as e:
+                # Record failed API call metrics (network error - no status code)
+                duration = time.time() - start_time
+                metrics.record_api_call(
+                    endpoint=endpoint,
+                    method=method,
+                    status_code=0,  # Use 0 to indicate network error
+                    duration_seconds=duration,
+                )
+
                 if attempt == self.max_retries:
                     error_msg = f"{method} {endpoint} request failed: {str(e)}"
                     # Log at debug level to avoid cluttering CLI output - higher level will show user-friendly error
