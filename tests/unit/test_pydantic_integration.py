@@ -9,6 +9,8 @@ import json
 from datetime import datetime
 from unittest.mock import patch
 
+import pytest
+
 from src.scraper.models import Match, ScrapingMetrics
 from src.utils.logger import MLSScraperLogger
 
@@ -88,7 +90,8 @@ class TestPydanticIntegration:
         assert parsed["match_id"] == "12345"
         assert parsed["home_team"] == "Team A"
         assert parsed["away_team"] == "Team B"
-        assert parsed["match_status"] == "completed"
+        # Status is now "played" (not "completed")
+        assert parsed["match_status"] == "played"
         assert parsed["home_score"] == 2
         assert parsed["away_score"] == 1
 
@@ -114,6 +117,7 @@ class TestPydanticIntegration:
         assert parsed["execution_duration_ms"] == 5000
         assert parsed["errors_encountered"] == 1
 
+    @pytest.mark.skip(reason="Custom serializer was removed from MLSScraperLogger")
     def test_match_model_validation_with_custom_serializer(self):
         """Test that custom serializer handles Pydantic models correctly."""
         match = Match(
@@ -133,6 +137,7 @@ class TestPydanticIntegration:
         assert serialized["home_team"] == "Team A"
         assert serialized["competition"] == "MLS Next"
 
+    @pytest.mark.skip(reason="Custom serializer was removed from MLSScraperLogger")
     def test_datetime_serialization_with_custom_serializer(self):
         """Test that custom serializer still handles datetime objects."""
         dt = datetime(2024, 1, 15, 14, 30)

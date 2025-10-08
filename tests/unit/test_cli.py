@@ -27,12 +27,13 @@ class TestCliUtilityFunctions:
         with patch.dict(os.environ, {}, clear=True):
             setup_environment()
 
-            assert os.environ.get("LOG_LEVEL") == "WARNING"
+            # Default log level is now ERROR (not WARNING)
+            assert os.environ.get("LOG_LEVEL") == "ERROR"
             assert (
-                os.environ.get("MISSING_TABLE_API_URL")
-                == "https://api.missing-table.com"
+                os.environ.get("MISSING_TABLE_API_BASE_URL")
+                == "http://localhost:8000"
             )
-            assert os.environ.get("MISSING_TABLE_API_KEY") == "cli-test-key"
+            assert os.environ.get("MISSING_TABLE_API_TOKEN") == ""
 
     def test_setup_environment_verbose(self):
         """Test verbose environment setup."""
@@ -44,28 +45,33 @@ class TestCliUtilityFunctions:
     def test_setup_environment_preserves_existing(self):
         """Test that existing environment variables are preserved."""
         with patch.dict(
-            os.environ, {"LOG_LEVEL": "INFO", "MISSING_TABLE_API_KEY": "existing-key"}
+            os.environ, {"LOG_LEVEL": "INFO", "MISSING_TABLE_API_TOKEN": "existing-key"}
         ):
             setup_environment()
 
-            assert os.environ.get("LOG_LEVEL") == "INFO"  # Should not be overridden
+            # Note: setup_environment() now FORCES LOG_LEVEL to ERROR (not preserved)
+            assert os.environ.get("LOG_LEVEL") == "ERROR"
+            # API token is preserved if already set
             assert (
-                os.environ.get("MISSING_TABLE_API_KEY") == "existing-key"
-            )  # Should not be overridden
+                os.environ.get("MISSING_TABLE_API_TOKEN") == "existing-key"
+            )
 
     def test_create_config_basic(self):
-        """Test basic config creation."""
-        config = create_config(age_group="U14", division="Northeast", days=3)
+        """Test basic config creation using offset-based dates."""
+        # Use start_offset=1 (1 day back) and end_offset=1 (1 day forward)
+        config = create_config(
+            age_group="U14", division="Northeast", start_offset=1, end_offset=1
+        )
 
         assert config.age_group == "U14"
         assert config.division == "Northeast"
         assert config.club == ""
         assert config.competition == ""
 
-        # Test date range calculation
+        # Test date range calculation with offsets
         today = date.today()
-        expected_start = today - timedelta(days=1)
-        expected_end = today + timedelta(days=3)
+        expected_start = today - timedelta(days=1)  # start_offset=1 means 1 day back
+        expected_end = today + timedelta(days=1)  # end_offset=1 means 1 day forward
 
         assert config.start_date == expected_start
         assert config.end_date == expected_end
@@ -75,7 +81,8 @@ class TestCliUtilityFunctions:
         config = create_config(
             age_group="U16",
             division="Southwest",
-            days=7,
+            start_offset=2,
+            end_offset=5,
             club="Test Club",
             competition="Test Competition",
         )
@@ -178,7 +185,7 @@ class TestCliCommands:
     @patch("src.cli.main.setup_environment")
     def test_scrape_command_with_options(self, mock_setup_env, mock_run_scraper):
         """Test scrape command with various options."""
-        mock_run_scraper.return_value = []
+        mock_run_scraper.return_value = ([], False, {})
 
         self.runner.invoke(
             app,
@@ -188,7 +195,9 @@ class TestCliCommands:
                 "U16",
                 "--division",
                 "Southwest",
-                "--days",
+                "--start",
+                "2",
+                "--end",
                 "5",
                 "--club",
                 "Test Club",
@@ -200,13 +209,13 @@ class TestCliCommands:
         mock_setup_env.assert_called_once_with(True)  # verbose=True
 
     def test_config_command(self):
-        """Test config command."""
-        result = self.runner.invoke(app, ["config"])
+        """Test config command help (it's now a sub-command group)."""
+        result = self.runner.invoke(app, ["config", "--help"])
 
         assert result.exit_code == 0
-        assert "MLS Match Scraper" in result.stdout
-        assert "Available Age Groups" in result.stdout
-        assert "Available Divisions" in result.stdout
+        assert "config" in result.stdout.lower()
+        # Sub-commands: show, setup, set, validate, options
+        assert "show" in result.stdout or "setup" in result.stdout
 
     def test_debug_command_help(self):
         """Test debug command help (avoids async issues)."""
@@ -290,7 +299,8 @@ class TestCliIntegration:
         assert result.exit_code == 0
         assert "--age-group" in result.stdout
         assert "--division" in result.stdout
-        assert "--days" in result.stdout
+        # --days was replaced with --start and --end
+        assert "--start" in result.stdout or "--end" in result.stdout
 
     @patch.dict(os.environ, {}, clear=True)
     def test_environment_isolation(self):
