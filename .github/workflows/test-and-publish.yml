@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for diff-cover
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -80,8 +82,9 @@ jobs:
           # Extract key metrics for badges
           COVERAGE=$(python -c "import json; data=json.load(open('$REPORT_DIR/coverage.json')); print(f\"{data['totals']['percent_covered']:.1f}\")")
           TESTS_TOTAL=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary']['total'])")
-          TESTS_PASSED=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary']['passed'])")
-          TESTS_FAILED=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary']['failed'])")
+          TESTS_PASSED=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary'].get('passed', 0))")
+          # Calculate failed tests (report.json uses 'total' and individual status counts)
+          TESTS_FAILED=$(python -c "import json; data=json.load(open('$REPORT_DIR/report.json')); print(data['summary'].get('failed', 0) if 'failed' in data['summary'] else data['summary']['total'] - data['summary'].get('passed', 0))")
 
           # Create metrics file for badges
           mkdir -p site/badges
