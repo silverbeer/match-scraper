@@ -676,6 +676,7 @@ class MatchAPIIntegrator:
             game_date = match.match_datetime.date().isoformat()
 
             api_data = {
+                "match_id": match.match_id,
                 "game_date": game_date,
                 "home_team_id": home_team_id,
                 "away_team_id": away_team_id,
