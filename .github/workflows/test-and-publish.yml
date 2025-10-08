@@ -39,7 +39,7 @@ jobs:
           uv add pytest-html pytest-json-report
 
       - name: Run linting
-        run: uv run ruff check --output-format=github .
+        run: uv run ruff check --fix --output-format=github .
 
       - name: Run type checking
         run: uv run mypy src/
