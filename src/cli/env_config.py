@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -12,7 +12,7 @@ from rich.table import Table
 console = Console()
 
 # Required and optional environment variables
-REQUIRED_ENV_VARS = {
+REQUIRED_ENV_VARS: dict[str, dict[str, Any]] = {
     "MISSING_TABLE_API_BASE_URL": {
         "description": "API endpoint for missing-table service",
         "default": "https://api.missing-table.com",
@@ -26,7 +26,7 @@ REQUIRED_ENV_VARS = {
     },
 }
 
-OPTIONAL_ENV_VARS = {
+OPTIONAL_ENV_VARS: dict[str, dict[str, Any]] = {
     "LOG_LEVEL": {
         "description": "Logging level for CLI",
         "default": "WARNING",
@@ -142,7 +142,7 @@ def get_current_config() -> tuple[dict[str, Optional[str]], dict[str, Optional[s
     return required_config, optional_config
 
 
-def display_current_config():
+def display_current_config() -> None:
     """Display current environment configuration."""
     required_config, optional_config = get_current_config()
     env_file = get_env_file_path()
@@ -198,7 +198,7 @@ def display_current_config():
     console.print(optional_table)
 
 
-def interactive_setup():
+def interactive_setup() -> None:
     """Interactive setup of environment variables."""
     console.print("[bold]🚀 Interactive Environment Setup[/bold]\n")
     console.print("This will help you configure the required environment variables.\n")

@@ -88,7 +88,7 @@ def normalize_team_name_for_display(team_name: str) -> str:
     return TEAM_NAME_MAPPINGS.get(team_name, team_name)
 
 
-def setup_environment(verbose: bool = False):
+def setup_environment(verbose: bool = False) -> None:
     """Set up environment variables for CLI usage."""
     # Load .env file first
     try:
@@ -112,7 +112,7 @@ def setup_environment(verbose: bool = False):
     logger.setLevel(log_level)
 
 
-def handle_cli_error(e: Exception, verbose: bool = False):
+def handle_cli_error(e: Exception, verbose: bool = False) -> None:
     """Handle CLI errors with user-friendly messages."""
     error_message = str(e)
 
@@ -247,7 +247,7 @@ def create_config(
     )
 
 
-def display_header():
+def display_header() -> None:
     """Display the application header."""
     if not use_rich:
         return  # Skip header in container environments
@@ -263,7 +263,7 @@ def display_header():
     console.print(panel)
 
 
-def display_config_summary(config: ScrapingConfig):
+def display_config_summary(config: ScrapingConfig) -> None:
     """Display configuration summary."""
     if not use_rich:
         return  # Skip config display in container environments
@@ -284,7 +284,7 @@ def display_config_summary(config: ScrapingConfig):
     console.print(Panel(config_table, title="📋 Configuration", border_style="cyan"))
 
 
-def display_matches_table(matches: list[Match]):
+def display_matches_table(matches: list[Match]) -> None:
     """Display matches in a beautiful table format."""
     if not matches:
         console.print(
@@ -339,16 +339,12 @@ def display_matches_table(matches: list[Match]):
             score_text = match.get_score_string()
             if match.match_status == "played":
                 score_status = f"[green]{score_text}[/green]"
-            elif match.match_status == "in_progress":
-                score_status = f"[yellow]🔄 {score_text}[/yellow]"
             else:
-                # Show score even for "scheduled" matches if they have one
+                # Show score even for "scheduled" or "TBD" matches if they have one
                 score_status = f"[cyan]{score_text}[/cyan]"
         else:
             # No score available - check if it's TBD vs upcoming
-            if match.match_status == "in_progress":
-                score_status = "[yellow]🔄 Live[/yellow]"
-            elif match.match_status == "scheduled":
+            if match.match_status == "scheduled":
                 # For past/current dates, show TBD; for future dates, show Scheduled
                 try:
                     today = date.today()
@@ -413,7 +409,7 @@ def display_matches_table(matches: list[Match]):
         console.print("=" * 50)
 
 
-def display_statistics(matches: list[Match]):
+def display_statistics(matches: list[Match]) -> None:
     """Display match statistics."""
     if not matches:
         return
@@ -470,7 +466,7 @@ def display_statistics(matches: list[Match]):
     console.print(Panel(stats_table, title="📊 Statistics", border_style="magenta"))
 
 
-def display_api_results(api_results: dict, api_healthy: bool):
+def display_api_results(api_results: dict, api_healthy: bool) -> None:
     """Display API integration results in a prominent panel."""
     if not api_results:
         if api_healthy:
@@ -546,7 +542,7 @@ def display_api_results(api_results: dict, api_healthy: bool):
     console.print(Panel(api_table, title=title, border_style=title_style))
 
 
-def display_upcoming_games(matches: list[Match], limit: int = 5):
+def display_upcoming_games(matches: list[Match], limit: int = 5) -> None:
     """Display upcoming games in a special format."""
     from datetime import date
 
@@ -817,7 +813,7 @@ def scrape(
             "--save", help="Save matches to JSON file (e.g., --save games.json)"
         ),
     ] = None,
-):
+) -> None:
     """
     ⚽ Scrape MLS match data and display in beautiful format.
 
@@ -960,7 +956,7 @@ def upcoming(
             "--verbose", "-v", help="Show detailed logs and full error traces"
         ),
     ] = False,
-):
+) -> None:
     """
     🔮 Show upcoming games in a clean, focused format.
 
@@ -1025,7 +1021,7 @@ def interactive(
             "--verbose", "-v", help="Show detailed logs and full error traces"
         ),
     ] = False,
-):
+) -> None:
     """
     🎮 Interactive mode for exploring MLS match data.
 
@@ -1099,7 +1095,7 @@ def interactive(
 
 
 @app.command()
-def test_quiet():
+def test_quiet() -> None:
     """
     🔇 Test quiet mode output with sample data.
 
@@ -1116,6 +1112,8 @@ def test_quiet():
             match_datetime=datetime(2025, 9, 20, 15, 0),
             location="Toyota Stadium",
             competition="MLS Next",
+            home_score=None,
+            away_score=None,
         ),
         Match(
             match_id="demo_2",
@@ -1164,14 +1162,14 @@ def cache_load(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show detailed logs")
     ] = False,
-):
+) -> None:
     """Load teams into cache and display statistics."""
     setup_environment(verbose)
 
     if not verbose:
         display_header()
 
-    async def load_cache():
+    async def load_cache() -> None:
         try:
             from src.api.missing_table_client import MissingTableClient
             from src.scraper.api_integration import MatchAPIIntegrator
@@ -1225,14 +1223,14 @@ def cache_status(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show detailed logs")
     ] = False,
-):
+) -> None:
     """Show current cache status and statistics."""
     setup_environment(verbose)
 
     if not verbose:
         display_header()
 
-    async def show_status():
+    async def show_status() -> None:
         try:
             from src.api.missing_table_client import MissingTableClient
             from src.scraper.api_integration import MatchAPIIntegrator
@@ -1281,14 +1279,14 @@ def cache_clear(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show detailed logs")
     ] = False,
-):
+) -> None:
     """Clear the teams cache for testing purposes."""
     setup_environment(verbose)
 
     if not verbose:
         display_header()
 
-    async def clear_cache():
+    async def clear_cache() -> None:
         try:
             from src.api.missing_table_client import MissingTableClient
             from src.scraper.api_integration import MatchAPIIntegrator
@@ -1315,14 +1313,14 @@ def cache_test(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show detailed logs")
     ] = False,
-):
+) -> None:
     """Test cache performance with specific team names."""
     setup_environment(verbose)
 
     if not verbose:
         display_header()
 
-    async def test_teams():
+    async def test_teams() -> None:
         try:
             import time
 
@@ -1400,14 +1398,14 @@ def cache_benchmark(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show detailed logs")
     ] = False,
-):
+) -> None:
     """Benchmark cache performance vs traditional individual lookups."""
     setup_environment(verbose)
 
     if not verbose:
         display_header()
 
-    async def benchmark():
+    async def benchmark() -> None:
         try:
             import time
 
@@ -1526,7 +1524,7 @@ def cache_benchmark(
 
 
 @app.command()
-def demo():
+def demo() -> None:
     """
     🎭 Demo mode with sample data to test the CLI interface.
 
@@ -1545,6 +1543,8 @@ def demo():
             match_datetime=datetime(2025, 9, 20, 15, 0),
             location="Toyota Stadium",
             competition="MLS Next",
+            home_score=None,
+            away_score=None,
         ),
         Match(
             match_id="demo_2",
@@ -1616,7 +1616,7 @@ def debug(
     timeout: Annotated[
         int, typer.Option("--timeout", "-t", help="Browser timeout in seconds")
     ] = 60,
-):
+) -> None:
     """
     🐛 Debug the MLS scraper step by step.
 
@@ -1665,7 +1665,7 @@ def debug(
     console.print("[green]✅ Debug session completed![/green]")
 
 
-def test_url_accessibility():
+def test_url_accessibility() -> None:
     """Test if the MLS URL is accessible via HTTP."""
     import requests
 
@@ -1701,7 +1701,7 @@ def test_url_accessibility():
         console.print(f"   ❌ HTTP test failed: {e}")
 
 
-async def test_browser_init(headless: bool, timeout: int):
+async def test_browser_init(headless: bool, timeout: int) -> None:
     """Test browser initialization."""
     from src.scraper.browser import BrowserConfig, BrowserManager
 
@@ -1734,7 +1734,7 @@ async def test_browser_init(headless: bool, timeout: int):
         console.print("   💡 Try: uv run playwright install")
 
 
-async def test_navigation(headless: bool, timeout: int):
+async def test_navigation(headless: bool, timeout: int) -> None:
     """Test navigation to MLS website."""
     from src.scraper.browser import BrowserConfig, BrowserManager, PageNavigator
 
@@ -1776,7 +1776,7 @@ async def test_navigation(headless: bool, timeout: int):
         console.print(f"   ❌ Navigation test failed: {e}")
 
 
-async def test_consent_handling(headless: bool, timeout: int):
+async def test_consent_handling(headless: bool, timeout: int) -> None:
     """Test cookie consent handling."""
     from src.scraper.browser import BrowserConfig, BrowserManager, PageNavigator
     from src.scraper.consent_handler import MLSConsentHandler
@@ -1837,7 +1837,7 @@ async def test_consent_handling(headless: bool, timeout: int):
         console.print(f"   ❌ Consent test failed: {e}")
 
 
-async def test_filters(headless: bool, timeout: int):
+async def test_filters(headless: bool, timeout: int) -> None:
     """Test filter application."""
     from datetime import date, timedelta
 
@@ -1919,7 +1919,7 @@ async def test_filters(headless: bool, timeout: int):
         console.print(f"   ❌ Filter test failed: {e}")
 
 
-async def test_extraction(headless: bool, timeout: int):
+async def test_extraction(headless: bool, timeout: int) -> None:
     """Test match extraction."""
     from src.scraper.browser import BrowserConfig, BrowserManager, PageNavigator
     from src.scraper.match_extraction import MLSMatchExtractor
@@ -1971,7 +1971,7 @@ async def test_extraction(headless: bool, timeout: int):
         console.print(f"   ❌ Extraction test failed: {e}")
 
 
-async def test_page_inspection(headless: bool, timeout: int):
+async def test_page_inspection(headless: bool, timeout: int) -> None:
     """Inspect page elements to understand the structure."""
     from src.scraper.browser import BrowserConfig, BrowserManager, PageNavigator
     from src.scraper.consent_handler import MLSConsentHandler
@@ -2084,7 +2084,7 @@ def inspect(
     timeout: Annotated[
         int, typer.Option("--timeout", "-t", help="Browser timeout in seconds")
     ] = 120,
-):
+) -> None:
     """
     🔍 Open browser and navigate to MLS page for manual inspection.
 
@@ -2101,7 +2101,7 @@ def inspect(
     asyncio.run(inspect_browser(headless, timeout))
 
 
-async def inspect_browser(headless: bool, timeout: int):
+async def inspect_browser(headless: bool, timeout: int) -> None:
     """Open browser and keep it open for manual inspection."""
     from src.scraper.browser import BrowserConfig, BrowserManager, PageNavigator
 
@@ -2259,7 +2259,7 @@ app.add_typer(config_app, name="config")
 
 
 @config_app.command("show")
-def config_show():
+def config_show() -> None:
     """
     📋 Show current environment configuration.
 
@@ -2270,7 +2270,7 @@ def config_show():
 
 
 @config_app.command("setup")
-def config_setup():
+def config_setup() -> None:
     """
     🚀 Interactive setup of environment variables.
 
@@ -2284,7 +2284,7 @@ def config_setup():
 def config_set(
     variable: Annotated[str, typer.Argument(help="Environment variable name")],
     value: Annotated[str, typer.Argument(help="Environment variable value")],
-):
+) -> None:
     """
     📝 Set a specific environment variable.
 
@@ -2297,7 +2297,7 @@ def config_set(
 
 
 @config_app.command("validate")
-def config_validate():
+def config_validate() -> None:
     """
     ✅ Validate current configuration.
 
@@ -2313,7 +2313,7 @@ def config_validate():
 
 
 @config_app.command("options")
-def config_options():
+def config_options() -> None:
     """
     🎯 Show available CLI options and examples.
 
@@ -2369,7 +2369,7 @@ def config_options():
 
 # Backward compatibility - keep the old config command as an alias
 @app.command("options")
-def options():
+def options() -> None:
     """
     🎯 Show available CLI options and examples (alias for 'config options').
 

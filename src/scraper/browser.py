@@ -7,7 +7,7 @@ and resource cleanup functionality optimized for containerized execution.
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from playwright.async_api import (
     Browser,
@@ -143,7 +143,7 @@ class BrowserManager:
             )
 
     @asynccontextmanager
-    async def get_page(self):
+    async def get_page(self) -> Any:
         """Context manager for page lifecycle management."""
         page = None
         try:
@@ -549,7 +549,7 @@ class ElementInteractor:
 
 
 @asynccontextmanager
-async def get_browser_manager(config: Optional[BrowserConfig] = None):
+async def get_browser_manager(config: Optional[BrowserConfig] = None) -> Any:
     """
     Context manager for browser lifecycle management.
 

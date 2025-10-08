@@ -7,9 +7,9 @@ and validation.
 """
 
 import asyncio
-from typing import Optional
+from typing import Any, Optional
 
-from playwright.async_api import Page
+from playwright.async_api import Frame, Page
 
 from ..utils.logger import get_logger
 from .browser import ElementInteractor
@@ -99,9 +99,9 @@ class MLSFilterApplicator:
         self.timeout = timeout
         self.interactor = ElementInteractor(page, timeout)
         self._available_options: dict[str, set[str]] = {}
-        self._iframe_content = None
+        self._iframe_content: Optional[Frame] = None
 
-    async def _get_iframe_content(self):
+    async def _get_iframe_content(self) -> Any:
         """
         Get the iframe content frame for filter interactions.
 
@@ -1443,7 +1443,7 @@ class MLSFilterApplicator:
 
 
 # Example usage
-async def example_filter_usage():
+async def example_filter_usage() -> None:
     """
     Example demonstrating how to use the MLSFilterApplicator.
 

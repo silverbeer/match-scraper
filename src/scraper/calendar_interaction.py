@@ -10,7 +10,7 @@ import asyncio
 from datetime import date
 from typing import Optional
 
-from playwright.async_api import Page
+from playwright.async_api import Frame, Page
 
 from ..utils.logger import get_logger
 from .browser import ElementInteractor
@@ -61,7 +61,7 @@ class MLSCalendarInteractor:
         self.page = page
         self.timeout = timeout
         self.interactor = ElementInteractor(page, timeout)
-        self.iframe_content = None
+        self.iframe_content: Optional[Frame] = None
 
     async def open_calendar_widget(self) -> bool:
         """
@@ -709,6 +709,7 @@ class MLSCalendarInteractor:
                         month_str, year_str = group1, group2
 
                     # Try to parse month
+                    month: Optional[int]
                     try:
                         month = int(month_str)
                     except ValueError:
@@ -798,8 +799,8 @@ class MLSCalendarInteractor:
                         return False
 
                 # Check if we've reached the target year
-                _, current_year = await self._get_current_month_year()
-                if current_year == target_year:
+                _, updated_year = await self._get_current_month_year()
+                if updated_year == target_year:
                     return True
 
                 # Small delay between clicks
@@ -859,8 +860,8 @@ class MLSCalendarInteractor:
                         return False
 
                 # Check if we've reached the target month
-                current_month, _ = await self._get_current_month_year()
-                if current_month == target_month:
+                updated_month, _ = await self._get_current_month_year()
+                if updated_month == target_month:
                     return True
 
                 # Small delay between clicks
@@ -945,7 +946,7 @@ class MLSCalendarInteractor:
 
 
 # Example usage
-async def example_calendar_usage():
+async def example_calendar_usage() -> None:
     """
     Example demonstrating how to use the MLSCalendarInteractor.
 

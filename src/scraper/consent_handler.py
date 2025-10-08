@@ -262,7 +262,7 @@ class MLSConsentHandler:
 
 
 # Example usage and testing function
-async def test_consent_handling():
+async def test_consent_handling() -> None:
     """
     Test consent handling functionality.
     """
