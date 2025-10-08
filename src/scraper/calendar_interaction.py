@@ -799,9 +799,8 @@ class MLSCalendarInteractor:
                         return False
 
                 # Check if we've reached the target year
-                _, current_year_value = await self._get_current_month_year()
-                current_year: Optional[int] = current_year_value
-                if current_year == target_year:
+                _, updated_year = await self._get_current_month_year()
+                if updated_year == target_year:
                     return True
 
                 # Small delay between clicks
@@ -861,9 +860,8 @@ class MLSCalendarInteractor:
                         return False
 
                 # Check if we've reached the target month
-                current_month_value, _ = await self._get_current_month_year()
-                current_month: Optional[int] = current_month_value
-                if current_month == target_month:
+                updated_month, _ = await self._get_current_month_year()
+                if updated_month == target_month:
                     return True
 
                 # Small delay between clicks

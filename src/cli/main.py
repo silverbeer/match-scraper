@@ -339,16 +339,12 @@ def display_matches_table(matches: list[Match]) -> None:
             score_text = match.get_score_string()
             if match.match_status == "played":
                 score_status = f"[green]{score_text}[/green]"
-            elif match.match_status == "in_progress":
-                score_status = f"[yellow]🔄 {score_text}[/yellow]"
             else:
-                # Show score even for "scheduled" matches if they have one
+                # Show score even for "scheduled" or "TBD" matches if they have one
                 score_status = f"[cyan]{score_text}[/cyan]"
         else:
             # No score available - check if it's TBD vs upcoming
-            if match.match_status == "in_progress":
-                score_status = "[yellow]🔄 Live[/yellow]"
-            elif match.match_status == "scheduled":
+            if match.match_status == "scheduled":
                 # For past/current dates, show TBD; for future dates, show Scheduled
                 try:
                     today = date.today()
@@ -1116,6 +1112,8 @@ def test_quiet() -> None:
             match_datetime=datetime(2025, 9, 20, 15, 0),
             location="Toyota Stadium",
             competition="MLS Next",
+            home_score=None,
+            away_score=None,
         ),
         Match(
             match_id="demo_2",
@@ -1545,6 +1543,8 @@ def demo() -> None:
             match_datetime=datetime(2025, 9, 20, 15, 0),
             location="Toyota Stadium",
             competition="MLS Next",
+            home_score=None,
+            away_score=None,
         ),
         Match(
             match_id="demo_2",
