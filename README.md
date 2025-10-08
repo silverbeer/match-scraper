@@ -14,6 +14,18 @@ Automated MLS match data scraper for missing-table.com API integration.
 
 This application scrapes match data from the MLS Next website and posts it to the missing-table.com API. Deployed on Google Kubernetes Engine (GKE) as a scheduled CronJob, built with Playwright and comprehensive monitoring.
 
+## 📚 Documentation
+
+**[📖 Full Documentation →](docs/README.md)**
+
+Quick links:
+- **[CLI Usage Guide](docs/guides/cli-usage.md)** - Complete CLI reference and examples
+- **[GKE Deployment](docs/deployment/gke-deployment.md)** - Kubernetes deployment guide
+- **[Testing Guide](docs/development/testing.md)** - Unit, integration, and E2E tests
+- **[Observability Setup](docs/observability/grafana-cloud-setup.md)** - Metrics and logging with Grafana Cloud
+
+Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
+
 ## Features
 
 - **Automated Scraping**: Playwright-based web scraping of MLS Next match data
@@ -235,9 +247,9 @@ For manual deployments:
 ```
 
 **Documentation:**
-- 📖 [GKE Deployment Guide](GKE_DEPLOYMENT.md) - Complete GKE deployment guide
-- 🧪 [Testing Guide](GKE_TESTING_GUIDE.md) - Testing and monitoring guide
-- 🚀 [Migration Guide](MIGRATION_TO_GKE.md) - Migration from AWS Lambda
+- 📖 [GKE Deployment Guide](docs/deployment/gke-deployment.md) - Complete GKE deployment guide
+- 🧪 [Testing Guide](docs/deployment/gke-testing.md) - Testing and monitoring guide
+- 🚀 [Migration Guide](docs/deployment/migration-to-gke.md) - Migration from AWS Lambda
 
 **Infrastructure Features:**
 - Kubernetes CronJob with configurable schedule
