@@ -20,31 +20,6 @@ spec:
             app: mls-scraper
         spec:
           restartPolicy: OnFailure
-          initContainers:
-          - name: config-preprocessor
-            image: bhgedigital/envsubst:latest
-            command: ["/bin/sh", "-c"]
-            args:
-              - |
-                envsubst < /etc/promtail-template/promtail.yaml > /etc/promtail-processed/promtail.yaml
-                echo "Promtail config processed successfully"
-                echo "Config file size: $(wc -c < /etc/promtail-processed/promtail.yaml) bytes"
-            env:
-            - name: LOKI_USER_ID
-              valueFrom:
-                secretKeyRef:
-                  name: mls-scraper-secrets
-                  key: LOKI_USER_ID
-            - name: LOKI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mls-scraper-secrets
-                  key: LOKI_API_KEY
-            volumeMounts:
-            - name: promtail-config
-              mountPath: /etc/promtail-template
-            - name: promtail-processed
-              mountPath: /etc/promtail-processed
           containers:
           - name: mls-scraper
             # Replace with your actual GCP Container Registry image
@@ -130,9 +105,6 @@ spec:
                 secretKeyRef:
                   name: mls-scraper-secrets
                   key: OTEL_EXPORTER_OTLP_HEADERS
-            volumeMounts:
-            - name: logs
-              mountPath: /var/log/scraper
             resources:
               requests:
                 memory: "1Gi"
@@ -149,31 +121,3 @@ spec:
               capabilities:
                 drop:
                 - ALL
-
-          # Promtail sidecar for log forwarding to Grafana Loki
-          - name: promtail
-            image: grafana/promtail:2.9.3
-            args:
-            - -config.file=/etc/promtail/promtail.yaml
-            volumeMounts:
-            - name: logs
-              mountPath: /var/log/scraper
-              readOnly: true
-            - name: promtail-processed
-              mountPath: /etc/promtail
-            resources:
-              requests:
-                memory: "128Mi"
-                cpu: "100m"
-              limits:
-                memory: "256Mi"
-                cpu: "200m"
-
-          volumes:
-          - name: logs
-            emptyDir: {}
-          - name: promtail-config
-            configMap:
-              name: promtail-config
-          - name: promtail-processed
-            emptyDir: {}
