@@ -945,7 +945,7 @@ class MLSCalendarInteractor:
 
 
 # Example usage
-async def example_calendar_usage():
+async def example_calendar_usage() -> None:
     """
     Example demonstrating how to use the MLSCalendarInteractor.
 

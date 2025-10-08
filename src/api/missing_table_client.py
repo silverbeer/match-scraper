@@ -414,7 +414,7 @@ class MissingTableClient:
 
         return result
 
-    async def list_games(self, **filters) -> list[dict[str, Any]]:
+    async def list_games(self, **filters: Any) -> list[dict[str, Any]]:
         """
         List games with optional filters.
 

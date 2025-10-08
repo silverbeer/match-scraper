@@ -8,7 +8,7 @@ error handling, retry logic, and metrics emission.
 
 import asyncio
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from ..api.missing_table_client import MissingTableClient
 from ..utils.logger import get_logger
@@ -301,7 +301,7 @@ class MLSScraper:
 
             return matches
 
-    async def _navigate_to_mls_website(self, page) -> None:
+    async def _navigate_to_mls_website(self, page: Any) -> None:
         """
         Navigate to MLS Next website with retry logic and consent handling.
 
@@ -340,7 +340,7 @@ class MLSScraper:
 
         logger.info("Navigation and consent handling completed")
 
-    async def _apply_filters_with_retry(self, page) -> None:
+    async def _apply_filters_with_retry(self, page: Any) -> None:
         """
         Apply filters with retry logic.
 
@@ -397,7 +397,7 @@ class MLSScraper:
                         f"Filter application failed after {self.MAX_RETRIES + 1} attempts: {e}"
                     ) from e
 
-    async def _set_date_range_with_retry(self, page) -> None:
+    async def _set_date_range_with_retry(self, page: Any) -> None:
         """
         Set date range filter with retry logic.
 
@@ -454,7 +454,7 @@ class MLSScraper:
                         f"Date range setting failed after {self.MAX_RETRIES + 1} attempts: {e}"
                     ) from e
 
-    async def _extract_matches_with_retry(self, page) -> list[Match]:
+    async def _extract_matches_with_retry(self, page: Any) -> list[Match]:
         """
         Extract matches with retry logic.
 
@@ -752,7 +752,7 @@ class MLSScraper:
 
 
 # Example usage and testing function
-async def example_scraper_usage():
+async def example_scraper_usage() -> None:
     """
     Example demonstrating how to use the MLSScraper.
 

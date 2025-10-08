@@ -7,7 +7,7 @@ and validation.
 """
 
 import asyncio
-from typing import Optional
+from typing import Any, Optional
 
 from playwright.async_api import Page
 
@@ -101,7 +101,7 @@ class MLSFilterApplicator:
         self._available_options: dict[str, set[str]] = {}
         self._iframe_content = None
 
-    async def _get_iframe_content(self):
+    async def _get_iframe_content(self) -> Any:
         """
         Get the iframe content frame for filter interactions.
 
@@ -1443,7 +1443,7 @@ class MLSFilterApplicator:
 
 
 # Example usage
-async def example_filter_usage():
+async def example_filter_usage() -> None:
     """
     Example demonstrating how to use the MLSFilterApplicator.
 

@@ -143,22 +143,22 @@ class MLSScraperLogger:
         context.setdefault("service", self.service_name)
         return context
 
-    def info(self, message: str, **kwargs) -> None:
+    def info(self, message: str, **kwargs: Any) -> None:
         """Log info message with context."""
         extra = self._add_service_context(kwargs.get("extra"))
         self._logger.info(message, extra=extra)
 
-    def debug(self, message: str, **kwargs) -> None:
+    def debug(self, message: str, **kwargs: Any) -> None:
         """Log debug message with context."""
         extra = self._add_service_context(kwargs.get("extra"))
         self._logger.debug(message, extra=extra)
 
-    def warning(self, message: str, **kwargs) -> None:
+    def warning(self, message: str, **kwargs: Any) -> None:
         """Log warning message with context."""
         extra = self._add_service_context(kwargs.get("extra"))
         self._logger.warning(message, extra=extra)
 
-    def error(self, message: str, **kwargs) -> None:
+    def error(self, message: str, **kwargs: Any) -> None:
         """Log error message with context."""
         extra = self._add_service_context(kwargs.get("extra"))
         self._logger.error(message, extra=extra)

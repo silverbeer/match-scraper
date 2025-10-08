@@ -142,7 +142,7 @@ def get_current_config() -> tuple[dict[str, Optional[str]], dict[str, Optional[s
     return required_config, optional_config
 
 
-def display_current_config():
+def display_current_config() -> None:
     """Display current environment configuration."""
     required_config, optional_config = get_current_config()
     env_file = get_env_file_path()
@@ -198,7 +198,7 @@ def display_current_config():
     console.print(optional_table)
 
 
-def interactive_setup():
+def interactive_setup() -> None:
     """Interactive setup of environment variables."""
     console.print("[bold]🚀 Interactive Environment Setup[/bold]\n")
     console.print("This will help you configure the required environment variables.\n")

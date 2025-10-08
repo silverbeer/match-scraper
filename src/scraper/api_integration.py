@@ -18,7 +18,9 @@ logger = get_logger()
 class MatchAPIIntegrator:
     """Handles integration between scraped matches and missing-table API."""
 
-    def __init__(self, api_client: MissingTableClient, config=None):
+    def __init__(
+        self, api_client: MissingTableClient, config: Optional[Any] = None
+    ) -> None:
         """Initialize the integrator with an API client."""
         self.client = api_client
         self.config = config
@@ -339,7 +341,7 @@ class MatchAPIIntegrator:
 
     async def _initialize_entity_ids(
         self, matches: list[Match], age_group: str, division: str
-    ):
+    ) -> None:
         """Initialize and cache entity IDs needed for API calls."""
         logger.info("Initializing entity IDs for API integration")
 
@@ -358,7 +360,7 @@ class MatchAPIIntegrator:
 
     async def _ensure_teams_exist(
         self, team_names: set[str], age_group: str, division: str
-    ):
+    ) -> None:
         """Ensure all teams exist in the API and cache their IDs."""
         logger.info(f"Ensuring {len(team_names)} teams exist in API")
 
@@ -473,14 +475,14 @@ class MatchAPIIntegrator:
 
         return team_id
 
-    async def _cache_age_group_id(self, age_group: str):
+    async def _cache_age_group_id(self, age_group: str) -> None:
         """Cache the age group ID."""
         if age_group not in self._age_group_cache:
             age_group_id = await self._get_age_group_id(age_group)
             if age_group_id:
                 self._age_group_cache[age_group] = age_group_id
 
-    async def _cache_division_id(self, division: str):
+    async def _cache_division_id(self, division: str) -> None:
         """Cache the division ID."""
         if division not in self._division_cache:
             division_id = await self._get_division_id(division)

@@ -8,7 +8,7 @@ and handling different match statuses with comprehensive error handling.
 
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from playwright.async_api import Page
 
@@ -464,7 +464,7 @@ class MLSMatchExtractor:
 
     async def _extract_match_from_row(
         self,
-        row_element,
+        row_element: Any,
         row_index: int,
         age_group: str,
         division: str,
@@ -717,7 +717,7 @@ class MLSMatchExtractor:
 
     async def _extract_match_from_card(
         self,
-        card_element,
+        card_element: Any,
         card_index: int,
         age_group: str,
         division: str,
@@ -790,7 +790,7 @@ class MLSMatchExtractor:
             )
             return None
 
-    async def _extract_from_cell_positions(self, cells) -> dict:
+    async def _extract_from_cell_positions(self, cells: Any) -> dict:
         """
         Extract match data based on cell positions.
 
@@ -1252,7 +1252,7 @@ class MLSMatchExtractor:
 
 
 # Example usage
-async def example_match_extraction():
+async def example_match_extraction() -> None:
     """
     Example demonstrating how to use the MLSMatchExtractor.
 
