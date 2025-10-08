@@ -1,6 +1,7 @@
 """Unit tests for CLI module."""
 
 import os
+import re
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -17,6 +18,12 @@ from src.cli.main import (
     handle_cli_error,
     setup_environment,
 )
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 
 class TestCliUtilityFunctions:
@@ -222,8 +229,9 @@ class TestCliCommands:
         result = self.runner.invoke(app, ["debug", "--help"])
 
         assert result.exit_code == 0
-        assert "--timeout" in result.stdout
-        assert "--headless" in result.stdout
+        stdout = strip_ansi(result.stdout)
+        assert "--timeout" in stdout
+        assert "--headless" in stdout
 
     def test_test_quiet_command_help(self):
         """Test test-quiet command help (avoids model validation issues)."""
@@ -242,7 +250,8 @@ class TestCliCommands:
         result = self.runner.invoke(app, ["inspect", "--help"])
 
         assert result.exit_code == 0
-        assert "--timeout" in result.stdout
+        stdout = strip_ansi(result.stdout)
+        assert "--timeout" in stdout
 
 
 class TestConstants:
@@ -297,10 +306,11 @@ class TestCliIntegration:
         result = self.runner.invoke(app, ["scrape", "--help"])
 
         assert result.exit_code == 0
-        assert "--age-group" in result.stdout
-        assert "--division" in result.stdout
+        stdout = strip_ansi(result.stdout)
+        assert "--age-group" in stdout
+        assert "--division" in stdout
         # --days was replaced with --start and --end
-        assert "--start" in result.stdout or "--end" in result.stdout
+        assert "--start" in stdout or "--end" in stdout
 
     @patch.dict(os.environ, {}, clear=True)
     def test_environment_isolation(self):
