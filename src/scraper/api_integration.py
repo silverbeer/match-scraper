@@ -43,7 +43,7 @@ class MatchAPIIntegrator:
         """Normalize team names using predefined mappings."""
         return self._team_name_mappings.get(team_name, team_name)
 
-    async def preload_teams_cache(self) -> dict[str, any]:
+    async def preload_teams_cache(self) -> dict[str, Any]:
         """
         Bulk load all teams from the API and build the cache.
 
@@ -101,7 +101,7 @@ class MatchAPIIntegrator:
                 "load_time": time.time() - start_time,
             }
 
-    def get_cache_stats(self) -> dict[str, any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Get current cache statistics."""
         return {
             "loaded": self._teams_cache_loaded,
