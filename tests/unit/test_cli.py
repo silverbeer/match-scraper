@@ -152,7 +152,7 @@ class TestCliCommands:
 
     def setup_method(self):
         """Set up test environment."""
-        self.runner = CliRunner()
+        self.runner = CliRunner(env={"NO_COLOR": "1"})
 
     @patch("src.cli.main.run_scraper")
     @patch("src.cli.main.setup_environment")
@@ -280,7 +280,7 @@ class TestCliIntegration:
 
     def setup_method(self):
         """Set up test environment."""
-        self.runner = CliRunner()
+        self.runner = CliRunner(env={"NO_COLOR": "1"})
 
     def test_app_help(self):
         """Test that the main app help displays correctly."""
