@@ -160,15 +160,18 @@ jobs:
 
       - name: Update image in CronJob manifest
         run: |
+          # Use latest tag (we always push latest in build step)
+          NEW_IMAGE="gcr.io/${{ secrets.GCP_PROJECT_ID }}/mls-scraper:latest"
+
           echo "Original CronJob image line:"
           grep "image: gcr.io" k8s/cronjob.yaml | head -1
 
-          # Update the image in cronjob.yaml to use the new image
-          sed -i "s|image: gcr.io/.*/mls-scraper:.*|image: ${{ needs.build-and-push.outputs.image-uri }}|g" k8s/cronjob.yaml
+          # Update the image in cronjob.yaml to use latest
+          sed -i "s|image: gcr.io/.*/mls-scraper:.*|image: ${NEW_IMAGE}|g" k8s/cronjob.yaml
 
           echo "Updated CronJob image line:"
           grep "image: gcr.io" k8s/cronjob.yaml | head -1
-          echo "Using image: ${{ needs.build-and-push.outputs.image-uri }}"
+          echo "Using image: ${NEW_IMAGE}"
 
       - name: Apply Kubernetes manifests
         run: |
