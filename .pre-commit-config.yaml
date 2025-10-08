@@ -24,7 +24,7 @@ repos:
         language: system
         pass_filenames: false
         files: ^src/.*\.py$
-        stages: [commit]
+        stages: [pre-commit]
 
   # Moved slow checks to CI only for faster local development
   # Uncomment these for thorough local checking when needed:

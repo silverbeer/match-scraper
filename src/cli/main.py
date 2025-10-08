@@ -854,6 +854,7 @@ def scrape(
     try:
         # Run scraper with execution time tracking
         from src.utils.metrics import get_metrics
+
         metrics = get_metrics()
 
         with metrics.time_execution():

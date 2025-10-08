@@ -53,7 +53,9 @@ def get_prometheus_datasource_uid(grafana_url: str, token: str) -> Optional[str]
     datasources = response.json()
     for ds in datasources:
         if ds.get("type") == "prometheus":
-            print(f"Found Prometheus datasource: {ds.get('name')} (UID: {ds.get('uid')})")
+            print(
+                f"Found Prometheus datasource: {ds.get('name')} (UID: {ds.get('uid')})"
+            )
             return ds.get("uid")
 
     return None

@@ -8,6 +8,8 @@ counter and histogram definitions, and metric recording functionality.
 import os
 from unittest.mock import Mock, patch
 
+import pytest
+
 from src.utils.metrics import MLSScraperMetrics, get_metrics, scraper_metrics
 
 
@@ -195,11 +197,12 @@ class TestMLSScraperMetrics:
                 "Distribution of browser operation execution times",
                 "s",
             ),
-            (
-                "lambda_execution_duration_seconds",
-                "Distribution of Lambda function execution times",
-                "s",
-            ),
+            # Lambda execution histogram was removed
+            # (
+            #     "lambda_execution_duration_seconds",
+            #     "Distribution of Lambda function execution times",
+            #     "s",
+            # ),
         ]
 
         for expected in expected_histograms:
@@ -356,6 +359,7 @@ class TestMetricsRecording:
         )
 
     @patch.dict(os.environ, {"AWS_LAMBDA_FUNCTION_NAME": "test-function"})
+    @pytest.mark.skip(reason="Lambda execution timing was removed")
     def test_time_lambda_execution_context_manager(self):
         """Test timing Lambda execution context manager."""
         with patch("time.time", side_effect=[2000.0, 2002.5]):  # 2.5 second duration
