@@ -224,7 +224,7 @@ class MissingTableClient:
 
                     response.raise_for_status()
 
-                    result = response.json()
+                    result: dict[str, Any] = response.json()
 
                     # Record successful API call metrics
                     duration = time.time() - start_time
@@ -433,5 +433,7 @@ class MissingTableClient:
 
         # Assume the API returns a list directly or in a 'games' field
         if isinstance(result, list):
-            return result
-        return result.get("games", [])
+            games_list: list[dict[str, Any]] = result
+            return games_list
+        games_from_dict: list[dict[str, Any]] = result.get("games", [])
+        return games_from_dict

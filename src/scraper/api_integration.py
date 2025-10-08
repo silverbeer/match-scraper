@@ -419,7 +419,7 @@ class MatchAPIIntegrator:
 
             for team in teams_list:
                 if team.get("name") == team_name:
-                    team_id = team.get("id")
+                    team_id: Optional[int] = team.get("id")
                     # Update cache if available
                     if self._teams_cache_loaded:
                         self._team_cache[normalized_name] = team_id
@@ -509,7 +509,8 @@ class MatchAPIIntegrator:
 
             for ag in age_groups_list:
                 if ag.get("name") == age_group:
-                    return ag.get("id")
+                    age_group_id: Optional[int] = ag.get("id")
+                    return age_group_id
 
             # If not found, create it
             age_group_data = {"name": age_group}
@@ -538,7 +539,8 @@ class MatchAPIIntegrator:
 
             for div in divisions_list:
                 if div.get("name") == division:
-                    return div.get("id")
+                    division_id: Optional[int] = div.get("id")
+                    return division_id
 
             # If not found, create it
             division_data = {"name": division}
@@ -582,16 +584,19 @@ class MatchAPIIntegrator:
                             start_date = datetime.fromisoformat(start_date_str).date()
                             end_date = datetime.fromisoformat(end_date_str).date()
                             if start_date <= current_date <= end_date:
-                                return season.get("id")
+                                season_id: int = season.get("id")
+                                return season_id
                         except Exception:
                             pass  # If date parsing fails, just use year matching
 
                     # If no date range or parsing failed, use this season
-                    return season.get("id")
+                    season_id_fallback: int = season.get("id")
+                    return season_id_fallback
 
             # If no season found, return the first available one
             if seasons_list:
-                return seasons_list[0].get("id")
+                first_season_id: int = seasons_list[0].get("id")
+                return first_season_id
 
             return 1  # Default fallback
 
@@ -619,11 +624,13 @@ class MatchAPIIntegrator:
             for gt in game_types_list:
                 name = gt.get("name", "").lower()
                 if "league" in name or "regular" in name:
-                    return gt.get("id")
+                    game_type_id: int = gt.get("id")
+                    return game_type_id
 
             # Return first available or default
             if game_types_list:
-                return game_types_list[0].get("id")
+                first_game_type_id: int = game_types_list[0].get("id")
+                return first_game_type_id
 
             return 1  # Default fallback
 
