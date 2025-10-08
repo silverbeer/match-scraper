@@ -76,8 +76,8 @@ class MLSScraperLogger:
                 # Create JSON formatter
                 file_handler = logging.FileHandler(log_file_path)
                 json_formatter = jsonlogger.JsonFormatter(
-                    '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
-                    timestamp=True
+                    "%(timestamp)s %(level)s %(service)s %(name)s %(message)s",
+                    timestamp=True,
                 )
                 file_handler.setFormatter(json_formatter)
                 self._logger.addHandler(file_handler)
@@ -105,8 +105,8 @@ class MLSScraperLogger:
                 # Use default stdout handler
                 handler = logging.StreamHandler(sys.stdout)
                 json_formatter = jsonlogger.JsonFormatter(
-                    '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
-                    timestamp=True
+                    "%(timestamp)s %(level)s %(service)s %(name)s %(message)s",
+                    timestamp=True,
                 )
                 handler.setFormatter(json_formatter)
                 self._logger.addHandler(handler)
@@ -114,8 +114,8 @@ class MLSScraperLogger:
             # Local development: Use stdout with JSON formatting
             handler = logging.StreamHandler(sys.stdout)
             json_formatter = jsonlogger.JsonFormatter(
-                '%(timestamp)s %(level)s %(service)s %(name)s %(message)s',
-                timestamp=True
+                "%(timestamp)s %(level)s %(service)s %(name)s %(message)s",
+                timestamp=True,
             )
             handler.setFormatter(json_formatter)
             self._logger.addHandler(handler)
@@ -140,27 +140,27 @@ class MLSScraperLogger:
             Extra fields with service context added
         """
         context = extra or {}
-        context.setdefault('service', self.service_name)
+        context.setdefault("service", self.service_name)
         return context
 
     def info(self, message: str, **kwargs) -> None:
         """Log info message with context."""
-        extra = self._add_service_context(kwargs.get('extra'))
+        extra = self._add_service_context(kwargs.get("extra"))
         self._logger.info(message, extra=extra)
 
     def debug(self, message: str, **kwargs) -> None:
         """Log debug message with context."""
-        extra = self._add_service_context(kwargs.get('extra'))
+        extra = self._add_service_context(kwargs.get("extra"))
         self._logger.debug(message, extra=extra)
 
     def warning(self, message: str, **kwargs) -> None:
         """Log warning message with context."""
-        extra = self._add_service_context(kwargs.get('extra'))
+        extra = self._add_service_context(kwargs.get("extra"))
         self._logger.warning(message, extra=extra)
 
     def error(self, message: str, **kwargs) -> None:
         """Log error message with context."""
-        extra = self._add_service_context(kwargs.get('extra'))
+        extra = self._add_service_context(kwargs.get("extra"))
         self._logger.error(message, extra=extra)
 
     def log_scraping_start(self, config: dict[str, Any]) -> None:

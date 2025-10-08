@@ -134,7 +134,9 @@ def dump_metrics(
         print(f"Parameters: {params}")
 
     try:
-        response = requests.get(url, headers=headers, auth=auth, params=params, timeout=60)
+        response = requests.get(
+            url, headers=headers, auth=auth, params=params, timeout=60
+        )
 
         # Debug: print response details on error
         if response.status_code != 200:
@@ -162,7 +164,9 @@ def dump_metrics(
     print(f"✓ Wrote {len(metric_names)} metric names to {output_file}")
 
     # Print match-scraper specific metrics for quick review
-    scraper_metrics = [m for m in metric_names if "scraper" in m.lower() or "games" in m.lower()]
+    scraper_metrics = [
+        m for m in metric_names if "scraper" in m.lower() or "games" in m.lower()
+    ]
     if scraper_metrics:
         print(f"\nFound {len(scraper_metrics)} match-scraper related metrics:")
         for metric in scraper_metrics:
@@ -217,7 +221,10 @@ def main() -> None:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         print("\nTo use this script, add these to your .env file:", file=sys.stderr)
-        print("  GRAFANA_PROM_URL=https://prometheus-prod-XXX.grafana.net/api/prom", file=sys.stderr)
+        print(
+            "  GRAFANA_PROM_URL=https://prometheus-prod-XXX.grafana.net/api/prom",
+            file=sys.stderr,
+        )
         print("  GRAFANA_TOKEN=glc_xxxxxxxxxxxxx", file=sys.stderr)
         sys.exit(1)
 

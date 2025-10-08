@@ -40,7 +40,6 @@ class TestMLSScraperLogger:
         python_logger = logger.get_logger()
         assert isinstance(python_logger, logging.Logger)
 
-
     def test_log_scraping_start(self):
         """Test logging scraping start with configuration."""
         logger = MLSScraperLogger()
@@ -159,7 +158,6 @@ class TestMLSScraperLogger:
             extra = call_args[1]["extra"]
             assert extra["success"] is False
             assert extra["error"] == "Element not found"
-
 
 
 class TestGlobalLoggerFunctions:

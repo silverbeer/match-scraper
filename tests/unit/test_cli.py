@@ -22,8 +22,8 @@ from src.cli.main import (
 
 def strip_ansi(text: str) -> str:
     """Remove ANSI escape codes from text."""
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 class TestCliUtilityFunctions:
@@ -37,8 +37,7 @@ class TestCliUtilityFunctions:
             # Default log level is now ERROR (not WARNING)
             assert os.environ.get("LOG_LEVEL") == "ERROR"
             assert (
-                os.environ.get("MISSING_TABLE_API_BASE_URL")
-                == "http://localhost:8000"
+                os.environ.get("MISSING_TABLE_API_BASE_URL") == "http://localhost:8000"
             )
             assert os.environ.get("MISSING_TABLE_API_TOKEN") == ""
 
@@ -59,9 +58,7 @@ class TestCliUtilityFunctions:
             # Note: setup_environment() now FORCES LOG_LEVEL to ERROR (not preserved)
             assert os.environ.get("LOG_LEVEL") == "ERROR"
             # API token is preserved if already set
-            assert (
-                os.environ.get("MISSING_TABLE_API_TOKEN") == "existing-key"
-            )
+            assert os.environ.get("MISSING_TABLE_API_TOKEN") == "existing-key"
 
     def test_create_config_basic(self):
         """Test basic config creation using offset-based dates."""
