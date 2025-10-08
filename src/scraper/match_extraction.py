@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from typing import Any, Optional
 
-from playwright.async_api import Page
+from playwright.async_api import Frame, Page
 
 from ..utils.logger import get_logger
 from .browser import ElementInteractor
@@ -94,7 +94,7 @@ class MLSMatchExtractor:
         self.page = page
         self.timeout = timeout
         self.interactor = ElementInteractor(page, timeout)
-        self.iframe_content = None
+        self.iframe_content: Optional[Frame] = None
 
     async def extract_matches(
         self, age_group: str, division: str, competition: Optional[str] = None
@@ -1090,7 +1090,9 @@ class MLSMatchExtractor:
             if not parsed_date:
                 match = re.match(r"(\w+)\s+(\d{1,2}),?\s+(\d{4})", date_str)
                 if match:
-                    month_name, day, year = match.groups()
+                    month_name, day_str, year_str = match.groups()
+                    day = int(day_str)
+                    year = int(year_str)
                     month_map = {
                         "january": 1,
                         "jan": 1,
@@ -1116,8 +1118,9 @@ class MLSMatchExtractor:
                         "december": 12,
                         "dec": 12,
                     }
-                    month = month_map.get(month_name.lower())
-                    if month:
+                    month_from_map: Optional[int] = month_map.get(month_name.lower())
+                    if month_from_map:
+                        month = month_from_map
                         parsed_date = datetime(int(year), month, int(day))
 
             if not parsed_date:
@@ -1163,8 +1166,8 @@ class MLSMatchExtractor:
             Tuple of (home_score, away_score, status)
         """
         try:
-            home_score = None
-            away_score = None
+            home_score: Optional[str | int] = None
+            away_score: Optional[str | int] = None
             status = "scheduled"
 
             # Check for explicit status indicators

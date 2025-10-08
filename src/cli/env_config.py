@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -12,7 +12,7 @@ from rich.table import Table
 console = Console()
 
 # Required and optional environment variables
-REQUIRED_ENV_VARS = {
+REQUIRED_ENV_VARS: dict[str, dict[str, Any]] = {
     "MISSING_TABLE_API_BASE_URL": {
         "description": "API endpoint for missing-table service",
         "default": "https://api.missing-table.com",
@@ -26,7 +26,7 @@ REQUIRED_ENV_VARS = {
     },
 }
 
-OPTIONAL_ENV_VARS = {
+OPTIONAL_ENV_VARS: dict[str, dict[str, Any]] = {
     "LOG_LEVEL": {
         "description": "Logging level for CLI",
         "default": "WARNING",

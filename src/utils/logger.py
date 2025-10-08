@@ -211,7 +211,7 @@ class MLSScraperLogger:
             duration_ms: Request duration in milliseconds
             error: Error message if call failed
         """
-        log_data = {
+        log_data: dict[str, Any] = {
             "operation": "api_call",
             "endpoint": endpoint,
             "method": method,

@@ -6,7 +6,7 @@ and posting matches to the API with proper team and entity management.
 
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from src.api.missing_table_client import MissingTableClient
 from src.scraper.models import Match
@@ -124,7 +124,7 @@ class MatchAPIIntegrator:
 
     async def post_matches(
         self, matches: list[Match], age_group: str, division: str
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Post a list of matches to the missing-table API.
 
@@ -185,7 +185,7 @@ class MatchAPIIntegrator:
             matches, age_group, division
         )
 
-        results = {
+        results: dict[str, Any] = {
             "posted": 0,
             "errors": 0,
             "skipped": 0,
@@ -409,13 +409,15 @@ class MatchAPIIntegrator:
 
         # Fallback to original API lookup if cache not available
         try:
-            teams = await self.client._make_request("GET", "api/teams")
+            teams_response = await self.client._make_request("GET", "api/teams")
 
             # Handle both array response and wrapped response
-            if isinstance(teams, dict) and "teams" in teams:
-                teams = teams["teams"]
+            if isinstance(teams_response, dict) and "teams" in teams_response:
+                teams_list = cast(list[Any], teams_response["teams"])
+            else:
+                teams_list = cast(list[Any], teams_response)
 
-            for team in teams:
+            for team in teams_list:
                 if team.get("name") == team_name:
                     team_id = team.get("id")
                     # Update cache if available
@@ -492,13 +494,20 @@ class MatchAPIIntegrator:
     async def _get_age_group_id(self, age_group: str) -> Optional[int]:
         """Get age group ID from the API."""
         try:
-            age_groups = await self.client._make_request("GET", "api/age-groups")
+            age_groups_response = await self.client._make_request(
+                "GET", "api/age-groups"
+            )
 
             # Handle both array response and wrapped response
-            if isinstance(age_groups, dict) and "age_groups" in age_groups:
-                age_groups = age_groups["age_groups"]
+            if (
+                isinstance(age_groups_response, dict)
+                and "age_groups" in age_groups_response
+            ):
+                age_groups_list = cast(list[Any], age_groups_response["age_groups"])
+            else:
+                age_groups_list = cast(list[Any], age_groups_response)
 
-            for ag in age_groups:
+            for ag in age_groups_list:
                 if ag.get("name") == age_group:
                     return ag.get("id")
 
@@ -516,13 +525,18 @@ class MatchAPIIntegrator:
     async def _get_division_id(self, division: str) -> Optional[int]:
         """Get division ID from the API."""
         try:
-            divisions = await self.client._make_request("GET", "api/divisions")
+            divisions_response = await self.client._make_request("GET", "api/divisions")
 
             # Handle both array response and wrapped response
-            if isinstance(divisions, dict) and "divisions" in divisions:
-                divisions = divisions["divisions"]
+            if (
+                isinstance(divisions_response, dict)
+                and "divisions" in divisions_response
+            ):
+                divisions_list = cast(list[Any], divisions_response["divisions"])
+            else:
+                divisions_list = cast(list[Any], divisions_response)
 
-            for div in divisions:
+            for div in divisions_list:
                 if div.get("name") == division:
                     return div.get("id")
 
@@ -540,17 +554,19 @@ class MatchAPIIntegrator:
     async def _get_season_id(self) -> int:
         """Get current season ID."""
         try:
-            seasons = await self.client._make_request("GET", "api/seasons")
+            seasons_response = await self.client._make_request("GET", "api/seasons")
 
             # Handle both array response and wrapped response
-            if isinstance(seasons, dict) and "seasons" in seasons:
-                seasons = seasons["seasons"]
+            if isinstance(seasons_response, dict) and "seasons" in seasons_response:
+                seasons_list = cast(list[Any], seasons_response["seasons"])
+            else:
+                seasons_list = cast(list[Any], seasons_response)
 
             # Find the most recent season that covers the current date
             current_date = datetime.now().date()
             current_year = current_date.year
 
-            for season in seasons:
+            for season in seasons_list:
                 # Check if season name contains current year or next year
                 season_name = season.get("name", "")
                 if (
@@ -574,8 +590,8 @@ class MatchAPIIntegrator:
                     return season.get("id")
 
             # If no season found, return the first available one
-            if seasons:
-                return seasons[0].get("id")
+            if seasons_list:
+                return seasons_list[0].get("id")
 
             return 1  # Default fallback
 
@@ -586,21 +602,28 @@ class MatchAPIIntegrator:
     async def _get_game_type_id(self) -> int:
         """Get game type ID for regular league games."""
         try:
-            game_types = await self.client._make_request("GET", "api/game-types")
+            game_types_response = await self.client._make_request(
+                "GET", "api/game-types"
+            )
 
             # Handle both array response and wrapped response
-            if isinstance(game_types, dict) and "game_types" in game_types:
-                game_types = game_types["game_types"]
+            if (
+                isinstance(game_types_response, dict)
+                and "game_types" in game_types_response
+            ):
+                game_types_list = cast(list[Any], game_types_response["game_types"])
+            else:
+                game_types_list = cast(list[Any], game_types_response)
 
             # Look for "League" or "Regular" game type
-            for gt in game_types:
+            for gt in game_types_list:
                 name = gt.get("name", "").lower()
                 if "league" in name or "regular" in name:
                     return gt.get("id")
 
             # Return first available or default
-            if game_types:
-                return game_types[0].get("id")
+            if game_types_list:
+                return game_types_list[0].get("id")
 
             return 1  # Default fallback
 
@@ -697,7 +720,7 @@ class MatchAPIIntegrator:
             division_id = self._division_cache.get(division)
 
             # Query existing games with filters
-            filters = {
+            filters: dict[str, Any] = {
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
             }
