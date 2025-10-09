@@ -241,7 +241,7 @@ wheels = [
 [[package]]
 name = "grafana-otel-py"
 version = "0.1.0"
-source = { git = "https://github.com/silverbeer/grafana-otel-py.git?rev=v0.1.2#8dfab11ee60bf9918ce808897b4c89909b09bb8b" }
+source = { git = "https://github.com/silverbeer/grafana-otel-py.git?rev=v0.2.0#4b129abb0ee3ee40b0bb1aa745ddd72c3cd51fff" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -532,7 +532,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "grafana-otel-py", git = "https://github.com/silverbeer/grafana-otel-py.git?rev=v0.1.2" },
+    { name = "grafana-otel-py", git = "https://github.com/silverbeer/grafana-otel-py.git?rev=v0.2.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "opentelemetry-api", specifier = ">=1.20.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.20.0" },

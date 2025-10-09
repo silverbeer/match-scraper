@@ -33,7 +33,9 @@ data:
   # Replace {GRAFANA_CLOUD_INSTANCE_ID} and {GRAFANA_CLOUD_ZONE} with your values
   # Example: https://otlp-gateway-prod-us-central-0.grafana.net/otlp/v1/metrics
   OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-prod-us-east-2.grafana.net/otlp/v1/metrics"
-  OTEL_METRIC_EXPORT_INTERVAL: "10000"
+  # Export every 60 seconds to stay within Grafana Cloud free tier rate limits
+  # For a 90-second CronJob: ~2 exports total (1 periodic + 1 shutdown flush)
+  OTEL_METRIC_EXPORT_INTERVAL: "60000"
   OTEL_METRIC_EXPORT_TIMEOUT: "30000"
 
   # Grafana Loki Configuration (for Promtail)

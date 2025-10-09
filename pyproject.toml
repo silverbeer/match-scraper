@@ -142,4 +142,4 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [tool.uv.sources]
-grafana-otel-py = { git = "https://github.com/silverbeer/grafana-otel-py.git", rev = "v0.1.2" }
+grafana-otel-py = { git = "https://github.com/silverbeer/grafana-otel-py.git", rev = "v0.2.0" }
