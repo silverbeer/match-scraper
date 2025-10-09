@@ -16,6 +16,8 @@ START="0"
 END="13"
 FROM_DATE=""
 TO_DATE=""
+CLUB=""
+COMPETITION=""
 FOLLOW_LOGS=true
 
 # Parse command line arguments
@@ -77,6 +79,22 @@ while [[ $# -gt 0 ]]; do
             TO_DATE="$2"
             shift 2
             ;;
+        --club=*)
+            CLUB="${1#*=}"
+            shift
+            ;;
+        --club)
+            CLUB="$2"
+            shift 2
+            ;;
+        --competition=*)
+            COMPETITION="${1#*=}"
+            shift
+            ;;
+        --competition)
+            COMPETITION="$2"
+            shift 2
+            ;;
         --no-follow)
             FOLLOW_LOGS=false
             shift
@@ -91,6 +109,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --to DATE           Absolute end date (YYYY-MM-DD, e.g., 2025-11-01)"
             echo "  --age-group GROUP   Age group (default: U14)"
             echo "  --division DIV      Division (default: Northeast)"
+            echo "  --club CLUB         Filter by specific club (optional)"
+            echo "  --competition COMP  Filter by specific competition (optional)"
             echo "  --namespace NS      Kubernetes namespace (default: match-scraper)"
             echo "  --no-follow         Don't follow logs after job creation"
             echo "  -h, --help          Show this help message"
@@ -100,6 +120,8 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --start -7 --end 0  # Last 7 days"
             echo "  $0 --from 2025-10-01 --to 2025-11-01  # Absolute dates"
             echo "  $0 --age-group U16 --division Southeast"
+            echo "  $0 --club \"Intercontinental Football Academy of New England\""
+            echo "  $0 --from 2025-10-09 --to 2025-11-03 --club \"IFA\" --age-group U14"
             exit 0
             ;;
         *)
@@ -121,6 +143,12 @@ echo -e "  Job Name:    ${GREEN}${JOB_NAME}${NC}"
 echo -e "  Namespace:   ${GREEN}${NAMESPACE}${NC}"
 echo -e "  Age Group:   ${GREEN}${AGE_GROUP}${NC}"
 echo -e "  Division:    ${GREEN}${DIVISION}${NC}"
+if [ -n "$CLUB" ]; then
+    echo -e "  Club:        ${GREEN}${CLUB}${NC}"
+fi
+if [ -n "$COMPETITION" ]; then
+    echo -e "  Competition: ${GREEN}${COMPETITION}${NC}"
+fi
 if [ -n "$FROM_DATE" ] && [ -n "$TO_DATE" ]; then
     echo -e "  Date Range:  ${GREEN}--from=${FROM_DATE} --to=${TO_DATE}${NC}"
 else
@@ -152,6 +180,16 @@ if [ -n "$FROM_DATE" ] && [ -n "$TO_DATE" ]; then
     CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --from=${FROM_DATE} --to=${TO_DATE}"
 else
     CLI_CMD="python -m src.cli.main scrape --age-group=${AGE_GROUP} --division=${DIVISION} --start=${START} --end=${END}"
+fi
+
+# Add optional club filter
+if [ -n "$CLUB" ]; then
+    CLI_CMD="${CLI_CMD} --club=\"${CLUB}\""
+fi
+
+# Add optional competition filter
+if [ -n "$COMPETITION" ]; then
+    CLI_CMD="${CLI_CMD} --competition=\"${COMPETITION}\""
 fi
 
 echo -e "${BLUE}📦 Creating job from CronJob template...${NC}"
