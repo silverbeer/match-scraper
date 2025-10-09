@@ -7,6 +7,7 @@ rich formatting and interactive features.
 """
 
 import asyncio
+import atexit
 import json
 import os
 import sys
@@ -54,6 +55,22 @@ app = typer.Typer(
     help="⚽ MLS Match Scraper - Beautiful terminal interface for MLS match data",
     rich_markup_mode="rich",
 )
+
+
+# Register metrics shutdown handler to ensure metrics are flushed on exit
+def _shutdown_metrics() -> None:
+    """Shutdown metrics and flush pending data before exit."""
+    try:
+        from src.utils.metrics import get_metrics
+
+        metrics = get_metrics()
+        metrics.shutdown(timeout_seconds=5)
+    except Exception:
+        # Silently fail - we're exiting anyway
+        pass
+
+
+atexit.register(_shutdown_metrics)
 
 # Configuration defaults
 DEFAULT_AGE_GROUP = "U14"

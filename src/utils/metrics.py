@@ -81,14 +81,27 @@ class MLSScraperMetrics:
 
                 import logging
 
-                logging.getLogger(__name__).info(
-                    f"OpenTelemetry metrics configured for endpoint: {otlp_endpoint}"
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    "✅ OpenTelemetry metrics configured successfully",
+                    extra={
+                        "endpoint": otlp_endpoint,
+                        "export_interval_ms": os.getenv(
+                            "OTEL_METRIC_EXPORT_INTERVAL", "5000"
+                        ),
+                        "export_timeout_ms": os.getenv(
+                            "OTEL_METRIC_EXPORT_TIMEOUT", "30000"
+                        ),
+                    },
                 )
             except Exception as e:
                 import logging
 
-                logging.getLogger(__name__).warning(
-                    f"Failed to configure OTLP metrics exporter: {e}. Metrics will not be exported."
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"⚠️  Failed to configure OTLP metrics exporter: {e}",
+                    extra={"error": str(e), "endpoint": otlp_endpoint},
+                    exc_info=True,
                 )
         else:
             import logging
@@ -98,8 +111,13 @@ class MLSScraperMetrics:
             )
 
         # Set up meter provider
-        meter_provider = MeterProvider(resource=resource, metric_readers=metric_readers)
-        metrics.set_meter_provider(meter_provider)
+        self.meter_provider = MeterProvider(
+            resource=resource, metric_readers=metric_readers
+        )
+        metrics.set_meter_provider(self.meter_provider)
+
+        # Store metric readers for shutdown
+        self.metric_readers = metric_readers
 
         # Get meter instance
         self.meter = metrics.get_meter(service_name, service_version)
@@ -346,6 +364,43 @@ class MLSScraperMetrics:
                 }
             )
             self.execution_duration_histogram.record(duration, attributes)
+
+    def shutdown(self, timeout_seconds: int = 30) -> bool:
+        """
+        Shutdown metrics collection and force flush all pending metrics.
+
+        This should be called before application exit to ensure all metrics
+        are exported to Grafana Cloud.
+
+        Args:
+            timeout_seconds: Maximum time to wait for export completion
+
+        Returns:
+            True if shutdown succeeded, False otherwise
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            logger.info(
+                "Shutting down metrics provider and flushing pending metrics..."
+            )
+
+            # Force flush all metric readers
+            for reader in self.metric_readers:
+                logger.debug(f"Flushing metric reader: {reader}")
+                reader.force_flush(timeout_millis=timeout_seconds * 1000)
+
+            # Shutdown meter provider
+            self.meter_provider.shutdown()
+
+            logger.info("Metrics shutdown completed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error during metrics shutdown: {e}", exc_info=True)
+            return False
 
 
 # Global metrics instance
