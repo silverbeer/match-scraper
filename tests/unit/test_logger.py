@@ -79,15 +79,18 @@ class TestMLSScraperLogger:
 
         with patch.object(logger._logger, "info") as mock_info:
             logger.log_api_call(
-                endpoint="/api/games", method="POST", status_code=201, duration_ms=250.5
+                endpoint="/api/matches",
+                method="POST",
+                status_code=201,
+                duration_ms=250.5,
             )
 
             mock_info.assert_called_once()
             call_args = mock_info.call_args
-            assert "API call successful: POST /api/games" in call_args[0][0]
+            assert "API call successful: POST /api/matches" in call_args[0][0]
             extra = call_args[1]["extra"]
             assert extra["operation"] == "api_call"
-            assert extra["endpoint"] == "/api/games"
+            assert extra["endpoint"] == "/api/matches"
             assert extra["method"] == "POST"
             assert extra["status_code"] == 201
             assert extra["duration_ms"] == 250.5
@@ -98,7 +101,7 @@ class TestMLSScraperLogger:
 
         with patch.object(logger._logger, "error") as mock_error:
             logger.log_api_call(
-                endpoint="/api/games",
+                endpoint="/api/matches",
                 method="POST",
                 status_code=500,
                 duration_ms=1000.0,
@@ -106,7 +109,7 @@ class TestMLSScraperLogger:
 
             mock_error.assert_called_once()
             call_args = mock_error.call_args
-            assert "API call failed: POST /api/games" in call_args[0][0]
+            assert "API call failed: POST /api/matches" in call_args[0][0]
             extra = call_args[1]["extra"]
             assert extra["status_code"] == 500
 
@@ -116,12 +119,12 @@ class TestMLSScraperLogger:
 
         with patch.object(logger._logger, "error") as mock_error:
             logger.log_api_call(
-                endpoint="/api/games", method="POST", error="Connection timeout"
+                endpoint="/api/matches", method="POST", error="Connection timeout"
             )
 
             mock_error.assert_called_once()
             call_args = mock_error.call_args
-            assert "API call failed: POST /api/games" in call_args[0][0]
+            assert "API call failed: POST /api/matches" in call_args[0][0]
             extra = call_args[1]["extra"]
             assert extra["error"] == "Connection timeout"
 

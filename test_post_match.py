@@ -1,22 +1,34 @@
 #!/usr/bin/env python3
-"""Test script to POST a single game to the missing-table API."""
+"""Test script to POST a single match to the missing-table API."""
 
 import asyncio
 import os
+from pathlib import Path
 
 import httpx
 
+# Load .env.dev if available
+try:
+    from dotenv import load_dotenv
+
+    env_file = Path(__file__).parent / ".env.dev"
+    if env_file.exists():
+        load_dotenv(env_file)
+        print(f"Loaded environment from {env_file}\n")
+except ImportError:
+    pass
+
 # Get API credentials from environment
-API_BASE_URL = os.getenv("MISSING_TABLE_API_BASE_URL", "https://api.missing-table.com")
+API_BASE_URL = os.getenv("MISSING_TABLE_API_BASE_URL", "http://localhost:8000")
 API_TOKEN = os.getenv("MISSING_TABLE_API_TOKEN")
 
 if not API_TOKEN:
     print("ERROR: MISSING_TABLE_API_TOKEN environment variable not set")
     exit(1)
 
-# Game data in correct API format
-game_data = {
-    "game_date": "2025-10-17",
+# Match data in correct API format
+match_data = {
+    "match_date": "2025-10-17",
     "home_team_id": 11,
     "away_team_id": 19,
     "home_score": 0,
@@ -24,13 +36,13 @@ game_data = {
     "match_status": "scheduled",
     "season_id": 3,
     "age_group_id": 2,
-    "game_type_id": 1,
+    "match_type_id": 1,
     "division_id": 1,
 }
 
 
-async def test_post_game():
-    """Test posting a single game to the API."""
+async def test_post_match():
+    """Test posting a single match to the API."""
 
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
@@ -38,10 +50,10 @@ async def test_post_game():
         "User-Agent": "match-scraper/1.0",
     }
 
-    url = f"{API_BASE_URL}/api/games"
+    url = f"{API_BASE_URL}/api/matches"
 
     print(f"Testing POST to {url}")
-    print(f"Game data: {game_data}")
+    print(f"Match data: {match_data}")
     print()
 
     try:
@@ -49,7 +61,7 @@ async def test_post_game():
             response = await client.post(
                 url,
                 headers=headers,
-                json=game_data,
+                json=match_data,
             )
 
             print(f"Status Code: {response.status_code}")
@@ -60,7 +72,7 @@ async def test_post_game():
             print()
 
             if response.status_code == 200 or response.status_code == 201:
-                print("✓ SUCCESS: Game posted successfully")
+                print("✓ SUCCESS: Match posted successfully")
                 return response.json()
             else:
                 print(f"✗ FAILED: Received status {response.status_code}")
@@ -76,4 +88,4 @@ async def test_post_game():
 
 
 if __name__ == "__main__":
-    asyncio.run(test_post_game())
+    asyncio.run(test_post_match())

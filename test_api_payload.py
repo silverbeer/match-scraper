@@ -65,16 +65,16 @@ async def test_payload_building():
 
         # Convert match to API format
         print("Converting match to API format...")
-        game_data = await integrator._convert_match_to_api_format(
+        match_data = await integrator._convert_match_to_api_format(
             test_match, "U14", "Northeast"
         )
 
-        if game_data:
+        if match_data:
             print("✓ Successfully converted match to API format:")
             print()
             import json
 
-            print(json.dumps(game_data, indent=2))
+            print(json.dumps(match_data, indent=2))
         else:
             print("✗ Failed to convert match to API format")
 
