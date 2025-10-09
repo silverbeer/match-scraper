@@ -20,6 +20,22 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Load environment variables from .env.dev if it exists
+try:
+    from dotenv import load_dotenv
+
+    env_file = project_root / ".env.dev"
+    if env_file.exists():
+        loaded = load_dotenv(env_file)
+        if loaded:
+            print(f"📄 Loaded environment from {env_file}\n")
+    else:
+        print(f"⚠️  No .env.dev file found at {env_file}\n")
+except ImportError:
+    print("⚠️  python-dotenv not installed, using system environment\n")
+except Exception as e:
+    print(f"⚠️  Failed to load .env.dev: {e}\n")
+
 from src.utils.metrics import get_metrics  # noqa: E402
 
 
