@@ -184,12 +184,12 @@ fi
 
 # Add optional club filter
 if [ -n "$CLUB" ]; then
-    CLI_CMD="${CLI_CMD} --club=\"${CLUB}\""
+    CLI_CMD="${CLI_CMD} --club='${CLUB}'"
 fi
 
 # Add optional competition filter
 if [ -n "$COMPETITION" ]; then
-    CLI_CMD="${CLI_CMD} --competition=\"${COMPETITION}\""
+    CLI_CMD="${CLI_CMD} --competition='${COMPETITION}'"
 fi
 
 echo -e "${BLUE}📦 Creating job from CronJob template...${NC}"
