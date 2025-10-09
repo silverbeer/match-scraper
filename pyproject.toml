@@ -21,6 +21,7 @@ dependencies = [
     "rich>=13.0.0",
     "pytest-playwright>=0.7.1",
     "python-dotenv>=1.1.1",
+    "grafana-otel-py",
 ]
 
 [project.scripts]
@@ -139,3 +140,6 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[tool.uv.sources]
+grafana-otel-py = { git = "https://github.com/silverbeer/grafana-otel-py.git", rev = "v0.1.2" }

@@ -1,8 +1,7 @@
 """
 OpenTelemetry metrics configuration for MLS Match Scraper.
 
-This module provides centralized metrics collection using OpenTelemetry with OTLP
-exporter for Grafana Cloud integration. Includes counter and histogram definitions
+This module provides centralized metrics collection using grafana-otel-py library
 for tracking scraping operations, API calls, and performance metrics.
 """
 
@@ -12,213 +11,96 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Optional
 
-from opentelemetry import metrics
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics._internal.instrument import Counter, Histogram
-from opentelemetry.sdk.metrics.export import (
-    AggregationTemporality,
-    PeriodicExportingMetricReader,
-)
-from opentelemetry.sdk.resources import Resource
+from grafana_otel import GrafanaOTELClient
 
 
-class MLSScraperMetrics:
+class MLSScraperMetrics(GrafanaOTELClient):
     """
-    Centralized metrics collection for MLS Match Scraper using OpenTelemetry.
+    Centralized metrics collection for MLS Match Scraper.
 
-    Provides counters and histograms for tracking scraping operations, API calls,
-    and performance metrics with automatic export to Grafana Cloud via OTLP.
+    Extends GrafanaOTELClient with domain-specific metrics for tracking
+    scraping operations, API calls, and performance.
     """
 
     def __init__(
         self, service_name: str = "mls-match-scraper", service_version: str = "1.0.0"
     ):
         """
-        Initialize OpenTelemetry metrics with OTLP exporter configuration.
+        Initialize metrics with MLS-specific configuration.
 
         Args:
             service_name: Name of the service for metric identification
             service_version: Version of the service
         """
-        self.service_name = service_name
-        self.service_version = service_version
-
-        # Configure resource with service information including Grafana Cloud attributes
-        resource = Resource.create(
-            {
-                "service.name": service_name,
-                "service.version": service_version,
+        # Pass additional Grafana Cloud resource attributes
+        super().__init__(
+            service_name=service_name,
+            service_version=service_version,
+            **{
                 "service.instance.id": os.getenv("HOSTNAME", "local"),
                 "deployment.environment": os.getenv("DEPLOYMENT_ENV", "production"),
                 "k8s.namespace.name": os.getenv("K8S_NAMESPACE", "match-scraper"),
                 "k8s.pod.name": os.getenv("HOSTNAME", "local"),
                 "cloud.provider": "gcp",
                 "cloud.platform": "gcp_kubernetes_engine",
-            }
+            },
         )
 
-        # Only configure OTLP exporter if endpoint is provided
-        metric_readers = []
-        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        # Initialize domain-specific metrics
+        self._init_scraper_metrics()
 
-        if otlp_endpoint:
-            try:
-                # Configure OTLP exporter for Grafana Cloud with Delta temporality
-                # Grafana Cloud requires Delta temporality for counters and histograms
-                otlp_exporter = OTLPMetricExporter(
-                    endpoint=otlp_endpoint,
-                    headers=self._parse_otlp_headers(),
-                    timeout=30,
-                    preferred_temporality={
-                        # Use Delta temporality for counters and histograms (required by Grafana Cloud)
-                        Counter: AggregationTemporality.DELTA,
-                        Histogram: AggregationTemporality.DELTA,
-                    },
-                )
-
-                # Configure periodic metric reader
-                metric_reader = PeriodicExportingMetricReader(
-                    exporter=otlp_exporter,
-                    export_interval_millis=int(
-                        os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "5000")
-                    ),
-                    export_timeout_millis=int(
-                        os.getenv("OTEL_METRIC_EXPORT_TIMEOUT", "30000")
-                    ),
-                )
-                metric_readers.append(metric_reader)
-
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.info(
-                    "✅ OpenTelemetry metrics configured successfully",
-                    extra={
-                        "endpoint": otlp_endpoint,
-                        "export_interval_ms": os.getenv(
-                            "OTEL_METRIC_EXPORT_INTERVAL", "5000"
-                        ),
-                        "export_timeout_ms": os.getenv(
-                            "OTEL_METRIC_EXPORT_TIMEOUT", "30000"
-                        ),
-                    },
-                )
-            except Exception as e:
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"⚠️  Failed to configure OTLP metrics exporter: {e}",
-                    extra={"error": str(e), "endpoint": otlp_endpoint},
-                    exc_info=True,
-                )
-        else:
-            import logging
-
-            logging.getLogger(__name__).info(
-                "OTEL_EXPORTER_OTLP_ENDPOINT not configured. Metrics will be collected but not exported."
-            )
-
-        # Set up meter provider
-        self.meter_provider = MeterProvider(
-            resource=resource, metric_readers=metric_readers
-        )
-        metrics.set_meter_provider(self.meter_provider)
-
-        # Store metric readers for shutdown
-        self.metric_readers = metric_readers
-
-        # Get meter instance
-        self.meter = metrics.get_meter(service_name, service_version)
-
-        # Initialize metrics
-        self._init_counters()
-        self._init_histograms()
-
-    def _parse_otlp_headers(self) -> dict[str, str]:
-        """
-        Parse OTLP headers from environment variable.
-
-        Returns:
-            Dictionary of headers for OTLP exporter
-        """
-        headers_str = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "")
-        headers = {}
-
-        if headers_str:
-            for header in headers_str.split(","):
-                if "=" in header:
-                    key, value = header.strip().split("=", 1)
-                    headers[key] = value
-
-        return headers
-
-    def _init_counters(self) -> None:
-        """Initialize counter metrics for tracking events."""
-
-        # Scraping operation counters
-        self.games_scheduled_counter = self.meter.create_counter(
+    def _init_scraper_metrics(self) -> None:
+        """Initialize scraper-specific metrics."""
+        # Game-related counters
+        self.games_scheduled_counter = self.create_counter(
             name="games_scheduled_total",
             description="Total number of games scheduled found during scraping",
-            unit="1",
         )
 
-        self.games_scored_counter = self.meter.create_counter(
+        self.games_scored_counter = self.create_counter(
             name="games_scored_total",
             description="Total number of games with scores found during scraping",
-            unit="1",
         )
 
         # API operation counters
-        self.api_calls_counter = self.meter.create_counter(
+        self.api_calls_counter = self.create_counter(
             name="api_calls_total",
             description="Total number of API calls made to missing-table.com",
-            unit="1",
         )
 
         # Error counters
-        self.scraping_errors_counter = self.meter.create_counter(
+        self.scraping_errors_counter = self.create_counter(
             name="scraping_errors_total",
             description="Total number of scraping errors by type",
-            unit="1",
         )
 
         # Browser operation counters
-        self.browser_operations_counter = self.meter.create_counter(
+        self.browser_operations_counter = self.create_counter(
             name="browser_operations_total",
             description="Total number of browser operations performed",
-            unit="1",
         )
-
-    def _init_histograms(self) -> None:
-        """Initialize histogram metrics for tracking distributions."""
 
         # Execution time histograms
-        self.scraping_duration_histogram = self.meter.create_histogram(
+        self.scraping_duration_histogram = self.create_histogram(
             name="scraping_duration_seconds",
             description="Distribution of scraping operation execution times",
-            unit="s",
         )
 
-        self.api_call_duration_histogram = self.meter.create_histogram(
+        self.api_call_duration_histogram = self.create_histogram(
             name="api_call_duration_seconds",
             description="Distribution of API call response times",
-            unit="s",
         )
 
         # Browser operation histograms
-        self.browser_operation_duration_histogram = self.meter.create_histogram(
+        self.browser_operation_duration_histogram = self.create_histogram(
             name="browser_operation_duration_seconds",
             description="Distribution of browser operation execution times",
-            unit="s",
         )
 
         # Application execution histogram
-        self.execution_duration_histogram = self.meter.create_histogram(
+        self.execution_duration_histogram = self.create_histogram(
             name="application_execution_duration_seconds",
             description="Distribution of application execution times",
-            unit="s",
         )
 
     def record_games_scheduled(
@@ -374,43 +256,6 @@ class MLSScraperMetrics:
                 }
             )
             self.execution_duration_histogram.record(duration, attributes)
-
-    def shutdown(self, timeout_seconds: int = 30) -> bool:
-        """
-        Shutdown metrics collection and force flush all pending metrics.
-
-        This should be called before application exit to ensure all metrics
-        are exported to Grafana Cloud.
-
-        Args:
-            timeout_seconds: Maximum time to wait for export completion
-
-        Returns:
-            True if shutdown succeeded, False otherwise
-        """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        try:
-            logger.info(
-                "Shutting down metrics provider and flushing pending metrics..."
-            )
-
-            # Force flush all metric readers
-            for reader in self.metric_readers:
-                logger.debug(f"Flushing metric reader: {reader}")
-                reader.force_flush(timeout_millis=timeout_seconds * 1000)
-
-            # Shutdown meter provider
-            self.meter_provider.shutdown()
-
-            logger.info("Metrics shutdown completed successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error during metrics shutdown: {e}", exc_info=True)
-            return False
 
 
 # Global metrics instance

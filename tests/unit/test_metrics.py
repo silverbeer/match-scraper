@@ -16,10 +16,10 @@ from src.utils.metrics import MLSScraperMetrics, get_metrics, scraper_metrics
 class TestMLSScraperMetrics:
     """Test cases for MLSScraperMetrics class."""
 
-    @patch("src.utils.metrics.OTLPMetricExporter")
-    @patch("src.utils.metrics.PeriodicExportingMetricReader")
-    @patch("src.utils.metrics.MeterProvider")
-    @patch("src.utils.metrics.metrics.set_meter_provider")
+    @patch("grafana_otel.client.OTLPMetricExporter")
+    @patch("grafana_otel.client.PeriodicExportingMetricReader")
+    @patch("grafana_otel.client.MeterProvider")
+    @patch("grafana_otel.client.metrics.set_meter_provider")
     def test_init_default_configuration(
         self, mock_set_provider, mock_meter_provider, mock_reader, mock_exporter
     ):
@@ -39,10 +39,10 @@ class TestMLSScraperMetrics:
         assert metrics_instance.service_version == "1.0.0"
         mock_set_provider.assert_called_once()
 
-    @patch("src.utils.metrics.OTLPMetricExporter")
-    @patch("src.utils.metrics.PeriodicExportingMetricReader")
-    @patch("src.utils.metrics.MeterProvider")
-    @patch("src.utils.metrics.metrics.set_meter_provider")
+    @patch("grafana_otel.client.OTLPMetricExporter")
+    @patch("grafana_otel.client.PeriodicExportingMetricReader")
+    @patch("grafana_otel.client.MeterProvider")
+    @patch("grafana_otel.client.metrics.set_meter_provider")
     def test_init_custom_configuration(
         self, mock_set_provider, mock_meter_provider, mock_reader, mock_exporter
     ):
@@ -66,39 +66,27 @@ class TestMLSScraperMetrics:
         assert metrics_instance.service_name == custom_name
         assert metrics_instance.service_version == custom_version
 
+    # _parse_otlp_headers moved to GrafanaOTELClient base class
+    @pytest.mark.skip(reason="Method moved to grafana-otel-py base class")
     def test_parse_otlp_headers_empty(self):
         """Test parsing empty OTLP headers."""
-        with patch.dict(os.environ, {}, clear=True):
-            metrics_instance = MLSScraperMetrics.__new__(MLSScraperMetrics)
-            headers = metrics_instance._parse_otlp_headers()
-            assert headers == {}
+        pass
 
+    @pytest.mark.skip(reason="Method moved to grafana-otel-py base class")
     def test_parse_otlp_headers_single_header(self):
         """Test parsing single OTLP header."""
-        with patch.dict(
-            os.environ, {"OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer token123"}
-        ):
-            metrics_instance = MLSScraperMetrics.__new__(MLSScraperMetrics)
-            headers = metrics_instance._parse_otlp_headers()
-            assert headers == {"Authorization": "Bearer token123"}
+        pass
 
+    @pytest.mark.skip(reason="Method moved to grafana-otel-py base class")
     def test_parse_otlp_headers_multiple_headers(self):
         """Test parsing multiple OTLP headers."""
-        headers_str = "Authorization=Bearer token123,Content-Type=application/json"
-        with patch.dict(os.environ, {"OTEL_EXPORTER_OTLP_HEADERS": headers_str}):
-            metrics_instance = MLSScraperMetrics.__new__(MLSScraperMetrics)
-            headers = metrics_instance._parse_otlp_headers()
-            expected = {
-                "Authorization": "Bearer token123",
-                "Content-Type": "application/json",
-            }
-            assert headers == expected
+        pass
 
-    @patch("src.utils.metrics.OTLPMetricExporter")
-    @patch("src.utils.metrics.PeriodicExportingMetricReader")
-    @patch("src.utils.metrics.MeterProvider")
-    @patch("src.utils.metrics.metrics.set_meter_provider")
-    @patch("src.utils.metrics.metrics.get_meter")
+    @patch("grafana_otel.client.OTLPMetricExporter")
+    @patch("grafana_otel.client.PeriodicExportingMetricReader")
+    @patch("grafana_otel.client.MeterProvider")
+    @patch("grafana_otel.client.metrics.set_meter_provider")
+    @patch("grafana_otel.client.metrics.get_meter")
     def test_counter_initialization(
         self,
         mock_get_meter,
@@ -114,7 +102,7 @@ class TestMLSScraperMetrics:
         # Track counter creation calls
         counter_calls = []
 
-        def track_counter_creation(name, description, unit):
+        def track_counter_creation(name, description, unit="1"):
             counter_calls.append((name, description, unit))
             return Mock()
 
@@ -151,11 +139,11 @@ class TestMLSScraperMetrics:
         for expected in expected_counters:
             assert expected in counter_calls
 
-    @patch("src.utils.metrics.OTLPMetricExporter")
-    @patch("src.utils.metrics.PeriodicExportingMetricReader")
-    @patch("src.utils.metrics.MeterProvider")
-    @patch("src.utils.metrics.metrics.set_meter_provider")
-    @patch("src.utils.metrics.metrics.get_meter")
+    @patch("grafana_otel.client.OTLPMetricExporter")
+    @patch("grafana_otel.client.PeriodicExportingMetricReader")
+    @patch("grafana_otel.client.MeterProvider")
+    @patch("grafana_otel.client.metrics.set_meter_provider")
+    @patch("grafana_otel.client.metrics.get_meter")
     def test_histogram_initialization(
         self,
         mock_get_meter,
@@ -171,7 +159,7 @@ class TestMLSScraperMetrics:
         # Track histogram creation calls
         histogram_calls = []
 
-        def track_histogram_creation(name, description, unit):
+        def track_histogram_creation(name, description, unit="s"):
             histogram_calls.append((name, description, unit))
             return Mock()
 
@@ -197,12 +185,11 @@ class TestMLSScraperMetrics:
                 "Distribution of browser operation execution times",
                 "s",
             ),
-            # Lambda execution histogram was removed
-            # (
-            #     "lambda_execution_duration_seconds",
-            #     "Distribution of Lambda function execution times",
-            #     "s",
-            # ),
+            (
+                "application_execution_duration_seconds",
+                "Distribution of application execution times",
+                "s",
+            ),
         ]
 
         for expected in expected_histograms:
@@ -215,10 +202,10 @@ class TestMetricsRecording:
     def setup_method(self):
         """Set up test fixtures."""
         with (
-            patch("src.utils.metrics.OTLPMetricExporter"),
-            patch("src.utils.metrics.PeriodicExportingMetricReader"),
-            patch("src.utils.metrics.MeterProvider"),
-            patch("src.utils.metrics.metrics.set_meter_provider"),
+            patch("grafana_otel.client.OTLPMetricExporter"),
+            patch("grafana_otel.client.PeriodicExportingMetricReader"),
+            patch("grafana_otel.client.MeterProvider"),
+            patch("grafana_otel.client.metrics.set_meter_provider"),
         ):
             self.metrics = MLSScraperMetrics()
 
@@ -231,7 +218,7 @@ class TestMetricsRecording:
             self.metrics.scraping_duration_histogram = Mock()
             self.metrics.api_call_duration_histogram = Mock()
             self.metrics.browser_operation_duration_histogram = Mock()
-            self.metrics.lambda_duration_histogram = Mock()
+            self.metrics.execution_duration_histogram = Mock()
 
     def test_record_games_scheduled(self):
         """Test recording games scheduled metric."""
@@ -401,13 +388,12 @@ class TestMetricsIntegration:
             "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer test-token",
             "OTEL_METRIC_EXPORT_INTERVAL": "10000",
             "OTEL_METRIC_EXPORT_TIMEOUT": "60000",
-            "AWS_LAMBDA_FUNCTION_NAME": "test-function",
         },
     )
-    @patch("src.utils.metrics.OTLPMetricExporter")
-    @patch("src.utils.metrics.PeriodicExportingMetricReader")
-    @patch("src.utils.metrics.MeterProvider")
-    @patch("src.utils.metrics.metrics.set_meter_provider")
+    @patch("grafana_otel.client.OTLPMetricExporter")
+    @patch("grafana_otel.client.PeriodicExportingMetricReader")
+    @patch("grafana_otel.client.MeterProvider")
+    @patch("grafana_otel.client.metrics.set_meter_provider")
     def test_metrics_with_environment_variables(
         self, mock_set_provider, mock_meter_provider, mock_reader, mock_exporter
     ):

@@ -239,6 +239,16 @@ wheels = [
 ]
 
 [[package]]
+name = "grafana-otel-py"
+version = "0.1.0"
+source = { git = "https://github.com/silverbeer/grafana-otel-py.git?rev=v0.1.2#8dfab11ee60bf9918ce808897b4c89909b09bb8b" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+]
+
+[[package]]
 name = "greenlet"
 version = "3.2.4"
 source = { registry = "https://pypi.org/simple" }
@@ -489,6 +499,7 @@ name = "mls-match-scraper"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "grafana-otel-py" },
     { name = "httpx" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
@@ -521,6 +532,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "grafana-otel-py", git = "https://github.com/silverbeer/grafana-otel-py.git?rev=v0.1.2" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "opentelemetry-api", specifier = ">=1.20.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.20.0" },
