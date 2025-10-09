@@ -424,11 +424,12 @@ class TestMetricsIntegration:
         MLSScraperMetrics()  # Initialize metrics
 
         # Verify OTLP exporter was configured with environment variables
-        mock_exporter.assert_called_once_with(
-            endpoint="https://otlp-gateway-test.grafana.net",
-            headers={"Authorization": "Bearer test-token"},
-            timeout=30,
-        )
+        # Note: preferred_temporality is added for Grafana Cloud compatibility
+        call_args = mock_exporter.call_args
+        assert call_args[1]["endpoint"] == "https://otlp-gateway-test.grafana.net"
+        assert call_args[1]["headers"] == {"Authorization": "Bearer test-token"}
+        assert call_args[1]["timeout"] == 30
+        assert "preferred_temporality" in call_args[1]
 
         # Verify periodic reader was configured with environment variables
         mock_reader.assert_called_once_with(

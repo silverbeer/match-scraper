@@ -15,7 +15,11 @@ from typing import Optional
 from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.metrics._internal.instrument import Counter, Histogram
+from opentelemetry.sdk.metrics.export import (
+    AggregationTemporality,
+    PeriodicExportingMetricReader,
+)
 from opentelemetry.sdk.resources import Resource
 
 
@@ -60,11 +64,17 @@ class MLSScraperMetrics:
 
         if otlp_endpoint:
             try:
-                # Configure OTLP exporter for Grafana Cloud
+                # Configure OTLP exporter for Grafana Cloud with Delta temporality
+                # Grafana Cloud requires Delta temporality for counters and histograms
                 otlp_exporter = OTLPMetricExporter(
                     endpoint=otlp_endpoint,
                     headers=self._parse_otlp_headers(),
                     timeout=30,
+                    preferred_temporality={
+                        # Use Delta temporality for counters and histograms (required by Grafana Cloud)
+                        Counter: AggregationTemporality.DELTA,
+                        Histogram: AggregationTemporality.DELTA,
+                    },
                 )
 
                 # Configure periodic metric reader
