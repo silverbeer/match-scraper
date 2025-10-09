@@ -2,7 +2,7 @@
 MissingTable.com API client for match data integration.
 
 This module provides a client for communicating with the missing-table.com API
-to create games, update scores, and manage match data with proper authentication,
+to create matches, update scores, and manage match data with proper authentication,
 error handling, and retry logic.
 """
 
@@ -49,7 +49,7 @@ class MissingTableClient:
     """
     Client for interacting with the missing-table.com API.
 
-    Provides methods for health checks, game creation, score updates,
+    Provides methods for health checks, match creation, score updates,
     with built-in authentication, retry logic, and comprehensive error handling.
     """
 
@@ -320,34 +320,34 @@ class MissingTableClient:
             f"Request failed after {self.max_retries + 1} attempts"
         )
 
-    async def create_game(self, game_data: dict[str, Any]) -> dict[str, Any]:
+    async def create_match(self, match_data: dict[str, Any]) -> dict[str, Any]:
         """
-        Create a new game in the missing-table API.
+        Create a new match in the missing-table API.
 
         Args:
-            game_data: Game information dictionary
+            match_data: Match information dictionary
 
         Returns:
-            Created game data from API response
+            Created match data from API response
 
         Raises:
-            MissingTableAPIError: If game creation fails
+            MissingTableAPIError: If match creation fails
         """
         logger.info(
-            "Creating new game",
+            "Creating new match",
             extra={
-                "home_team": game_data.get("home_team"),
-                "away_team": game_data.get("away_team"),
-                "game_date": game_data.get("game_date"),
+                "home_team": match_data.get("home_team"),
+                "away_team": match_data.get("away_team"),
+                "match_date": match_data.get("match_date"),
             },
         )
 
-        result = await self._make_request("POST", "api/games", data=game_data)
+        result = await self._make_request("POST", "api/matches", data=match_data)
 
         logger.info(
-            "Game created successfully",
+            "Match created successfully",
             extra={
-                "game_id": result.get("id"),
+                "match_id": result.get("id"),
                 "home_team": result.get("home_team"),
                 "away_team": result.get("away_team"),
             },
@@ -355,38 +355,38 @@ class MissingTableClient:
 
         return result
 
-    async def update_score(
-        self, game_id: str, score_data: dict[str, Any]
+    async def update_match_score(
+        self, match_id: str, score_data: dict[str, Any]
     ) -> dict[str, Any]:
         """
-        Update the score for an existing game using PATCH.
+        Update the score for an existing match using PATCH.
 
         Args:
-            game_id: ID of the game to update
+            match_id: ID of the match to update
             score_data: Score information dictionary (can include home_score, away_score, match_status)
 
         Returns:
-            Updated game data from API response
+            Updated match data from API response
 
         Raises:
             MissingTableAPIError: If score update fails
         """
         logger.info(
-            "Updating game score",
+            "Updating match score",
             extra={
-                "game_id": game_id,
+                "match_id": match_id,
                 "home_score": score_data.get("home_score"),
                 "away_score": score_data.get("away_score"),
             },
         )
 
-        endpoint = f"api/games/{game_id}"
+        endpoint = f"api/matches/{match_id}"
         result = await self._make_request("PATCH", endpoint, data=score_data)
 
         logger.info(
             "Score updated successfully",
             extra={
-                "game_id": game_id,
+                "match_id": match_id,
                 "home_score": result.get("home_score"),
                 "away_score": result.get("away_score"),
             },
@@ -394,46 +394,46 @@ class MissingTableClient:
 
         return result
 
-    async def get_game(self, game_id: str) -> dict[str, Any]:
+    async def get_match(self, match_id: str) -> dict[str, Any]:
         """
-        Retrieve a game by ID.
+        Retrieve a match by ID.
 
         Args:
-            game_id: ID of the game to retrieve
+            match_id: ID of the match to retrieve
 
         Returns:
-            Game data from API response
+            Match data from API response
 
         Raises:
-            MissingTableAPIError: If game retrieval fails
+            MissingTableAPIError: If match retrieval fails
         """
-        logger.debug("Retrieving game", extra={"game_id": game_id})
+        logger.debug("Retrieving match", extra={"match_id": match_id})
 
-        endpoint = f"api/games/{game_id}"
+        endpoint = f"api/matches/{match_id}"
         result = await self._make_request("GET", endpoint)
 
         return result
 
-    async def list_games(self, **filters: Any) -> list[dict[str, Any]]:
+    async def list_matches(self, **filters: Any) -> list[dict[str, Any]]:
         """
-        List games with optional filters.
+        List matches with optional filters.
 
         Args:
-            **filters: Query parameters for filtering games
+            **filters: Query parameters for filtering matches
 
         Returns:
-            List of games from API response
+            List of matches from API response
 
         Raises:
-            MissingTableAPIError: If games listing fails
+            MissingTableAPIError: If matches listing fails
         """
-        logger.debug("Listing games", extra={"filters": filters})
+        logger.debug("Listing matches", extra={"filters": filters})
 
-        result = await self._make_request("GET", "api/games", params=filters)
+        result = await self._make_request("GET", "api/matches", params=filters)
 
-        # Assume the API returns a list directly or in a 'games' field
+        # Assume the API returns a list directly or in a 'matches' field
         if isinstance(result, list):
-            games_list: list[dict[str, Any]] = result
-            return games_list
-        games_from_dict: list[dict[str, Any]] = result.get("games", [])
-        return games_from_dict
+            matches_list: list[dict[str, Any]] = result
+            return matches_list
+        matches_from_dict: list[dict[str, Any]] = result.get("matches", [])
+        return matches_from_dict

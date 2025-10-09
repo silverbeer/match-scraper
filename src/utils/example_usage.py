@@ -44,13 +44,13 @@ def example_scraping_operation() -> dict[str, Any]:
         duration = time.time() - start_time
 
         scraper_logger.log_api_call(
-            endpoint="/api/games",
+            endpoint="/api/matches",
             method="POST",
             status_code=201,
             duration_ms=duration * 1000,
         )
         metrics.record_api_call(
-            endpoint="/api/games",
+            endpoint="/api/matches",
             method="POST",
             status_code=201,
             duration_seconds=duration,

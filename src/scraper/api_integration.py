@@ -180,8 +180,8 @@ class MatchAPIIntegrator:
                     f"Failed to initialize API data for teams: {', '.join(sorted(team_names)[:3])}{'...' if len(team_names) > 3 else ''}. Error: {e}"
                 ) from e
 
-        # Load existing games for deduplication
-        existing_games_map = await self._load_existing_games_for_deduplication(
+        # Load existing matches for deduplication
+        existing_matches_map = await self._load_existing_matches_for_deduplication(
             matches, age_group, division
         )
 
@@ -200,11 +200,11 @@ class MatchAPIIntegrator:
         for match in matches:
             try:
                 # Convert match to API format
-                game_data = await self._convert_match_to_api_format(
+                match_data = await self._convert_match_to_api_format(
                     match, age_group, division
                 )
 
-                if not game_data:
+                if not match_data:
                     logger.warning(
                         f"Skipping match {match.match_id} - could not convert to API format"
                     )
@@ -212,37 +212,37 @@ class MatchAPIIntegrator:
                     continue
 
                 # Check for duplicates
-                duplicate_key = self._create_game_duplicate_key(game_data)
-                if duplicate_key in existing_games_map:
-                    existing_game = existing_games_map[duplicate_key]
+                duplicate_key = self._create_match_duplicate_key(match_data)
+                if duplicate_key in existing_matches_map:
+                    existing_match = existing_matches_map[duplicate_key]
 
                     # Check if we need to update the score
                     scraped_has_score = match.has_score()
-                    existing_home_score = existing_game.get("home_score")
-                    existing_away_score = existing_game.get("away_score")
+                    existing_home_score = existing_match.get("home_score")
+                    existing_away_score = existing_match.get("away_score")
                     existing_has_score = (
                         existing_home_score is not None
                         and existing_away_score is not None
                         and (existing_home_score > 0 or existing_away_score > 0)
                     )
 
-                    # If scraped match has a score and existing game doesn't, update it
+                    # If scraped match has a score and existing match doesn't, update it
                     if scraped_has_score and not existing_has_score:
                         try:
-                            game_id = existing_game.get("id")
+                            match_id = existing_match.get("id")
                             score_data = {
-                                "home_score": game_data["home_score"],
-                                "away_score": game_data["away_score"],
-                                "match_status": game_data["match_status"],
+                                "home_score": match_data["home_score"],
+                                "away_score": match_data["away_score"],
+                                "match_status": match_data["match_status"],
                             }
 
-                            await self.client.update_score(game_id, score_data)
+                            await self.client.update_match_score(match_id, score_data)
 
                             logger.info(
                                 f"Updated score for existing match {match.match_id}",
                                 extra={
                                     "match_id": match.match_id,
-                                    "existing_game_id": game_id,
+                                    "existing_match_id": match_id,
                                     "home_score": score_data["home_score"],
                                     "away_score": score_data["away_score"],
                                 },
@@ -252,7 +252,7 @@ class MatchAPIIntegrator:
                             results["updated_matches"].append(
                                 {
                                     "match_id": match.match_id,
-                                    "existing_game_id": game_id,
+                                    "existing_match_id": match_id,
                                     "home_team": match.home_team,
                                     "away_team": match.away_team,
                                     "home_score": score_data["home_score"],
@@ -264,40 +264,43 @@ class MatchAPIIntegrator:
                         except Exception as e:
                             logger.error(
                                 f"Failed to update score for match {match.match_id}: {e}",
-                                extra={"match_id": match.match_id, "game_id": game_id},
+                                extra={
+                                    "match_id": match.match_id,
+                                    "existing_match_id": match_id,
+                                },
                             )
                             # Fall through to mark as duplicate
 
-                    # Game exists and no update needed
+                    # Match exists and no update needed
                     logger.info(
                         f"Skipping duplicate match {match.match_id}",
                         extra={
                             "match_id": match.match_id,
-                            "existing_game_id": existing_game.get("id"),
+                            "existing_match_id": existing_match.get("id"),
                             "home_team": match.home_team,
                             "away_team": match.away_team,
-                            "game_date": game_data["game_date"],
+                            "match_date": match_data["match_date"],
                         },
                     )
                     results["duplicates"] += 1
                     results["duplicate_matches"].append(
                         {
                             "match_id": match.match_id,
-                            "existing_game_id": existing_game.get("id"),
+                            "existing_match_id": existing_match.get("id"),
                             "home_team": match.home_team,
                             "away_team": match.away_team,
-                            "game_date": game_data["game_date"],
+                            "match_date": match_data["match_date"],
                         }
                     )
                     continue
 
                 # Post to API (only if not a duplicate)
-                api_result = await self.client.create_game(game_data)
+                api_result = await self.client.create_match(match_data)
                 results["posted"] += 1
                 results["posted_matches"].append(
                     {
                         "match_id": match.match_id,
-                        "api_game_id": api_result.get("id"),
+                        "api_match_id": api_result.get("id"),
                         "home_team": match.home_team,
                         "away_team": match.away_team,
                     }
@@ -307,7 +310,7 @@ class MatchAPIIntegrator:
                     f"Successfully posted match {match.match_id} to API",
                     extra={
                         "match_id": match.match_id,
-                        "api_game_id": api_result.get("id"),
+                        "api_match_id": api_result.get("id"),
                         "home_team": match.home_team,
                         "away_team": match.away_team,
                     },
@@ -604,38 +607,38 @@ class MatchAPIIntegrator:
             logger.warning(f"Error getting season: {e}")
             return 1  # Default fallback
 
-    async def _get_game_type_id(self) -> int:
-        """Get game type ID for regular league games."""
+    async def _get_match_type_id(self) -> int:
+        """Get match type ID for regular league matches."""
         try:
-            game_types_response = await self.client._make_request(
-                "GET", "api/game-types"
+            match_types_response = await self.client._make_request(
+                "GET", "api/match-types"
             )
 
             # Handle both array response and wrapped response
             if (
-                isinstance(game_types_response, dict)
-                and "game_types" in game_types_response
+                isinstance(match_types_response, dict)
+                and "match_types" in match_types_response
             ):
-                game_types_list = cast(list[Any], game_types_response["game_types"])
+                match_types_list = cast(list[Any], match_types_response["match_types"])
             else:
-                game_types_list = cast(list[Any], game_types_response)
+                match_types_list = cast(list[Any], match_types_response)
 
-            # Look for "League" or "Regular" game type
-            for gt in game_types_list:
-                name = gt.get("name", "").lower()
+            # Look for "League" or "Regular" match type
+            for mt in match_types_list:
+                name = mt.get("name", "").lower()
                 if "league" in name or "regular" in name:
-                    game_type_id: int = gt.get("id")
-                    return game_type_id
+                    match_type_id: int = mt.get("id")
+                    return match_type_id
 
             # Return first available or default
-            if game_types_list:
-                first_game_type_id: int = game_types_list[0].get("id")
-                return first_game_type_id
+            if match_types_list:
+                first_match_type_id: int = match_types_list[0].get("id")
+                return first_match_type_id
 
             return 1  # Default fallback
 
         except Exception as e:
-            logger.warning(f"Error getting game type: {e}")
+            logger.warning(f"Error getting match type: {e}")
             return 1  # Default fallback
 
     async def _convert_match_to_api_format(
@@ -657,7 +660,7 @@ class MatchAPIIntegrator:
             age_group_id = self._age_group_cache.get(age_group)
             division_id = self._division_cache.get(division)
             season_id = await self._get_season_id()
-            game_type_id = await self._get_game_type_id()
+            match_type_id = await self._get_match_type_id()
 
             if not age_group_id:
                 logger.warning(f"Missing age group ID for {age_group}")
@@ -673,11 +676,11 @@ class MatchAPIIntegrator:
                 away_score = int(match.away_score)
 
             # Format date for API (API expects just date, not datetime)
-            game_date = match.match_datetime.date().isoformat()
+            match_date = match.match_datetime.date().isoformat()
 
             api_data = {
                 "match_id": match.match_id,
-                "game_date": game_date,
+                "match_date": match_date,
                 "home_team_id": home_team_id,
                 "away_team_id": away_team_id,
                 "home_score": home_score,
@@ -685,7 +688,7 @@ class MatchAPIIntegrator:
                 "match_status": match.match_status,
                 "season_id": season_id,
                 "age_group_id": age_group_id,
-                "game_type_id": game_type_id,
+                "match_type_id": match_type_id,
                 "division_id": division_id,
             }
 
@@ -695,11 +698,11 @@ class MatchAPIIntegrator:
             logger.error(f"Error converting match {match.match_id} to API format: {e}")
             return None
 
-    async def _load_existing_games_for_deduplication(
+    async def _load_existing_matches_for_deduplication(
         self, matches: list[Match], age_group: str, division: str
     ) -> dict[str, dict]:
         """
-        Load existing games from API for deduplication checking.
+        Load existing matches from API for deduplication checking.
 
         Args:
             matches: List of matches being processed
@@ -707,10 +710,10 @@ class MatchAPIIntegrator:
             division: Division filter
 
         Returns:
-            Dictionary mapping duplicate keys to existing game data
+            Dictionary mapping duplicate keys to existing match data
         """
         try:
-            logger.info("Loading existing games for deduplication")
+            logger.info("Loading existing matches for deduplication")
 
             # Get date range from matches
             dates = [
@@ -727,7 +730,7 @@ class MatchAPIIntegrator:
             age_group_id = self._age_group_cache.get(age_group)
             division_id = self._division_cache.get(division)
 
-            # Query existing games with filters
+            # Query existing matches with filters
             filters: dict[str, Any] = {
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
@@ -739,42 +742,42 @@ class MatchAPIIntegrator:
             if division_id:
                 filters["division_id"] = division_id
 
-            existing_games = await self.client.list_games(**filters)
+            existing_matches = await self.client.list_matches(**filters)
 
             # Build duplicate key map
-            existing_games_map = {}
-            for game in existing_games:
-                duplicate_key = self._create_game_duplicate_key(game)
-                existing_games_map[duplicate_key] = game
+            existing_matches_map = {}
+            for match in existing_matches:
+                duplicate_key = self._create_match_duplicate_key(match)
+                existing_matches_map[duplicate_key] = match
 
             logger.info(
-                f"Loaded {len(existing_games)} existing games for deduplication",
+                f"Loaded {len(existing_matches)} existing matches for deduplication",
                 extra={
                     "date_range": f"{start_date} to {end_date}",
-                    "existing_games_count": len(existing_games),
+                    "existing_matches_count": len(existing_matches),
                 },
             )
 
-            return existing_games_map
+            return existing_matches_map
 
         except Exception as e:
-            logger.warning(f"Failed to load existing games for deduplication: {e}")
+            logger.warning(f"Failed to load existing matches for deduplication: {e}")
             # Continue without deduplication rather than failing completely
             return {}
 
-    def _create_game_duplicate_key(self, game_data: dict[str, Any]) -> str:
+    def _create_match_duplicate_key(self, match_data: dict[str, Any]) -> str:
         """
-        Create a unique key for game deduplication.
+        Create a unique key for match deduplication.
 
         Args:
-            game_data: Game data dictionary
+            match_data: Match data dictionary
 
         Returns:
-            Unique key string for the game
+            Unique key string for the match
         """
-        # Use game_date + home_team_id + away_team_id as unique identifier
-        game_date = game_data.get("game_date", "")
-        home_team_id = game_data.get("home_team_id", "")
-        away_team_id = game_data.get("away_team_id", "")
+        # Use match_date + home_team_id + away_team_id as unique identifier
+        match_date = match_data.get("match_date", "")
+        home_team_id = match_data.get("home_team_id", "")
+        away_team_id = match_data.get("away_team_id", "")
 
-        return f"{game_date}:{home_team_id}:{away_team_id}"
+        return f"{match_date}:{home_team_id}:{away_team_id}"

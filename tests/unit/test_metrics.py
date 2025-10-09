@@ -249,17 +249,17 @@ class TestMetricsRecording:
     def test_record_api_call(self):
         """Test recording API call metrics."""
         self.metrics.record_api_call(
-            endpoint="/api/games",
+            endpoint="/api/matches",
             method="POST",
             status_code=201,
             duration_seconds=0.25,
-            labels={"operation": "create_game"},
+            labels={"operation": "create_match"},
         )
 
         expected_attributes = {
-            "operation": "create_game",
+            "operation": "create_match",
             "service": "mls-match-scraper",
-            "endpoint": "/api/games",
+            "endpoint": "/api/matches",
             "method": "POST",
             "status_code": "201",
             "status_class": "2xx",

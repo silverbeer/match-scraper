@@ -31,7 +31,10 @@ class TestCliUtilityFunctions:
 
     def test_setup_environment_default(self):
         """Test default environment setup."""
-        with patch.dict(os.environ, {}, clear=True):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("dotenv.load_dotenv"),  # Prevent .env loading
+        ):
             setup_environment()
 
             # Default log level is now ERROR (not WARNING)
