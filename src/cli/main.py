@@ -210,6 +210,7 @@ def create_config(
     verbose: bool = False,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    use_async_api: bool = True,
 ) -> ScrapingConfig:
     """Create scraping configuration from CLI parameters."""
 
@@ -261,6 +262,8 @@ def create_config(
         cache_refresh_on_miss=os.getenv("CACHE_REFRESH_ON_MISS", "true").lower()
         == "true",
         cache_preload_timeout=int(os.getenv("CACHE_PRELOAD_TIMEOUT", "30")),
+        # API integration configuration
+        use_async_api=use_async_api,
     )
 
 
@@ -830,6 +833,20 @@ def scrape(
             "--save", help="Save matches to JSON file (e.g., --save games.json)"
         ),
     ] = None,
+    async_api: Annotated[
+        bool,
+        typer.Option(
+            "--async-api/--sync-api",
+            help="Use async API for match submission (default: async)",
+        ),
+    ] = True,
+    use_queue: Annotated[
+        bool,
+        typer.Option(
+            "--use-queue",
+            help="Submit matches directly to RabbitMQ queue (bypasses HTTP API)",
+        ),
+    ] = False,
 ) -> None:
     """
     ⚽ Scrape MLS match data and display in beautiful format.
@@ -857,7 +874,7 @@ def scrape(
 
     # Create configuration
     config = create_config(
-        age_group, division, start, end, club, competition, verbose, from_date, to_date
+        age_group, division, start, end, club, competition, verbose, from_date, to_date, async_api
     )
 
     if not quiet:
@@ -871,9 +888,70 @@ def scrape(
         metrics = get_metrics()
 
         with metrics.time_execution():
+            # If using queue, disable API integration in scraper
+            # (we'll submit to queue after scraping)
+            enable_api = api_integration and not use_queue
+
             matches, api_healthy, api_results = asyncio.run(
-                run_scraper(config, verbose, headless, api_integration)
+                run_scraper(config, verbose, headless, enable_api)
             )
+
+        # Submit to RabbitMQ queue if requested
+        if use_queue and matches and api_integration:
+            from src.celery.queue_client import MatchQueueClient
+
+            console.print("\n[cyan]📨 Submitting matches to RabbitMQ queue...[/cyan]")
+
+            try:
+                queue_client = MatchQueueClient()
+
+                # Check connection first
+                if not queue_client.check_connection():
+                    console.print(
+                        "[red]❌ Cannot connect to RabbitMQ - matches not queued[/red]"
+                    )
+                else:
+                    # Convert Match objects to dict for queue submission
+                    match_dicts = []
+                    for match in matches:
+                        match_dict = {
+                            "home_team": match.home_team,
+                            "away_team": match.away_team,
+                            "date": match.match_datetime.date().isoformat()
+                            if match.match_datetime
+                            else date.today().isoformat(),
+                            "season": "2024-25",  # TODO: derive from match date
+                            "age_group": config.age_group,
+                            "match_type": "League",
+                            "division": config.division if config.division else None,
+                            "score_home": match.home_score,
+                            "score_away": match.away_score,
+                            "status": match.match_status or "scheduled",
+                            "match_id": match.match_id,
+                            "location": match.location,
+                        }
+                        match_dicts.append(match_dict)
+
+                    # Submit batch
+                    task_ids = queue_client.submit_matches_batch(match_dicts)
+
+                    # Update api_results for display
+                    api_results = {
+                        "posted": len(task_ids),
+                        "errors": len(matches) - len(task_ids),
+                        "skipped": 0,
+                        "duplicates": 0,
+                        "updated": 0,
+                    }
+
+                    console.print(
+                        f"[green]✅ {len(task_ids)} matches queued for processing[/green]"
+                    )
+
+            except Exception as e:
+                console.print(f"[red]❌ Queue submission failed: {e}[/red]")
+                if verbose:
+                    console.print_exception()
 
         # Filter for upcoming only if requested
         if upcoming_only:

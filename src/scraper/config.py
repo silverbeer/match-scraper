@@ -27,6 +27,11 @@ class ScrapingConfig(BaseModel):
     missing_table_api_key: str = Field(..., description="Missing Table API key")
     log_level: str = Field(default="INFO", description="Logging level")
 
+    # API integration configuration
+    use_async_api: bool = Field(
+        default=True, description="Use async API for match submission (recommended)"
+    )
+
     # Team cache configuration
     enable_team_cache: bool = Field(default=True, description="Enable team caching")
     cache_refresh_on_miss: bool = Field(
@@ -169,6 +174,9 @@ def load_config() -> ScrapingConfig:
     # Calculate date range using date_handler
     start_date, end_date = calculate_date_range(look_back_days)
 
+    # API integration configuration
+    use_async_api = os.getenv("USE_ASYNC_API", "true").lower() == "true"
+
     # Team cache configuration
     enable_team_cache = os.getenv("ENABLE_TEAM_CACHE", "true").lower() == "true"
     cache_refresh_on_miss = os.getenv("CACHE_REFRESH_ON_MISS", "true").lower() == "true"
@@ -196,6 +204,7 @@ def load_config() -> ScrapingConfig:
         missing_table_api_url=missing_table_api_url,
         missing_table_api_key=missing_table_api_key,
         log_level=log_level,
+        use_async_api=use_async_api,
         enable_team_cache=enable_team_cache,
         cache_refresh_on_miss=cache_refresh_on_miss,
         cache_preload_timeout=cache_preload_timeout,

@@ -22,6 +22,8 @@ dependencies = [
     "pytest-playwright>=0.7.1",
     "python-dotenv>=1.1.1",
     "grafana-otel-py",
+    "celery>=5.5.3",
+    "kombu>=5.5.4",
 ]
 
 [project.scripts]
