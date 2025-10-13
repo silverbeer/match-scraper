@@ -151,10 +151,17 @@ class MLSScraper:
             # Post matches to missing-table API if integration is enabled
             if self.enable_api_integration and self.api_integrator and matches:
                 try:
-                    logger.info("Starting API integration to post matches")
-                    api_results = await self.api_integrator.post_matches(
-                        matches, self.config.age_group, self.config.division
-                    )
+                    # Choose between sync and async API based on configuration
+                    if self.config.use_async_api:
+                        logger.info("Starting async API integration to post matches")
+                        api_results = await self.api_integrator.post_matches_async(
+                            matches, self.config.age_group, self.config.division
+                        )
+                    else:
+                        logger.info("Starting sync API integration to post matches")
+                        api_results = await self.api_integrator.post_matches(
+                            matches, self.config.age_group, self.config.division
+                        )
 
                     # Store the full API results for later retrieval
                     self.api_results = api_results
@@ -174,6 +181,7 @@ class MLSScraper:
                             "errors": api_results.get("errors", 0),
                             "skipped": api_results.get("skipped", 0),
                             "duplicates": api_results.get("duplicates", 0),
+                            "use_async": self.config.use_async_api,
                         },
                     )
                 except Exception as e:

@@ -437,3 +437,91 @@ class MissingTableClient:
             return matches_list
         matches_from_dict: list[dict[str, Any]] = result.get("matches", [])
         return matches_from_dict
+
+    async def submit_match_async(
+        self, match_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Submit a match for asynchronous processing via Celery workers.
+
+        This method posts to the /api/matches/submit endpoint which queues
+        the match for processing and returns immediately with a task ID.
+
+        Args:
+            match_data: Match information dictionary with team names (not IDs)
+                Required fields: home_team, away_team, match_date, season
+                Optional: age_group, division, home_score, away_score, etc.
+
+        Returns:
+            Dictionary containing:
+                - task_id: Celery task ID for status polling
+                - status_url: URL to check task status
+                - match: Echo of submitted match data
+
+        Raises:
+            MissingTableAPIError: If submission fails
+
+        Example:
+            >>> match_data = {
+            ...     "home_team": "Team A",
+            ...     "away_team": "Team B",
+            ...     "match_date": "2025-10-25T15:00:00Z",
+            ...     "season": "2025-26",
+            ...     "age_group": "U14",
+            ...     "external_match_id": "mls-12345"
+            ... }
+            >>> result = await client.submit_match_async(match_data)
+            >>> task_id = result["task_id"]
+        """
+        logger.info(
+            "Submitting match for async processing",
+            extra={
+                "home_team": match_data.get("home_team"),
+                "away_team": match_data.get("away_team"),
+                "match_date": match_data.get("match_date"),
+            },
+        )
+
+        result = await self._make_request(
+            "POST", "api/matches/submit", data=match_data
+        )
+
+        logger.info(
+            "Match submitted successfully",
+            extra={
+                "task_id": result.get("task_id"),
+                "status_url": result.get("status_url"),
+            },
+        )
+
+        return result
+
+    async def get_task_status(self, task_id: str) -> dict[str, Any]:
+        """
+        Check the status of an async match processing task.
+
+        Args:
+            task_id: The Celery task ID returned from submit_match_async
+
+        Returns:
+            Dictionary containing:
+                - task_id: The task ID
+                - state: Task state (PENDING, SUCCESS, FAILURE, etc.)
+                - ready: Boolean indicating if task is complete
+                - result: Match creation result if successful
+                - error: Error message if failed
+
+        Raises:
+            MissingTableAPIError: If status check fails
+
+        Example:
+            >>> status = await client.get_task_status(task_id)
+            >>> if status["ready"] and status.get("result"):
+            ...     match_id = status["result"]["match_id"]
+        """
+        logger.debug("Checking task status", extra={"task_id": task_id})
+
+        endpoint = f"api/matches/task/{task_id}"
+        result = await self._make_request("GET", endpoint)
+
+        return result
