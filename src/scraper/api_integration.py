@@ -781,3 +781,178 @@ class MatchAPIIntegrator:
         away_team_id = match_data.get("away_team_id", "")
 
         return f"{match_date}:{home_team_id}:{away_team_id}"
+
+    async def post_matches_async(
+        self, matches: list[Match], age_group: str, division: str
+    ) -> dict[str, Any]:
+        """
+        Post matches using async API endpoint (via Celery workers).
+
+        This method submits matches to /api/matches/submit which queues them
+        for async processing. It's faster for bulk operations and doesn't require
+        preloading team caches or entity IDs.
+
+        Args:
+            matches: List of Match objects to post
+            age_group: Age group (e.g., "U14")
+            division: Division (e.g., "Northeast")
+
+        Returns:
+            Dictionary with posting results and task IDs
+        """
+        if not matches:
+            logger.info("No matches to post to API")
+            return {"posted": 0, "errors": 0, "task_ids": []}
+
+        logger.info(
+            f"Starting async API integration for {len(matches)} matches",
+            extra={
+                "match_count": len(matches),
+                "age_group": age_group,
+                "division": division,
+            },
+        )
+
+        results: dict[str, Any] = {
+            "posted": 0,
+            "errors": 0,
+            "task_ids": [],
+            "failed_matches": [],
+            "posted_matches": [],
+        }
+
+        for match in matches:
+            try:
+                # Convert match to async API format (uses team names, not IDs)
+                match_data = self._convert_match_to_async_format(
+                    match, age_group, division
+                )
+
+                if not match_data:
+                    logger.warning(
+                        f"Skipping match {match.match_id} - could not convert to async format"
+                    )
+                    results["errors"] += 1
+                    continue
+
+                # Submit to async API
+                submit_result = await self.client.submit_match_async(match_data)
+                task_id = submit_result.get("task_id")
+
+                results["posted"] += 1
+                results["task_ids"].append(task_id)
+                results["posted_matches"].append(
+                    {
+                        "match_id": match.match_id,
+                        "task_id": task_id,
+                        "home_team": match.home_team,
+                        "away_team": match.away_team,
+                    }
+                )
+
+                logger.info(
+                    f"Successfully submitted match {match.match_id} for async processing",
+                    extra={
+                        "match_id": match.match_id,
+                        "task_id": task_id,
+                        "home_team": match.home_team,
+                        "away_team": match.away_team,
+                    },
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to submit match {match.match_id} to async API: {e}",
+                    extra={"match_id": match.match_id, "error": str(e)},
+                )
+                results["errors"] += 1
+                results["failed_matches"].append(
+                    {
+                        "match_id": match.match_id,
+                        "error": str(e),
+                        "home_team": match.home_team,
+                        "away_team": match.away_team,
+                    }
+                )
+
+        logger.info(
+            "Async API integration completed",
+            extra={
+                "posted": results["posted"],
+                "errors": results["errors"],
+                "task_count": len(results["task_ids"]),
+            },
+        )
+
+        return results
+
+    def _convert_match_to_async_format(
+        self, match: Match, age_group: str, division: str
+    ) -> Optional[dict]:
+        """
+        Convert a Match object to async API format (with team names).
+
+        The async API accepts team names instead of IDs and handles
+        entity resolution on the backend via Celery workers.
+
+        Args:
+            match: Match object to convert
+            age_group: Age group name
+            division: Division name
+
+        Returns:
+            Dictionary for async API submission or None if conversion fails
+        """
+        try:
+            # Use normalized team names
+            home_team = self._normalize_team_name(match.home_team)
+            away_team = self._normalize_team_name(match.away_team)
+
+            # Handle scores
+            home_score = None
+            away_score = None
+
+            if match.home_score is not None and str(match.home_score).isdigit():
+                home_score = int(match.home_score)
+            if match.away_score is not None and str(match.away_score).isdigit():
+                away_score = int(match.away_score)
+
+            # Format match date as ISO string
+            match_date = match.match_datetime.isoformat()
+
+            # Determine season from match date (simple logic - could be enhanced)
+            match_year = match.match_datetime.year
+            match_month = match.match_datetime.month
+
+            # MLS Next season typically runs Aug-July
+            if match_month >= 8:  # August or later
+                season = f"{match_year}-{str(match_year + 1)[2:]}"
+            else:
+                season = f"{match_year - 1}-{str(match_year)[2:]}"
+
+            api_data = {
+                "home_team": home_team,
+                "away_team": away_team,
+                "match_date": match_date,
+                "season": season,
+                "age_group": age_group,
+                "division": division,
+                "match_status": match.match_status,
+                "match_type": "League",  # Default to League
+                "location": None,  # Not available from MLS scraping
+                "external_match_id": match.match_id,  # Use scraped ID for deduplication
+            }
+
+            # Add scores if available
+            if home_score is not None:
+                api_data["home_score"] = home_score
+            if away_score is not None:
+                api_data["away_score"] = away_score
+
+            return api_data
+
+        except Exception as e:
+            logger.error(
+                f"Error converting match {match.match_id} to async format: {e}"
+            )
+            return None
