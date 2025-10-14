@@ -936,8 +936,12 @@ def scrape(
                     match_dicts = []
                     for match in matches:
                         match_dict = {
-                            "home_team": match.home_team,
-                            "away_team": match.away_team,
+                            "home_team": normalize_team_name_for_display(
+                                match.home_team
+                            ),
+                            "away_team": normalize_team_name_for_display(
+                                match.away_team
+                            ),
                             "match_date": match.match_datetime.date().isoformat()
                             if match.match_datetime
                             else date.today().isoformat(),
