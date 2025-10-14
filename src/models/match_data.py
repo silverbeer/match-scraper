@@ -26,19 +26,19 @@ class MatchData(BaseModel):
     # Required fields
     home_team: str = Field(..., min_length=1, description="Home team name")
     away_team: str = Field(..., min_length=1, description="Away team name")
-    date: DateType = Field(..., description="Match date")
+    match_date: DateType = Field(..., description="Match date")
     season: str = Field(..., min_length=1, description="Season identifier")
     age_group: str = Field(..., min_length=1, description="Age group")
     match_type: str = Field(..., min_length=1, description="Match type")
 
     # Optional fields
     division: str | None = Field(None, description="Division name")
-    score_home: int | None = Field(None, ge=0, description="Home team score")
-    score_away: int | None = Field(None, ge=0, description="Away team score")
-    status: Literal["scheduled", "completed", "postponed", "cancelled"] | None = Field(
-        None, description="Match status"
+    home_score: int | None = Field(None, ge=0, description="Home team score")
+    away_score: int | None = Field(None, ge=0, description="Away team score")
+    match_status: Literal["scheduled", "completed", "postponed", "cancelled"] | None = (
+        Field(None, description="Match status")
     )
-    match_id: str | None = Field(
+    external_match_id: str | None = Field(
         None, description="External match ID for deduplication"
     )
     location: str | None = Field(None, description="Match location/venue")
@@ -52,15 +52,15 @@ class MatchData(BaseModel):
                 {
                     "home_team": "Chicago Fire Juniors",
                     "away_team": "Indiana Fire Academy",
-                    "date": "2025-10-13",
+                    "match_date": "2025-10-13",
                     "season": "2024-25",
                     "age_group": "U14",
                     "match_type": "League",
                     "division": "Northeast",
-                    "score_home": 2,
-                    "score_away": 1,
-                    "status": "completed",
-                    "match_id": "mlsnext_12345",
+                    "home_score": 2,
+                    "away_score": 1,
+                    "match_status": "completed",
+                    "external_match_id": "mlsnext_12345",
                     "location": "Toyota Park",
                 }
             ]

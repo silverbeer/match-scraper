@@ -938,7 +938,7 @@ def scrape(
                         match_dict = {
                             "home_team": match.home_team,
                             "away_team": match.away_team,
-                            "date": match.match_datetime.date().isoformat()
+                            "match_date": match.match_datetime.date().isoformat()
                             if match.match_datetime
                             else date.today().isoformat(),
                             "season": "2024-25",  # TODO: derive from match date
@@ -946,14 +946,14 @@ def scrape(
                             "match_type": "League",
                             "division": config.division if config.division else None,
                             # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
-                            "score_home": match.home_score
+                            "home_score": match.home_score
                             if isinstance(match.home_score, int)
                             else None,
-                            "score_away": match.away_score
+                            "away_score": match.away_score
                             if isinstance(match.away_score, int)
                             else None,
-                            "status": match.match_status or "scheduled",
-                            "match_id": match.match_id,
+                            "match_status": match.match_status or "scheduled",
+                            "external_match_id": match.match_id,
                             "location": match.location,
                         }
                         match_dicts.append(match_dict)
