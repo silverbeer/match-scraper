@@ -25,13 +25,9 @@ echo "Image: $IMAGE_NAME"
 echo "🔐 Configuring Docker authentication..."
 gcloud auth configure-docker
 
-# Step 2: Build the container image
-echo "🏗️  Building container image..."
-docker build -f Dockerfile.gke -t "$IMAGE_NAME" .
-
-# Step 3: Push the image to GCP Container Registry
-echo "📤 Pushing image to GCP Container Registry..."
-docker push "$IMAGE_NAME"
+# Step 2: Build the container image for AMD64 (GKE architecture)
+echo "🏗️  Building container image for linux/amd64..."
+docker buildx build --platform linux/amd64 -f Dockerfile.gke -t "$IMAGE_NAME" --push .
 
 echo ""
 echo "✅ Container image built and pushed successfully!"
