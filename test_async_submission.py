@@ -19,7 +19,8 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from src.api.missing_table_client import MissingTableClient, MissingTableAPIError  # noqa: E402
+# ruff: noqa: E402, I001
+from src.api.missing_table_client import MissingTableClient, MissingTableAPIError
 
 
 async def test_async_submission():
@@ -86,7 +87,7 @@ async def test_async_submission():
         "location": "Test Stadium"
     }
 
-    print(f"📋 Match Details:")
+    print("📋 Match Details:")
     print(f"   Home: {match_data['home_team']}")
     print(f"   Away: {match_data['away_team']}")
     print(f"   Date: {match_data['match_date']}")
@@ -106,7 +107,7 @@ async def test_async_submission():
         task_id = result.get('task_id')
         status_url = result.get('status_url')
 
-        print(f"✅ Match submitted successfully!")
+        print("✅ Match submitted successfully!")
         print(f"   Task ID: {task_id}")
         print(f"   Status URL: {status_url}")
         print()
