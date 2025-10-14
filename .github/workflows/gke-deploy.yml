@@ -100,24 +100,18 @@ jobs:
 
           echo "Building image: ${IMAGE_URI}"
 
-      - name: Build Docker image
+      - name: Build and push Docker image (AMD64)
         run: |
-          docker build \
+          docker buildx build \
+            --platform linux/amd64 \
             -f Dockerfile.gke \
             -t ${{ steps.build-info.outputs.image-uri }} \
             -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/mls-scraper:latest \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --push \
             .
 
-      - name: Push to Google Container Registry
-        run: |
-          # Push tagged version
-          docker push ${{ steps.build-info.outputs.image-uri }}
-
-          # Push latest tag
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mls-scraper:latest
-
-          echo "✅ Image pushed to GCR"
+          echo "✅ Image built and pushed to GCR (linux/amd64)"
 
       - name: Image summary
         run: |
