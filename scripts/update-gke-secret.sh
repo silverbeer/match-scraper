@@ -39,7 +39,17 @@ if [ -z "$MISSING_TABLE_API_TOKEN" ]; then
     exit 1
 fi
 
-echo -e "${GREEN}✓ Token loaded from environment file${NC}"
+# Check if RabbitMQ URL is set and replace localhost with GKE service name
+if [ -z "$RABBITMQ_URL" ]; then
+    echo -e "${YELLOW}Warning: RABBITMQ_URL not found in $ENV_FILE${NC}"
+    echo -e "${YELLOW}Using default GKE RabbitMQ URL${NC}"
+    RABBITMQ_URL="amqp://admin:admin123@messaging-rabbitmq.missing-table-dev.svc.cluster.local:5672//"
+elif [[ "$RABBITMQ_URL" == *"localhost"* ]]; then
+    echo -e "${YELLOW}Detected localhost in RABBITMQ_URL, replacing with GKE service name${NC}"
+    RABBITMQ_URL="amqp://admin:admin123@messaging-rabbitmq.missing-table-dev.svc.cluster.local:5672//"
+fi
+
+echo -e "${GREEN}✓ Configuration loaded from environment file${NC}"
 echo ""
 
 # Check if kubectl is available
@@ -64,7 +74,10 @@ kubectl delete secret mls-scraper-secrets -n $NAMESPACE --ignore-not-found=true
 # Create new secret
 kubectl create secret generic mls-scraper-secrets \
   -n $NAMESPACE \
-  --from-literal=MISSING_TABLE_API_TOKEN="$MISSING_TABLE_API_TOKEN"
+  --from-literal=MISSING_TABLE_API_TOKEN="$MISSING_TABLE_API_TOKEN" \
+  --from-literal=RABBITMQ_URL="$RABBITMQ_URL" \
+  --from-literal=OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS" \
+  --from-literal=GRAFANA_CLOUD_API_TOKEN="$GRAFANA_TOKEN"
 
 echo -e "${GREEN}✓ Secret updated successfully${NC}"
 echo ""
