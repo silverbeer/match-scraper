@@ -119,7 +119,7 @@ class MatchQueueClient:
         # Step 2: Send to queue
         # IMPORTANT: Task name must match the worker's @app.task(name=...) decorator
         result = self.app.send_task(
-            "missing_table.tasks.process_match_data",  # Task name (string, not import!)
+            "celery_tasks.match_tasks.process_match_data",  # Task name (matches backend!)
             args=[
                 validated.model_dump(mode="json")
             ],  # Serialize to JSON-compatible dict
