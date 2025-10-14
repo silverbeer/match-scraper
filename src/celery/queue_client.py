@@ -35,7 +35,10 @@ class MatchQueueClient:
 
         Args:
             broker_url: RabbitMQ connection URL. Format: amqp://user:pass@host:port//
-                       Defaults to RABBITMQ_URL env var, falls back to localhost.
+                       Defaults to RABBITMQ_URL env var. Required if not provided.
+
+        Raises:
+            ValueError: If broker_url is not provided and RABBITMQ_URL env var is not set
 
         Example:
             # Local development
@@ -44,9 +47,14 @@ class MatchQueueClient:
             # GKE production
             client = MatchQueueClient("amqp://admin:admin123@messaging-rabbitmq:5672//")
         """
-        self.broker_url = broker_url or os.getenv(
-            "RABBITMQ_URL", "amqp://admin:admin123@localhost:5672//"
-        )
+        self.broker_url = broker_url or os.getenv("RABBITMQ_URL")
+
+        if not self.broker_url:
+            raise ValueError(
+                "RabbitMQ connection URL is required. "
+                "Set RABBITMQ_URL environment variable or pass broker_url parameter. "
+                "Format: amqp://user:password@host:port//"
+            )
 
         # Create Celery app (producer only, no tasks defined)
         self.app = Celery("match_scraper", broker=self.broker_url)

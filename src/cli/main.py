@@ -99,6 +99,11 @@ TEAM_NAME_MAPPINGS = {
     "Intercontinental Football Academy of New England": "IFA",
 }
 
+# Reverse mapping: CLI short names to full MLS website names
+CLI_TO_MLS_CLUB_NAMES = {
+    "IFA": "Intercontinental Football Academy of New England",
+}
+
 
 def normalize_team_name_for_display(team_name: str) -> str:
     """Normalize team names for consistent display."""
@@ -213,6 +218,13 @@ def create_config(
     use_async_api: bool = True,
 ) -> ScrapingConfig:
     """Create scraping configuration from CLI parameters."""
+
+    # Expand club name if it's a CLI shorthand (e.g., "IFA" -> full name)
+    if club and club in CLI_TO_MLS_CLUB_NAMES:
+        expanded_club = CLI_TO_MLS_CLUB_NAMES[club]
+        if verbose:
+            console.print(f"[dim]Expanding club '{club}' to '{expanded_club}'[/dim]")
+        club = expanded_club
 
     # Validate argument combinations and determine date calculation method
     if from_date and to_date:
@@ -843,10 +855,10 @@ def scrape(
     use_queue: Annotated[
         bool,
         typer.Option(
-            "--use-queue",
-            help="Submit matches directly to RabbitMQ queue (bypasses HTTP API)",
+            "--use-queue/--no-use-queue",
+            help="Submit matches directly to RabbitMQ queue (default: True)",
         ),
-    ] = False,
+    ] = True,
 ) -> None:
     """
     ⚽ Scrape MLS match data and display in beautiful format.
@@ -874,7 +886,16 @@ def scrape(
 
     # Create configuration
     config = create_config(
-        age_group, division, start, end, club, competition, verbose, from_date, to_date, async_api
+        age_group,
+        division,
+        start,
+        end,
+        club,
+        competition,
+        verbose,
+        from_date,
+        to_date,
+        async_api,
     )
 
     if not quiet:
@@ -924,8 +945,13 @@ def scrape(
                             "age_group": config.age_group,
                             "match_type": "League",
                             "division": config.division if config.division else None,
-                            "score_home": match.home_score,
-                            "score_away": match.away_score,
+                            # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
+                            "score_home": match.home_score
+                            if isinstance(match.home_score, int)
+                            else None,
+                            "score_away": match.away_score
+                            if isinstance(match.away_score, int)
+                            else None,
                             "status": match.match_status or "scheduled",
                             "match_id": match.match_id,
                             "location": match.location,
