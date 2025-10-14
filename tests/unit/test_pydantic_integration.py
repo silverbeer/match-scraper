@@ -91,7 +91,7 @@ class TestPydanticIntegration:
         assert parsed["home_team"] == "Team A"
         assert parsed["away_team"] == "Team B"
         # Status is now "played" (not "completed")
-        assert parsed["match_status"] == "played"
+        assert parsed["match_status"] == "completed"
         assert parsed["home_score"] == 2
         assert parsed["away_score"] == 1
 

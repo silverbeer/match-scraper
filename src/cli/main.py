@@ -369,7 +369,7 @@ def display_matches_table(matches: list[Match]) -> None:
         # Format score/status
         if match.has_score():
             score_text = match.get_score_string()
-            if match.match_status == "played":
+            if match.match_status == "completed":
                 score_status = f"[green]{score_text}[/green]"
             else:
                 # Show score even for "scheduled" or "TBD" matches if they have one
@@ -449,7 +449,7 @@ def display_statistics(matches: list[Match]) -> None:
     # Calculate statistics
     total_matches = len(matches)
     scheduled_matches = len([m for m in matches if m.match_status == "scheduled"])
-    played_matches = len([m for m in matches if m.match_status == "played"])
+    played_matches = len([m for m in matches if m.match_status == "completed"])
     in_progress_matches = len([m for m in matches if m.match_status == "in_progress"])
     matches_with_scores = len([m for m in matches if m.has_score()])
     matches_with_venues = len([m for m in matches if m.location])
@@ -1003,7 +1003,7 @@ def scrape(
             for match in matches:
                 status = (
                     "✅"
-                    if match.match_status == "played"
+                    if match.match_status == "completed"
                     else "⏰"
                     if match.match_status == "scheduled"
                     else "🔄"
@@ -1259,7 +1259,7 @@ def test_quiet() -> None:
     for match in sample_matches:
         status = (
             "✅"
-            if match.match_status == "played"
+            if match.match_status == "completed"
             else "⏰"
             if match.match_status == "scheduled"
             else "🔄"

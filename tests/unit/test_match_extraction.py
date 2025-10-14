@@ -269,7 +269,7 @@ class TestMLSMatchExtractor:
         assert result.home_score == 2
         assert result.away_score == 1
         # Status is now "played" (not "completed") - computed from scores
-        assert result.match_status == "played"
+        assert result.match_status == "completed"
 
     @pytest.mark.asyncio
     async def test_extract_match_from_row_insufficient_cells(
@@ -464,7 +464,7 @@ class TestMLSMatchExtractor:
         assert result.home_score == 2
         assert result.away_score == 1
         # Status is "played" (computed from scores), not "completed"
-        assert result.match_status == "played"
+        assert result.match_status == "completed"
         assert result.competition == "MLS Next"
         assert result.location == "Stadium A"
 

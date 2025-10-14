@@ -48,7 +48,7 @@ class TestMatch:
         assert match.has_score()
         assert match.is_played()
         # Status is now "played" (not "completed")
-        assert match.match_status == "played"
+        assert match.match_status == "completed"
         assert match.get_score_string() == "2 - 1"
 
     def test_scheduled_match_status(self):

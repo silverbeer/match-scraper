@@ -43,13 +43,13 @@ class Match(BaseModel):
 
     @computed_field
     @property
-    def match_status(self) -> Literal["scheduled", "played", "TBD"]:
+    def match_status(self) -> Literal["scheduled", "completed", "TBD"]:
         """Calculate match status based on datetime and scores.
 
         Rules:
         - If match_datetime is in the future: "scheduled"
         - If match_datetime is today or in the past:
-          - If both scores are integers (not TBD): "played"
+          - If both scores are integers (not TBD): "completed"
           - If scores are TBD or None: "TBD"
         """
         now = (
@@ -69,7 +69,7 @@ class Match(BaseModel):
             and isinstance(self.home_score, int)
             and isinstance(self.away_score, int)
         ):
-            return "played"
+            return "completed"
 
         # Everything else (TBD, None, etc.) is TBD
         return "TBD"
@@ -112,9 +112,9 @@ class Match(BaseModel):
         """Check if the match has been played.
 
         Returns:
-            bool: True if match status is played
+            bool: True if match status is completed
         """
-        return self.match_status == "played"
+        return self.match_status == "completed"
 
     def get_score_string(self) -> Optional[str]:
         """Get formatted score string.
