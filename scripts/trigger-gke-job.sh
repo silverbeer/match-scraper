@@ -18,6 +18,7 @@ FROM_DATE=""
 TO_DATE=""
 CLUB=""
 COMPETITION=""
+LIMIT=""
 FOLLOW_LOGS=true
 
 # Parse command line arguments
@@ -95,6 +96,14 @@ while [[ $# -gt 0 ]]; do
             COMPETITION="$2"
             shift 2
             ;;
+        --limit=*)
+            LIMIT="${1#*=}"
+            shift
+            ;;
+        --limit)
+            LIMIT="$2"
+            shift 2
+            ;;
         --no-follow)
             FOLLOW_LOGS=false
             shift
@@ -111,6 +120,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --division DIV      Division (default: Northeast)"
             echo "  --club CLUB         Filter by specific club (optional)"
             echo "  --competition COMP  Filter by specific competition (optional)"
+            echo "  --limit N           Maximum number of matches to scrape (optional)"
             echo "  --namespace NS      Kubernetes namespace (default: match-scraper)"
             echo "  --no-follow         Don't follow logs after job creation"
             echo "  -h, --help          Show this help message"
@@ -148,6 +158,9 @@ if [ -n "$CLUB" ]; then
 fi
 if [ -n "$COMPETITION" ]; then
     echo -e "  Competition: ${GREEN}${COMPETITION}${NC}"
+fi
+if [ -n "$LIMIT" ]; then
+    echo -e "  Limit:       ${GREEN}${LIMIT}${NC}"
 fi
 if [ -n "$FROM_DATE" ] && [ -n "$TO_DATE" ]; then
     echo -e "  Date Range:  ${GREEN}--from=${FROM_DATE} --to=${TO_DATE}${NC}"
@@ -190,6 +203,11 @@ fi
 # Add optional competition filter
 if [ -n "$COMPETITION" ]; then
     CLI_CMD="${CLI_CMD} --competition='${COMPETITION}'"
+fi
+
+# Add optional limit
+if [ -n "$LIMIT" ]; then
+    CLI_CMD="${CLI_CMD} --limit=${LIMIT}"
 fi
 
 echo -e "${BLUE}📦 Creating job from CronJob template...${NC}"
