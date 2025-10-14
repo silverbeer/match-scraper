@@ -123,8 +123,8 @@ class MatchQueueClient:
             args=[
                 validated.model_dump(mode="json")
             ],  # Serialize to JSON-compatible dict
-            queue="matches",  # Queue name
-            routing_key="matches",  # Routing key (usually same as queue)
+            queue="match_processing",  # Queue name (matches backend routing!)
+            routing_key="match.process",  # Routing key (backend uses match.*)
         )
 
         print(f"✓ Match submitted to queue: {result.id}")
