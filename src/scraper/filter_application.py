@@ -975,18 +975,14 @@ class MLSFilterApplicator:
 
             # Strategy 1: Use calendar date picker by clicking actual date cells
             try:
-                from datetime import datetime, timedelta
+                from datetime import datetime
 
-                # Calculate actual start and end dates based on today
-                today = datetime.now().date()
-                yesterday = today - timedelta(days=1)
-                actual_start_date = yesterday - timedelta(
-                    days=1
-                )  # Yesterday minus 1 day
-                actual_end_date = yesterday + timedelta(days=3)  # Yesterday plus 3 days
+                # Parse the provided dates (MM/DD/YYYY format)
+                parsed_start_date = datetime.strptime(start_date, "%m/%d/%Y").date()
+                parsed_end_date = datetime.strptime(end_date, "%m/%d/%Y").date()
 
                 logger.info(
-                    f"Calculated date range - Start: {actual_start_date}, End: {actual_end_date}"
+                    f"Using provided date range - Start: {parsed_start_date}, End: {parsed_end_date}"
                 )
 
                 # Find and click the date field to open calendar
@@ -1001,9 +997,19 @@ class MLSFilterApplicator:
                     if await calendar_picker.count() > 0:
                         logger.info("Calendar picker opened successfully")
 
-                        # Click on start date (19th) - use left calendar only
-                        start_day = 19  # Always use 19th regardless of calculation
+                        # Extract day numbers from parsed dates
+                        start_day = parsed_start_date.day
+                        end_day = parsed_end_date.day
+
+                        # Check if dates are in the same month
+                        same_month = (
+                            parsed_start_date.year == parsed_end_date.year
+                            and parsed_start_date.month == parsed_end_date.month
+                        )
+
+                        # Click on start date - use left calendar
                         start_date_selectors = [
+                            f'.daterangepicker .drp-calendar.left td[data-title]:has-text("{start_day}"):not(.off)',
                             f'.daterangepicker .drp-calendar.left td:has-text("{start_day}"):not(.off)',
                             f'.drp-calendar.left .calendar-table td:has-text("{start_day}"):not(.off)',
                             f'.daterangepicker .left td:has-text("{start_day}"):not(.off)',
@@ -1027,13 +1033,21 @@ class MLSFilterApplicator:
                             )
                             return False
 
-                        # Click on end date (22nd) - use left calendar only (same month)
-                        end_day = 22  # Always use 22nd regardless of calculation
-                        end_date_selectors = [
-                            f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
-                            f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
-                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
-                        ]
+                        # Click on end date - use right calendar if different month, left if same month
+                        if same_month:
+                            end_date_selectors = [
+                                f'.daterangepicker .drp-calendar.left td[data-title]:has-text("{end_day}"):not(.off)',
+                                f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
+                                f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
+                                f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
+                            ]
+                        else:
+                            end_date_selectors = [
+                                f'.daterangepicker .drp-calendar.right td[data-title]:has-text("{end_day}"):not(.off)',
+                                f'.daterangepicker .drp-calendar.right td:has-text("{end_day}"):not(.off)',
+                                f'.drp-calendar.right .calendar-table td:has-text("{end_day}"):not(.off)',
+                                f'.daterangepicker .right td:has-text("{end_day}"):not(.off)',
+                            ]
 
                         end_clicked = False
                         for end_selector in end_date_selectors:
@@ -1041,7 +1055,7 @@ class MLSFilterApplicator:
                             if await end_cell.count() > 0:
                                 await end_cell.first.click()
                                 logger.info(
-                                    f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                                    f"Clicked end date {end_day} on {'left' if same_month else 'right'} calendar using selector: {end_selector}"
                                 )
                                 await asyncio.sleep(1)
                                 end_clicked = True
@@ -1049,7 +1063,7 @@ class MLSFilterApplicator:
 
                         if not end_clicked:
                             logger.warning(
-                                f"Could not click end date {end_day} on left calendar"
+                                f"Could not click end date {end_day} on calendar"
                             )
                             return False
 
@@ -1078,8 +1092,8 @@ class MLSFilterApplicator:
                         logger.info(
                             "Date filter applied via calendar date picker",
                             extra={
-                                "start_date": str(actual_start_date),
-                                "end_date": str(actual_end_date),
+                                "start_date": str(parsed_start_date),
+                                "end_date": str(parsed_end_date),
                             },
                         )
                         return True
