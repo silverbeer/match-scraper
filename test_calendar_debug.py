@@ -72,11 +72,13 @@ async def test_calendar_navigation():
         # Create calendar interactor
         calendar = MLSCalendarInteractor(page)
 
-        # Test dates: September 1-30, 2025
-        start_date = date(2025, 9, 1)
-        end_date = date(2025, 9, 30)
+        # Test dates: October 15-22, 2025 (current month)
+        start_date = date(2025, 10, 15)
+        end_date = date(2025, 10, 22)
 
-        logger.info(f"Testing calendar navigation for {start_date} to {end_date}")
+        logger.info(
+            f"Testing calendar selection for current month: {start_date} to {end_date}"
+        )
 
         # Try to set date range (this will trigger our navigation logic)
         success = await calendar.set_date_range_filter(start_date, end_date)
@@ -107,8 +109,9 @@ if __name__ == "__main__":
     print("1. Open a browser window (headful mode)")
     print("2. Navigate to MLS Next U14 Northeast page")
     print("3. Handle cookie consent banner")
-    print("4. Attempt to set date range to September 1-30, 2025")
-    print("5. Show you exactly what happens in the browser")
+    print("4. Test current month selection: October 15-22, 2025")
+    print("5. Verify no navigation occurs (should stay in October)")
+    print("6. Show you exactly what happens in the browser")
     print()
     print("Watch the browser window to see calendar navigation in action!")
     print("=" * 80)
