@@ -513,6 +513,19 @@ class MLSCalendarInteractor:
                 if await calendar_picker.count() > 0:
                     logger.info("Calendar picker opened successfully")
 
+                    # Navigate to start_date's month if needed
+                    if not await self._navigate_daterangepicker_to_month(
+                        start_date.month, start_date.year
+                    ):
+                        logger.warning(
+                            "Failed to navigate to start date month",
+                            extra={
+                                "target_month": start_date.month,
+                                "target_year": start_date.year,
+                            },
+                        )
+                        return False
+
                     # Click on start date - use left calendar only
                     start_day = start_date.day  # Use actual start date
                     start_date_selectors = [
@@ -539,31 +552,83 @@ class MLSCalendarInteractor:
                         )
                         return False
 
-                    # Click on end date - use left calendar only (same month)
-                    end_day = end_date.day  # Use actual end date
-                    end_date_selectors = [
-                        f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
-                        f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
-                        f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
-                    ]
+                    # Determine if end date is in the same month as start date
+                    same_month = (
+                        start_date.month == end_date.month
+                        and start_date.year == end_date.year
+                    )
 
-                    end_clicked = False
-                    for end_selector in end_date_selectors:
-                        end_cell = self.iframe_content.locator(end_selector)
-                        if await end_cell.count() > 0:
-                            await end_cell.first.click()
-                            logger.info(
-                                f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
-                            )
-                            await asyncio.sleep(1)
-                            end_clicked = True
-                            break
-
-                    if not end_clicked:
-                        logger.warning(
-                            f"Could not click end date {end_day} on left calendar"
+                    if same_month:
+                        # Same month: Select end date from left calendar
+                        logger.debug(
+                            "Start and end dates in same month - selecting end date from left calendar"
                         )
-                        return False
+                        end_day = end_date.day
+                        end_date_selectors = [
+                            f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
+                            f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
+                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
+                        ]
+
+                        end_clicked = False
+                        for end_selector in end_date_selectors:
+                            end_cell = self.iframe_content.locator(end_selector)
+                            if await end_cell.count() > 0:
+                                await end_cell.first.click()
+                                logger.info(
+                                    f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                                )
+                                await asyncio.sleep(1)
+                                end_clicked = True
+                                break
+
+                        if not end_clicked:
+                            logger.warning(
+                                f"Could not click end date {end_day} on left calendar"
+                            )
+                            return False
+                    else:
+                        # Different months: Navigate to end month (left calendar will update)
+                        # then select end date from left calendar
+                        logger.debug(
+                            "Start and end dates in different months - navigating to end month"
+                        )
+                        if not await self._navigate_daterangepicker_to_month(
+                            end_date.month, end_date.year
+                        ):
+                            logger.warning(
+                                "Failed to navigate to end date month",
+                                extra={
+                                    "target_month": end_date.month,
+                                    "target_year": end_date.year,
+                                },
+                            )
+                            return False
+
+                        end_day = end_date.day
+                        end_date_selectors = [
+                            f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
+                            f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
+                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
+                        ]
+
+                        end_clicked = False
+                        for end_selector in end_date_selectors:
+                            end_cell = self.iframe_content.locator(end_selector)
+                            if await end_cell.count() > 0:
+                                await end_cell.first.click()
+                                logger.info(
+                                    f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                                )
+                                await asyncio.sleep(1)
+                                end_clicked = True
+                                break
+
+                        if not end_clicked:
+                            logger.warning(
+                                f"Could not click end date {end_day} on left calendar"
+                            )
+                            return False
 
                     # Click Apply button
                     apply_selectors = [
@@ -587,8 +652,8 @@ class MLSCalendarInteractor:
                         logger.info(
                             "Date filter applied via calendar date picker",
                             extra={
-                                "start_date": f"September {start_day}",
-                                "end_date": f"September {end_day}",
+                                "start_date": str(start_date),
+                                "end_date": str(end_date),
                             },
                         )
                         return True
@@ -675,6 +740,176 @@ class MLSCalendarInteractor:
         except Exception as e:
             logger.debug("Error getting current month/year", extra={"error": str(e)})
             return None, None
+
+    async def _get_daterangepicker_current_month_year(
+        self,
+    ) -> tuple[Optional[int], Optional[int]]:
+        """
+        Get the current month and year displayed in the daterangepicker left calendar.
+
+        This is specifically for the daterangepicker widget that appears when clicking
+        the date field in the iframe. It reads the month/year from the left calendar panel.
+
+        Returns:
+            Tuple of (month, year) or (None, None) if not found
+        """
+        try:
+            if not self.iframe_content:
+                logger.debug("No iframe content available for daterangepicker")
+                return None, None
+
+            # Selectors for daterangepicker month/year display
+            # The daterangepicker shows month in format "Oct 2025" in the calendar header
+            month_year_selectors = [
+                ".daterangepicker .drp-calendar.left .month",
+                ".daterangepicker .drp-calendar.left th.month",
+                ".drp-calendar.left .calendar-table th.month",
+            ]
+
+            for selector in month_year_selectors:
+                month_element = self.iframe_content.locator(selector)
+                if await month_element.count() > 0:
+                    text = await month_element.first.text_content()
+                    if text:
+                        logger.debug(
+                            "Found daterangepicker month/year text",
+                            extra={"text": text.strip(), "selector": selector},
+                        )
+                        # Parse the text using existing helper
+                        month, year = self._parse_month_year_text(text.strip())
+                        if month and year:
+                            logger.debug(
+                                "Parsed daterangepicker month/year",
+                                extra={"month": month, "year": year},
+                            )
+                            return month, year
+
+            logger.debug("Could not find daterangepicker month/year display")
+            return None, None
+
+        except Exception as e:
+            logger.debug(
+                "Error getting daterangepicker current month/year",
+                extra={"error": str(e)},
+            )
+            return None, None
+
+    async def _navigate_daterangepicker_to_month(
+        self, target_month: int, target_year: int
+    ) -> bool:
+        """
+        Navigate the daterangepicker to the specified month and year.
+
+        This method clicks the prev/next month arrows in the daterangepicker
+        until the left calendar shows the target month and year.
+
+        Args:
+            target_month: Target month (1-12)
+            target_year: Target year (e.g., 2025)
+
+        Returns:
+            True if navigation successful, False otherwise
+        """
+        try:
+            if not self.iframe_content:
+                logger.debug(
+                    "No iframe content available for daterangepicker navigation"
+                )
+                return False
+
+            # Get current displayed month/year
+            (
+                current_month,
+                current_year,
+            ) = await self._get_daterangepicker_current_month_year()
+            if current_month is None or current_year is None:
+                logger.warning("Could not get current daterangepicker month/year")
+                return False
+
+            logger.info(
+                "Navigating daterangepicker",
+                extra={
+                    "current_month": current_month,
+                    "current_year": current_year,
+                    "target_month": target_month,
+                    "target_year": target_year,
+                },
+            )
+
+            # Calculate how many months to navigate (forward or backward)
+            current_total_months = current_year * 12 + current_month
+            target_total_months = target_year * 12 + target_month
+            months_diff = target_total_months - current_total_months
+
+            if months_diff == 0:
+                logger.debug("Already on target month/year")
+                return True
+
+            is_forward = months_diff > 0
+            iterations = abs(months_diff)
+
+            # Limit iterations to prevent infinite loops
+            max_iterations = min(iterations, 24)  # Max 2 years navigation
+
+            # Selectors for daterangepicker navigation buttons
+            prev_selector = ".daterangepicker .drp-calendar.left .prev"
+            next_selector = ".daterangepicker .drp-calendar.left .next"
+
+            for i in range(max_iterations):
+                if is_forward:
+                    # Click next month button
+                    next_button = self.iframe_content.locator(next_selector)
+                    if await next_button.count() > 0:
+                        await next_button.first.click()
+                        logger.debug(f"Clicked next month button (iteration {i + 1})")
+                    else:
+                        logger.warning("Next month button not found")
+                        return False
+                else:
+                    # Click previous month button
+                    prev_button = self.iframe_content.locator(prev_selector)
+                    if await prev_button.count() > 0:
+                        await prev_button.first.click()
+                        logger.debug(f"Clicked prev month button (iteration {i + 1})")
+                    else:
+                        logger.warning("Prev month button not found")
+                        return False
+
+                # Wait for UI to update (reduced from 0.5s to 0.3s for faster navigation)
+                await asyncio.sleep(0.3)
+
+                # Check if we've reached the target month/year
+                (
+                    updated_month,
+                    updated_year,
+                ) = await self._get_daterangepicker_current_month_year()
+                if updated_month == target_month and updated_year == target_year:
+                    logger.info(
+                        "Successfully navigated to target month/year",
+                        extra={"month": target_month, "year": target_year},
+                    )
+                    return True
+
+            logger.warning(
+                "Failed to reach target month after max iterations",
+                extra={
+                    "max_iterations": max_iterations,
+                    "target_month": target_month,
+                    "target_year": target_year,
+                },
+            )
+            return False
+
+        except Exception as e:
+            logger.error(
+                "Error navigating daterangepicker to month",
+                extra={
+                    "error": str(e),
+                    "target_month": target_month,
+                    "target_year": target_year,
+                },
+            )
+            return False
 
     def _parse_month_year_text(self, text: str) -> tuple[Optional[int], Optional[int]]:
         """
