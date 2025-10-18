@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: match-scraper-config
+  namespace: match-scraper
+  labels:
+    app: match-scraper
+data:
+  # MLS Scraping Configuration
+  AGE_GROUP: "U14"
+  DIVISION: "Northeast"
+
+  # RabbitMQ Connection (uses local RabbitMQ service)
+  RABBITMQ_URL: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+
+  # Missing Table API (optional - not used when --use-queue is enabled)
+  # If you run missing-table API locally, update this
+  MISSING_TABLE_API_BASE_URL: "http://missing-table-api:8000"
+
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  # Enable colors for local development logs (set to "1" to disable)
+  NO_COLOR: "0"
+
+  # Browser Configuration
+  HEADLESS: "true"
+  BROWSER_TIMEOUT: "30000"
+
+  # Scraping Configuration
+  MAX_RETRIES: "3"
+  RETRY_DELAY: "5"
+
+  # Deployment Environment
+  DEPLOYMENT_ENV: "local-k3s"
+  K8S_NAMESPACE: "match-scraper"

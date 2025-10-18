@@ -182,17 +182,30 @@ tests/
 ├── unit/                  # Fast unit tests (CI)
 ├── integration/           # Multi-component tests
 ├── e2e/                  # End-to-end browser tests
-k8s/                      # Kubernetes manifests
+k8s/                      # Kubernetes manifests (GKE)
 ├── namespace.yaml         # Kubernetes namespace
 ├── configmap.yaml         # Configuration
 ├── secret.yaml           # API tokens
 └── cronjob.yaml          # Scheduled job
+k3s/                      # K3s/local manifests
+├── rabbitmq/             # RabbitMQ deployment
+│   ├── namespace.yaml    # Shared namespace
+│   ├── statefulset.yaml  # RabbitMQ StatefulSet
+│   ├── service.yaml      # Internal and NodePort services
+│   ├── configmap.yaml    # RabbitMQ configuration
+│   └── secret.yaml       # RabbitMQ credentials
+└── match-scraper/        # Match-scraper deployment
+    ├── configmap.yaml    # Scraper configuration
+    ├── secret.yaml       # API tokens (optional)
+    └── cronjob.yaml      # Scheduled job
 scripts/
 ├── deploy-gke-complete.sh # Complete GKE deployment
 ├── deploy-gke-env.sh     # Environment-based deployment
 ├── build-and-push-gke.sh # Container build and push
 ├── deploy-to-gke.sh      # Kubernetes deployment
-├── test-gke.sh           # Testing and monitoring
+├── test-gke.sh           # GKE testing and monitoring
+├── deploy-k3s.sh         # K3s local deployment
+├── test-k3s.sh           # K3s testing and monitoring
 └── test-review.py        # Test analysis helper script
 ```
 
@@ -258,6 +271,47 @@ For manual deployments:
 - Kubernetes Secret for API tokens
 - Resource requests and limits for GKE Autopilot
 - Comprehensive testing and monitoring scripts
+
+### K3s/Rancher Local Deployment
+
+For local/cost-effective deployments, run match-scraper with RabbitMQ in k3s:
+
+#### Quick Start
+
+```bash
+# One-command deployment (RabbitMQ + match-scraper)
+./scripts/deploy-k3s.sh
+
+# Test the pipeline
+./scripts/test-k3s.sh trigger
+./scripts/test-k3s.sh logs
+
+# Check RabbitMQ status
+./scripts/test-k3s.sh rabbitmq
+```
+
+**Architecture:**
+```
+match-scraper (CronJob) → RabbitMQ → missing-table workers → Supabase
+```
+
+**Benefits:**
+- ✅ No cloud costs
+- ✅ Same queue-based architecture
+- ✅ Full local control
+- ✅ Easy dev/prod environment switching
+
+**Documentation:**
+- 📖 [K3s Deployment Guide](docs/deployment/k3s-deployment.md) - Complete local deployment guide
+- 🔧 [Configuration](k3s/match-scraper/configmap.yaml) - Scraper configuration
+- 🐰 [RabbitMQ Setup](k3s/rabbitmq/) - RabbitMQ manifests
+
+**Key Features:**
+- RabbitMQ StatefulSet with persistent storage
+- Management UI at http://localhost:30672
+- Automated build and image import to k3s
+- Manual job triggering for testing
+- Real-time log monitoring
 
 ## CLI Tool
 

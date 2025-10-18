@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: match-scraper
+  labels:
+    app: rabbitmq
+data:
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_prometheus].
+
+  rabbitmq.conf: |
+    # Default user configuration
+    default_user = admin
+    default_pass = admin123
+
+    # Networking
+    listeners.tcp.default = 5672
+    management.tcp.port = 15672
+
+    # Logging
+    log.file.level = info
+    log.console = true
+    log.console.level = info
+
+    # Memory and disk limits
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.absolute = 2GB
+
+    # Queue configuration
+    queue_master_locator = min-masters

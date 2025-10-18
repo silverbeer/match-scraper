@@ -16,6 +16,7 @@ Welcome to the comprehensive documentation for the MLS Match Scraper project. Th
 - [Fast Commits](development/fast-commits.md) - Tips for faster development workflow
 
 ### 🚢 Deployment
+- [K3s Deployment Guide](deployment/k3s-deployment.md) - Local/cost-effective deployment with k3s and RabbitMQ
 - [GKE Deployment Guide](deployment/gke-deployment.md) - Complete Google Kubernetes Engine deployment
 - [GKE Testing Guide](deployment/gke-testing.md) - Testing and monitoring GKE deployments
 - [GKE GitHub Actions](deployment/gke-github-actions.md) - CI/CD setup for GKE
@@ -49,6 +50,7 @@ docs/
 │   ├── test-reports-access.md  # Accessing test results
 │   └── fast-commits.md         # Development workflow tips
 ├── deployment/                  # Deployment guides
+│   ├── k3s-deployment.md       # K3s local deployment
 │   ├── gke-deployment.md       # GKE deployment
 │   ├── gke-testing.md          # GKE testing
 │   ├── gke-github-actions.md   # CI/CD setup
@@ -72,10 +74,11 @@ docs/
 4. Use [CLI Usage Guide](guides/cli-usage.md) for local testing
 
 ### I'm a DevOps Engineer
-1. Read [GKE Deployment Guide](deployment/gke-deployment.md)
-2. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
-3. Configure [GKE GitHub Actions](deployment/gke-github-actions.md)
-4. Review [GKE Testing Guide](deployment/gke-testing.md)
+1. For local deployment: [K3s Deployment Guide](deployment/k3s-deployment.md)
+2. For cloud deployment: [GKE Deployment Guide](deployment/gke-deployment.md)
+3. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
+4. Configure [GKE GitHub Actions](deployment/gke-github-actions.md)
+5. Review [GKE Testing Guide](deployment/gke-testing.md)
 
 ### I'm New to the Project
 1. Start with the [Main README](../README.md)
@@ -100,6 +103,7 @@ docs/
 
 ### By Task
 - **Running Tests**: [`development/testing.md`](development/testing.md)
+- **Deploying Locally (k3s)**: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md)
 - **Deploying to GKE**: [`deployment/gke-deployment.md`](deployment/gke-deployment.md)
 - **Setting up Monitoring**: [`observability/grafana-cloud-setup.md`](observability/grafana-cloud-setup.md)
 - **Using the CLI**: [`guides/cli-usage.md`](guides/cli-usage.md)
