@@ -1,0 +1,67 @@
+# Fast Match-Scraper Dockerfile
+# Uses Playwright's official image with browsers pre-installed
+# Build time: ~2-3 minutes vs 10+ minutes with original
+# Image size: ~1.5GB vs ~2-3GB with original
+
+FROM mcr.microsoft.com/playwright/python:v1.48-jammy
+
+# Set working directory
+WORKDIR /app
+
+# Install uv (fast Python package installer)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files first (for better Docker layer caching)
+COPY pyproject.toml uv.lock ./
+
+# Copy README.md (required by hatchling build backend)
+COPY README.md ./
+
+# Install Python dependencies
+# --frozen ensures reproducible builds
+# --no-dev skips development dependencies
+RUN uv sync --frozen --no-dev
+
+# Copy application source code
+# This is done last to maximize Docker layer caching
+COPY . .
+
+# Set environment variables
+# NO_COLOR=1 disables Rich terminal formatting for cleaner container logs
+ENV NO_COLOR=1
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+
+# Set HOME to /app for uv cache (fixes permission issues in Kubernetes)
+ENV HOME=/app
+ENV UV_CACHE_DIR=/app/.cache/uv
+
+# Playwright browsers are already installed in the base image!
+# They're located at /ms-playwright by default in this image
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Make entire /app directory writable for Kubernetes non-root execution
+# This allows uv to create/modify .venv and cache directories
+RUN chmod -R 777 /app
+
+# Health check (optional - checks if Python works)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Default command: Run scraper with queue submission
+# Can be overridden by Kubernetes CronJob
+CMD ["uv", "run", "mls-scraper", "scrape", \
+     "--age-group", "U14", \
+     "--division", "Northeast", \
+     "--use-queue", \
+     "--no-api"]
+
+# Build command for local K3s:
+# docker build -f Dockerfile.fast -t match-scraper:latest .
+#
+# Build time comparison:
+# - Original Dockerfile: ~10-15 minutes (downloads 256 packages + installs Playwright)
+# - This Dockerfile.fast: ~2-3 minutes (browsers pre-installed, minimal dependencies)
+#
+# Test locally:
+# docker run --rm -e RABBITMQ_URL="amqp://admin:admin123@host.docker.internal:5672//" match-scraper:latest
