@@ -199,11 +199,11 @@ spec:
       - name: scraper
         image: match-scraper:latest
         imagePullPolicy: Never
-        command: ["python", "-m", "src.cli.main", "scrape"]
+        command: ["uv", "run", "mls-scraper", "scrape"]
         args: $(printf '%s\n' "${ARGS[@]}" | jq -R . | jq -s .)
         env:
         - name: RABBITMQ_URL
-          value: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+          value: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
         - name: NO_COLOR
           value: "1"
         # Note: Don't set KUBERNETES_SERVICE_HOST for manual jobs
@@ -384,7 +384,7 @@ EOF
         echo ""
 
         echo -e "${BLUE}Connection Info:${NC}"
-        echo "  Internal: amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+        echo "  Internal: amqp://admin:admin123@messaging-rabbitmq.messaging.svc.cluster.local:5672//"
         ;;
 
     *)
