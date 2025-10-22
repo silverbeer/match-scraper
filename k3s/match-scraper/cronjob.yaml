@@ -28,8 +28,11 @@ spec:
             image: match-scraper:latest
             imagePullPolicy: Never  # Don't try to pull - use local image
             command: ["python", "-m", "src.cli.main", "scrape"]
-            # Note: --use-queue is enabled by default, so matches go to RabbitMQ
-            # To disable queue: add "--no-use-queue" to command above
+            # Routing: By default, publishes to "matches-fanout" exchange which routes to both:
+            #   - matches.prod queue (processed by prod workers → prod Supabase)
+            #   - matches.dev queue (processed by dev workers → dev Supabase)
+            # To target specific queue: add "--queue matches.dev" or "--queue matches.prod"
+            # To disable queue: add "--no-submit-queue"
             env:
             # Load from ConfigMap
             - name: AGE_GROUP

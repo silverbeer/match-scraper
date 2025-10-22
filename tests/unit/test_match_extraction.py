@@ -327,7 +327,7 @@ class TestMLSMatchExtractor:
         assert result is not None
         assert result.home_team == "Team A"
         assert result.away_team == "Team B"
-        assert result.match_status == "TBD"
+        assert result.match_status == "tbd"
 
     @pytest.mark.asyncio
     async def test_extract_from_cell_positions(self, match_extractor, mock_page):

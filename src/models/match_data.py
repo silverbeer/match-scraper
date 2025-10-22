@@ -35,14 +35,17 @@ class MatchData(BaseModel):
     division: str | None = Field(None, description="Division name")
     home_score: int | None = Field(None, ge=0, description="Home team score")
     away_score: int | None = Field(None, ge=0, description="Away team score")
-    match_status: Literal["scheduled", "completed", "postponed", "cancelled"] | None = (
-        Field(None, description="Match status")
-    )
+    match_status: (
+        Literal["scheduled", "tbd", "completed", "postponed", "cancelled"] | None
+    ) = Field(None, description="Match status (tbd = match played, score pending)")
     external_match_id: str | None = Field(
         None, description="External match ID for deduplication"
     )
     location: str | None = Field(None, description="Match location/venue")
     notes: str | None = Field(None, description="Additional notes")
+    source: str | None = Field(
+        None, description="Data source (e.g., 'match-scraper', 'manual')"
+    )
 
     class Config:
         """Pydantic configuration."""
@@ -62,6 +65,7 @@ class MatchData(BaseModel):
                     "match_status": "completed",
                     "external_match_id": "mlsnext_12345",
                     "location": "Toyota Park",
+                    "source": "match-scraper",
                 }
             ]
         }

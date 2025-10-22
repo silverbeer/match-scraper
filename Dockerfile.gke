@@ -45,9 +45,10 @@ RUN uv export --no-dev --frozen --no-hashes > requirements.txt && \
 # Copy application code
 COPY src/ /app/src/
 
-# Create a non-root user for security
+# Create a non-root user for security and set up log directory
 RUN useradd -m -u 1000 scraper && \
-    chown -R scraper:scraper /app
+    mkdir -p /var/log/scraper && \
+    chown -R scraper:scraper /app /var/log/scraper
 
 # Install Playwright browsers as the scraper user
 USER scraper

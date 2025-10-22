@@ -27,10 +27,6 @@ from rich.text import Text
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.api.missing_table_client import (  # noqa: E402
-    MissingTableAPIError,
-    MissingTableClient,
-)
 from src.cli.env_config import (  # noqa: E402
     display_current_config,
     interactive_setup,
@@ -94,7 +90,7 @@ VALID_DIVISIONS = [
 ]
 
 
-# Team name mappings for display (matches api_integration mappings)
+# Team name mappings for display
 TEAM_NAME_MAPPINGS = {
     "Intercontinental Football Academy of New England": "IFA",
 }
@@ -166,45 +162,6 @@ def handle_cli_error(e: Exception, verbose: bool = False) -> None:
         console.print("[dim]💡 Use --verbose/-v to see full error details[/dim]")
 
 
-async def check_missing_table_api(verbose: bool = False) -> bool:
-    """Check if missing-table API is healthy and ready."""
-    try:
-        client = MissingTableClient()
-
-        if verbose:
-            console.print("🏥 Checking missing-table API health...")
-
-        # Perform health check
-        health = await client.health_check(full=False)
-
-        if verbose:
-            console.print(f"✅ API Health: {health.status}")
-            if health.version:
-                console.print(f"   Version: {health.version}")
-
-        return health.status.lower() == "healthy"
-
-    except MissingTableAPIError as e:
-        if verbose:
-            console.print(f"❌ Missing-table API error: {e}")
-            if e.status_code:
-                console.print(f"   Status: {e.status_code}")
-        else:
-            console.print(
-                "⚠️  Missing-table API not available (continuing with scraping only)"
-            )
-        return False
-
-    except Exception as e:
-        if verbose:
-            console.print(f"💥 Unexpected API error: {e}")
-        else:
-            console.print(
-                "⚠️  Missing-table API check failed (continuing with scraping only)"
-            )
-        return False
-
-
 def create_config(
     age_group: str,
     division: str,
@@ -215,7 +172,6 @@ def create_config(
     verbose: bool = False,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    use_async_api: bool = True,
 ) -> ScrapingConfig:
     """Create scraping configuration from CLI parameters."""
 
@@ -274,8 +230,6 @@ def create_config(
         cache_refresh_on_miss=os.getenv("CACHE_REFRESH_ON_MISS", "true").lower()
         == "true",
         cache_preload_timeout=int(os.getenv("CACHE_PRELOAD_TIMEOUT", "30")),
-        # API integration configuration
-        use_async_api=use_async_api,
     )
 
 
@@ -450,7 +404,7 @@ def display_statistics(matches: list[Match]) -> None:
     total_matches = len(matches)
     scheduled_matches = len([m for m in matches if m.match_status == "scheduled"])
     played_matches = len([m for m in matches if m.match_status == "completed"])
-    in_progress_matches = len([m for m in matches if m.match_status == "in_progress"])
+    tbd_matches = len([m for m in matches if m.match_status == "tbd"])
     matches_with_scores = len([m for m in matches if m.has_score()])
     matches_with_venues = len([m for m in matches if m.location])
     unique_teams = len(
@@ -477,11 +431,11 @@ def display_statistics(matches: list[Match]) -> None:
         str(played_matches),
         f"{played_matches / total_matches * 100:.0f}%",
     )
-    if in_progress_matches > 0:
+    if tbd_matches > 0:
         stats_table.add_row(
-            "🔄 In Progress",
-            str(in_progress_matches),
-            f"{in_progress_matches / total_matches * 100:.0f}%",
+            "⏳ Score Pending",
+            str(tbd_matches),
+            f"{tbd_matches / total_matches * 100:.0f}%",
         )
     stats_table.add_row(
         "⚽ With Scores",
@@ -496,82 +450,6 @@ def display_statistics(matches: list[Match]) -> None:
     stats_table.add_row("👥 Unique Teams", str(unique_teams), "")
 
     console.print(Panel(stats_table, title="📊 Statistics", border_style="magenta"))
-
-
-def display_api_results(api_results: dict, api_healthy: bool) -> None:
-    """Display API integration results in a prominent panel."""
-    if not api_results:
-        if api_healthy:
-            console.print(
-                Panel(
-                    "[yellow]⚠️  API was available but no matches were posted[/yellow]",
-                    title="📡 Missing-table API Integration",
-                    border_style="yellow",
-                )
-            )
-        else:
-            console.print(
-                Panel(
-                    "[dim]⚠️  API not available - matches not posted[/dim]",
-                    title="📡 Missing-table API Integration",
-                    border_style="dim",
-                )
-            )
-        return
-
-    posted = api_results.get("posted", 0)
-    errors = api_results.get("errors", 0)
-    skipped = api_results.get("skipped", 0)
-    duplicates = api_results.get("duplicates", 0)
-    api_error = api_results.get("api_error")
-
-    # If there's a specific API error, show it prominently
-    if api_error:
-        console.print(
-            Panel(
-                f"[red]❌ API Connection Failed[/red]\n\n{api_error}\n\n[dim]Matches were scraped successfully but could not be posted to missing-table API.[/dim]",
-                title="📡 Missing-table API Integration - Connection Error",
-                border_style="red",
-            )
-        )
-        return
-
-    # Create API results table
-    api_table = Table(show_header=False, box=None, padding=(0, 1))
-    api_table.add_column("Status", style="cyan", width=20)
-    api_table.add_column("Count", style="white", justify="right", width=8)
-
-    updated = api_results.get("updated", 0)
-
-    if posted > 0:
-        api_table.add_row("✅ Successfully posted", str(posted))
-    if updated > 0:
-        api_table.add_row("📝 Scores updated", str(updated))
-    if duplicates > 0:
-        api_table.add_row("🔄 Skipped duplicates", str(duplicates))
-    if errors > 0:
-        api_table.add_row("❌ Failed to post", str(errors))
-    if skipped > 0:
-        api_table.add_row("⏭️  Skipped (other)", str(skipped))
-
-    if not posted and not errors and not skipped and not duplicates and not updated:
-        api_table.add_row("ℹ️  No action taken", "0")
-
-    # Determine panel style based on results
-    if errors > 0 and posted == 0 and updated == 0:
-        title_style = "red"
-        title = "📡 Missing-table API Integration - ❌ Failed"
-    elif errors > 0:
-        title_style = "yellow"
-        title = "📡 Missing-table API Integration - ⚠️  Partial Success"
-    elif posted > 0 or duplicates > 0 or updated > 0:
-        title_style = "green"
-        title = "📡 Missing-table API Integration - ✅ Success"
-    else:
-        title_style = "dim"
-        title = "📡 Missing-table API Integration - ℹ️  No Changes"
-
-    console.print(Panel(api_table, title=title, border_style=title_style))
 
 
 def display_upcoming_games(matches: list[Match], limit: int = 5) -> None:
@@ -669,12 +547,11 @@ async def run_scraper(
     config: ScrapingConfig,
     verbose: bool = False,
     headless: bool = True,
-    enable_api_integration: bool = True,
-) -> tuple[list[Match], bool, dict]:
-    """Run the scraper with progress indication and API health check.
+) -> list[Match]:
+    """Run the scraper with progress indication.
 
     Returns:
-        Tuple of (matches, api_healthy, api_results)
+        List of scraped Match objects
     """
     import logging
     import warnings
@@ -690,7 +567,6 @@ async def run_scraper(
         logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
     matches = []
-    api_healthy = False
 
     # Disable progress spinner in container environments (NO_COLOR=1)
     with Progress(
@@ -700,47 +576,14 @@ async def run_scraper(
         transient=True,
         disable=not use_rich,  # Disable progress bar when NO_COLOR is set
     ) as progress:
-        # Check API health first
-        health_task = progress.add_task("🏥 Checking missing-table API...", total=None)
-        try:
-            api_healthy = await check_missing_table_api(verbose=verbose)
-            if api_healthy:
-                progress.update(health_task, description="✅ API ready for integration")
-            else:
-                progress.update(
-                    health_task, description="⚠️  API not available (scraping only)"
-                )
-        except Exception as e:
-            progress.update(health_task, description="❌ API check failed")
-            if verbose:
-                console.print(f"API health check error: {e}")
-        finally:
-            # Remove the health check task to prevent it from being repeatedly displayed
-            progress.remove_task(health_task)
-
         # Add scraping progress task
         scrape_task = progress.add_task("🌐 Initializing browser...", total=None)
 
         try:
-            scraper = MLSScraper(
-                config, headless=headless, enable_api_integration=enable_api_integration
-            )
+            scraper = MLSScraper(config, headless=headless)
 
             progress.update(scrape_task, description="🔍 Scraping matches...")
             matches = await scraper.scrape_matches()
-
-            # Get API results from scraper (includes posted, errors, skipped, duplicates, updated)
-            api_results = (
-                scraper.api_results
-                if scraper.api_results
-                else {
-                    "posted": 0,
-                    "errors": 0,
-                    "skipped": 0,
-                    "duplicates": 0,
-                    "updated": 0,
-                }
-            )
 
             progress.update(scrape_task, description="✅ Scraping completed!")
             progress.remove_task(scrape_task)
@@ -749,24 +592,10 @@ async def run_scraper(
             progress.update(scrape_task, description=f"❌ Scraping failed: {e}")
             raise
         except Exception as e:
-            error_str = str(e).lower()
-            if "cannot connect to missing-table api" in error_str:
-                progress.update(
-                    scrape_task, description="⚠️  API connection failed, continuing..."
-                )
-                # Still return matches, just without API integration
-                api_results = {
-                    "posted": 0,
-                    "errors": scraper.execution_metrics.api_calls_failed,
-                    "skipped": 0,
-                    "api_error": str(e),
-                }
-                return matches, False, api_results
-            else:
-                progress.update(scrape_task, description=f"💥 Unexpected error: {e}")
-                raise
+            progress.update(scrape_task, description=f"💥 Unexpected error: {e}")
+            raise
 
-    return matches, api_healthy, api_results
+    return matches
 
 
 @app.command()
@@ -833,32 +662,33 @@ def scrape(
         bool,
         typer.Option("--headless/--no-headless", help="Run browser in headless mode"),
     ] = True,
-    api_integration: Annotated[
-        bool,
-        typer.Option(
-            "--api/--no-api", help="Enable posting matches to missing-table API"
-        ),
-    ] = True,
     save_file: Annotated[
         Optional[str],
         typer.Option(
             "--save", help="Save matches to JSON file (e.g., --save games.json)"
         ),
     ] = None,
-    async_api: Annotated[
+    submit_queue: Annotated[
         bool,
         typer.Option(
-            "--async-api/--sync-api",
-            help="Use async API for match submission (default: async)",
+            "--submit-queue/--no-submit-queue",
+            help="Submit matches to RabbitMQ queue for processing (default: True)",
         ),
     ] = True,
-    use_queue: Annotated[
-        bool,
+    exchange_name: Annotated[
+        Optional[str],
         typer.Option(
-            "--use-queue/--no-use-queue",
-            help="Submit matches directly to RabbitMQ queue (default: True)",
+            "--exchange",
+            help="RabbitMQ exchange to publish to (fanout to multiple queues). Default: matches-fanout",
         ),
-    ] = True,
+    ] = None,
+    queue_name: Annotated[
+        Optional[str],
+        typer.Option(
+            "--queue",
+            help="Specific queue to publish to (bypasses exchange). Use for targeting dev/prod directly",
+        ),
+    ] = None,
 ) -> None:
     """
     ⚽ Scrape MLS match data and display in beautiful format.
@@ -895,7 +725,6 @@ def scrape(
         verbose,
         from_date,
         to_date,
-        async_api,
     )
 
     if not quiet:
@@ -909,22 +738,19 @@ def scrape(
         metrics = get_metrics()
 
         with metrics.time_execution():
-            # If using queue, disable API integration in scraper
-            # (we'll submit to queue after scraping)
-            enable_api = api_integration and not use_queue
-
-            matches, api_healthy, api_results = asyncio.run(
-                run_scraper(config, verbose, headless, enable_api)
-            )
+            matches = asyncio.run(run_scraper(config, verbose, headless))
 
         # Submit to RabbitMQ queue if requested
-        if use_queue and matches and api_integration:
+        if submit_queue and matches:
             from src.celery.queue_client import MatchQueueClient
 
-            console.print("\n[cyan]📨 Submitting matches to RabbitMQ queue...[/cyan]")
+            console.print("\n[cyan]📨 Submitting matches to RabbitMQ...[/cyan]")
 
             try:
-                queue_client = MatchQueueClient()
+                queue_client = MatchQueueClient(
+                    exchange_name=exchange_name,
+                    queue_name=queue_name,
+                )
 
                 # Check connection first
                 if not queue_client.check_connection():
@@ -959,20 +785,12 @@ def scrape(
                             "match_status": match.match_status or "scheduled",
                             "external_match_id": match.match_id,
                             "location": match.location,
+                            "source": "match-scraper",  # Data source identifier
                         }
                         match_dicts.append(match_dict)
 
                     # Submit batch
                     task_ids = queue_client.submit_matches_batch(match_dicts)
-
-                    # Update api_results for display
-                    api_results = {
-                        "posted": len(task_ids),
-                        "errors": len(matches) - len(task_ids),
-                        "skipped": 0,
-                        "duplicates": 0,
-                        "updated": 0,
-                    }
 
                     console.print(
                         f"[green]✅ {len(task_ids)} matches queued for processing[/green]"
@@ -1006,6 +824,8 @@ def scrape(
                     if match.match_status == "completed"
                     else "⏰"
                     if match.match_status == "scheduled"
+                    else "⏳"
+                    if match.match_status == "tbd"
                     else "🔄"
                 )
                 score = f" ({match.get_score_string()})" if match.has_score() else ""
@@ -1039,10 +859,6 @@ def scrape(
                 console.print(
                     f"\n[green]✅ Successfully found {len(matches)} matches![/green]"
                 )
-
-            # Show API integration results prominently
-            if api_integration:
-                display_api_results(api_results, api_healthy)
 
             # Save matches to file if requested
             if save_file and matches:
@@ -1262,6 +1078,8 @@ def test_quiet() -> None:
             if match.match_status == "completed"
             else "⏰"
             if match.match_status == "scheduled"
+            else "⏳"
+            if match.match_status == "tbd"
             else "🔄"
         )
         score = f" ({match.get_score_string()})" if match.has_score() else ""
@@ -1275,377 +1093,6 @@ def test_quiet() -> None:
 
     console.print("[dim]" + "=" * 50 + "[/dim]")
     console.print("[dim]Perfect for piping to other commands or scripts![/dim]")
-
-
-# Create cache subapp
-cache_app = typer.Typer(help="🗄️ Team cache management commands")
-app.add_typer(cache_app, name="cache")
-
-
-@cache_app.command("load")
-def cache_load(
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
-    ] = False,
-) -> None:
-    """Load teams into cache and display statistics."""
-    setup_environment(verbose)
-
-    if not verbose:
-        display_header()
-
-    async def load_cache() -> None:
-        try:
-            from src.api.missing_table_client import MissingTableClient
-            from src.scraper.api_integration import MatchAPIIntegrator
-
-            # Create API client and integrator
-            client = MissingTableClient()
-            integrator = MatchAPIIntegrator(client)
-
-            console.print("🔄 Loading teams cache...")
-
-            # Preload cache
-            result = await integrator.preload_teams_cache()
-
-            if result.get("success", True):  # True for already_loaded case
-                if result.get("already_loaded"):
-                    console.print("[yellow]✓ Cache already loaded![/yellow]")
-                else:
-                    console.print("[green]✅ Cache loaded successfully![/green]")
-
-                # Display statistics
-                stats = integrator.get_cache_stats()
-
-                stats_table = Table(show_header=False, box=None)
-                stats_table.add_column("Metric", style="cyan")
-                stats_table.add_column("Value", style="white")
-
-                stats_table.add_row("Teams loaded", str(stats["team_count"]))
-                stats_table.add_row("Load time", f"{stats['load_time']:.3f}s")
-                stats_table.add_row(
-                    "Cache status", "✅ Loaded" if stats["loaded"] else "❌ Not loaded"
-                )
-
-                console.print(
-                    Panel(
-                        stats_table, title="📊 Cache Statistics", border_style="green"
-                    )
-                )
-            else:
-                console.print(
-                    f"[red]❌ Cache loading failed: {result.get('error', 'Unknown error')}[/red]"
-                )
-
-        except Exception as e:
-            console.print(f"[red]❌ Error loading cache: {e}[/red]")
-
-    asyncio.run(load_cache())
-
-
-@cache_app.command("status")
-def cache_status(
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
-    ] = False,
-) -> None:
-    """Show current cache status and statistics."""
-    setup_environment(verbose)
-
-    if not verbose:
-        display_header()
-
-    async def show_status() -> None:
-        try:
-            from src.api.missing_table_client import MissingTableClient
-            from src.scraper.api_integration import MatchAPIIntegrator
-
-            # Create API client and integrator
-            client = MissingTableClient()
-            integrator = MatchAPIIntegrator(client)
-
-            # Get cache statistics
-            stats = integrator.get_cache_stats()
-
-            # Create status table
-            status_table = Table(show_header=False, box=None)
-            status_table.add_column("Metric", style="cyan")
-            status_table.add_column("Value", style="white")
-
-            status_table.add_row(
-                "Cache loaded", "✅ Yes" if stats["loaded"] else "❌ No"
-            )
-            status_table.add_row("Teams in cache", str(stats["team_count"]))
-            if stats["load_time"]:
-                status_table.add_row("Last load time", f"{stats['load_time']:.3f}s")
-            if stats["hit_count"] > 0 or stats["miss_count"] > 0:
-                status_table.add_row("Cache hits", str(stats["hit_count"]))
-                status_table.add_row("Cache misses", str(stats["miss_count"]))
-                status_table.add_row("Hit rate", f"{stats['hit_rate']:.1%}")
-
-            # Determine border color based on status
-            border_color = "green" if stats["loaded"] else "red"
-            title = (
-                "📊 Cache Status - ✅ Active"
-                if stats["loaded"]
-                else "📊 Cache Status - ❌ Not Loaded"
-            )
-
-            console.print(Panel(status_table, title=title, border_style=border_color))
-
-        except Exception as e:
-            console.print(f"[red]❌ Error getting cache status: {e}[/red]")
-
-    asyncio.run(show_status())
-
-
-@cache_app.command("clear")
-def cache_clear(
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
-    ] = False,
-) -> None:
-    """Clear the teams cache for testing purposes."""
-    setup_environment(verbose)
-
-    if not verbose:
-        display_header()
-
-    async def clear_cache() -> None:
-        try:
-            from src.api.missing_table_client import MissingTableClient
-            from src.scraper.api_integration import MatchAPIIntegrator
-
-            # Create API client and integrator
-            client = MissingTableClient()
-            integrator = MatchAPIIntegrator(client)
-
-            # Clear cache
-            integrator.clear_cache()
-            console.print("[yellow]🗑️  Cache cleared successfully![/yellow]")
-
-        except Exception as e:
-            console.print(f"[red]❌ Error clearing cache: {e}[/red]")
-
-    asyncio.run(clear_cache())
-
-
-@cache_app.command("test")
-def cache_test(
-    teams: Annotated[
-        str, typer.Option("--teams", help="Comma-separated list of team names to test")
-    ] = "Boston Bolts,New York City FC,IFA",
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
-    ] = False,
-) -> None:
-    """Test cache performance with specific team names."""
-    setup_environment(verbose)
-
-    if not verbose:
-        display_header()
-
-    async def test_teams() -> None:
-        try:
-            import time
-
-            from src.api.missing_table_client import MissingTableClient
-            from src.scraper.api_integration import MatchAPIIntegrator
-
-            # Create API client and integrator
-            client = MissingTableClient()
-            integrator = MatchAPIIntegrator(client)
-
-            team_list = [team.strip() for team in teams.split(",")]
-
-            console.print(f"🧪 Testing cache with {len(team_list)} teams...")
-            console.print(f"Teams: {', '.join(team_list)}")
-            console.print()
-
-            # Load cache first
-            console.print("🔄 Loading cache...")
-            cache_result = await integrator.preload_teams_cache()
-
-            if not cache_result.get("success", True):
-                console.print(
-                    "[yellow]⚠️ Cache loading failed, testing without cache[/yellow]"
-                )
-
-            # Test each team
-            results_table = Table(show_header=True, header_style="bold magenta")
-            results_table.add_column("Team Name", style="cyan")
-            results_table.add_column("Found", style="white")
-            results_table.add_column("Team ID", style="green")
-            results_table.add_column("Status", style="yellow")
-
-            for team_name in team_list:
-                start_time = time.time()
-                team_id = await integrator._find_team_by_name(team_name)
-                lookup_time = time.time() - start_time
-
-                if team_id:
-                    results_table.add_row(
-                        team_name,
-                        "✅ Yes",
-                        str(team_id),
-                        f"Found in {lookup_time:.3f}s",
-                    )
-                else:
-                    results_table.add_row(
-                        team_name, "❌ No", "-", f"Not found ({lookup_time:.3f}s)"
-                    )
-
-            console.print(Panel(results_table, title="🧪 Team Lookup Test Results"))
-
-            # Show final cache stats
-            stats = integrator.get_cache_stats()
-            if stats["hit_count"] > 0 or stats["miss_count"] > 0:
-                console.print("\n📊 Cache Performance:")
-                console.print(f"   Hits: {stats['hit_count']}")
-                console.print(f"   Misses: {stats['miss_count']}")
-                console.print(f"   Hit Rate: {stats['hit_rate']:.1%}")
-
-        except Exception as e:
-            console.print(f"[red]❌ Error testing teams: {e}[/red]")
-
-    asyncio.run(test_teams())
-
-
-@cache_app.command("benchmark")
-def cache_benchmark(
-    teams: Annotated[
-        str,
-        typer.Option("--teams", help="Comma-separated list of team names to benchmark"),
-    ] = "Boston Bolts,New York City FC,IFA,Austin FC Academy,Real Salt Lake Academy",
-    iterations: Annotated[
-        int, typer.Option("--iterations", help="Number of iterations per test")
-    ] = 3,
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Show detailed logs")
-    ] = False,
-) -> None:
-    """Benchmark cache performance vs traditional individual lookups."""
-    setup_environment(verbose)
-
-    if not verbose:
-        display_header()
-
-    async def benchmark() -> None:
-        try:
-            import time
-
-            from src.api.missing_table_client import MissingTableClient
-            from src.scraper.api_integration import MatchAPIIntegrator
-
-            # Create API client and integrator
-            client = MissingTableClient()
-            integrator = MatchAPIIntegrator(client)
-
-            team_list = [team.strip() for team in teams.split(",")]
-
-            console.print("🏁 Benchmarking cache performance...")
-            console.print(f"Teams: {len(team_list)} | Iterations: {iterations}")
-            console.print()
-
-            # Test 1: Traditional individual lookups (clear cache first)
-            console.print("🔄 Testing traditional individual lookups...")
-            integrator.clear_cache()
-
-            traditional_times = []
-            for i in range(iterations):
-                integrator.clear_cache()  # Clear cache between iterations
-                start_time = time.time()
-
-                # Do individual lookups without cache
-                for team_name in team_list:
-                    await integrator._find_team_by_name(team_name)
-
-                iteration_time = time.time() - start_time
-                traditional_times.append(iteration_time)
-                console.print(f"   Iteration {i + 1}: {iteration_time:.3f}s")
-
-            avg_traditional = sum(traditional_times) / len(traditional_times)
-
-            console.print()
-
-            # Test 2: Cache-optimized lookups
-            console.print("🚀 Testing cache-optimized lookups...")
-
-            cached_times = []
-            for i in range(iterations):
-                integrator.clear_cache()  # Start fresh
-                start_time = time.time()
-
-                # Preload cache once, then do lookups
-                await integrator.preload_teams_cache()
-                for team_name in team_list:
-                    await integrator._find_team_by_name(team_name)
-
-                iteration_time = time.time() - start_time
-                cached_times.append(iteration_time)
-                console.print(f"   Iteration {i + 1}: {iteration_time:.3f}s")
-
-            avg_cached = sum(cached_times) / len(cached_times)
-
-            console.print()
-
-            # Results comparison
-            improvement = ((avg_traditional - avg_cached) / avg_traditional) * 100
-            speedup = avg_traditional / avg_cached
-
-            results_table = Table(show_header=True, header_style="bold magenta")
-            results_table.add_column("Method", style="cyan")
-            results_table.add_column("Avg Time", style="white")
-            results_table.add_column("Min Time", style="green")
-            results_table.add_column("Max Time", style="red")
-            results_table.add_column("Performance", style="yellow")
-
-            results_table.add_row(
-                "Traditional Lookups",
-                f"{avg_traditional:.3f}s",
-                f"{min(traditional_times):.3f}s",
-                f"{max(traditional_times):.3f}s",
-                "Baseline",
-            )
-
-            results_table.add_row(
-                "Cache-Optimized",
-                f"{avg_cached:.3f}s",
-                f"{min(cached_times):.3f}s",
-                f"{max(cached_times):.3f}s",
-                f"{speedup:.1f}x faster"
-                if improvement > 0
-                else f"{abs(speedup):.1f}x slower",
-            )
-
-            console.print(Panel(results_table, title="🏁 Benchmark Results"))
-
-            # Summary
-            if improvement > 0:
-                console.print(
-                    f"\n🎉 [green]Cache optimization achieved {improvement:.1f}% improvement![/green]"
-                )
-                console.print(
-                    f"   Cache method is {speedup:.1f}x faster than traditional lookups"
-                )
-            else:
-                console.print(
-                    f"\n⚠️ [yellow]Cache method was {abs(improvement):.1f}% slower[/yellow]"
-                )
-                console.print(
-                    "   Consider investigating network conditions or API response times"
-                )
-
-            # Show final cache stats
-            stats = integrator.get_cache_stats()
-            console.print(
-                f"\n📊 Final cache stats: {stats['hit_count']} hits, {stats['miss_count']} misses"
-            )
-
-        except Exception as e:
-            console.print(f"[red]❌ Benchmark failed: {e}[/red]")
-
-    asyncio.run(benchmark())
 
 
 @app.command()
