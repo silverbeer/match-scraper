@@ -1,0 +1,120 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-cronjob
+  namespace: match-scraper
+  labels:
+    app: match-scraper
+spec:
+  # Run daily at 6 AM UTC
+  schedule: "0 6 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: match-scraper
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: match-scraper
+            # Use locally built image
+            # Build with: docker build -f Dockerfile.gke -t match-scraper:latest .
+            # Import to k3s: sudo k3s ctr images import match-scraper.tar
+            image: match-scraper:latest
+            imagePullPolicy: Never  # Don't try to pull - use local image
+            command: ["python", "-m", "src.cli.main", "scrape"]
+            # Routing: By default, publishes to "matches-fanout" exchange which routes to both:
+            #   - matches.prod queue (processed by prod workers → prod Supabase)
+            #   - matches.dev queue (processed by dev workers → dev Supabase)
+            # To target specific queue: add "--queue matches.dev" or "--queue matches.prod"
+            # To disable queue: add "--no-submit-queue"
+            env:
+            # Load from ConfigMap
+            - name: AGE_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: AGE_GROUP
+            - name: DIVISION
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: DIVISION
+            - name: RABBITMQ_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: RABBITMQ_URL
+            - name: MISSING_TABLE_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: MISSING_TABLE_API_BASE_URL
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: LOG_LEVEL
+            - name: NO_COLOR
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: NO_COLOR
+            - name: HEADLESS
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: HEADLESS
+            - name: BROWSER_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: BROWSER_TIMEOUT
+            - name: MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: MAX_RETRIES
+            - name: RETRY_DELAY
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: RETRY_DELAY
+            - name: DEPLOYMENT_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: DEPLOYMENT_ENV
+            - name: K8S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: match-scraper-config
+                  key: K8S_NAMESPACE
+            # Load from Secret (optional when using queue)
+            - name: MISSING_TABLE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: match-scraper-secrets
+                  key: MISSING_TABLE_API_TOKEN
+                  optional: true
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+            # Security context for running as non-root
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false  # Playwright needs to write temp files
+              capabilities:
+                drop:
+                - ALL

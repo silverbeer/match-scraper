@@ -1,0 +1,127 @@
+---
+# ServiceAccount for cleanup job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: job-cleanup
+  namespace: match-scraper
+---
+# Role with permissions to list and delete jobs
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-cleanup
+  namespace: match-scraper
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["list", "delete", "deletecollection"]
+---
+# RoleBinding to connect ServiceAccount and Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: job-cleanup
+  namespace: match-scraper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: job-cleanup
+subjects:
+- kind: ServiceAccount
+  name: job-cleanup
+  namespace: match-scraper
+---
+# CronJob to clean up completed jobs daily
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-completed-jobs
+  namespace: match-scraper
+  labels:
+    app: job-cleanup
+spec:
+  # Run daily at 2 AM UTC
+  schedule: "0 2 * * *"
+  timeZone: "UTC"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      # Clean up the cleanup job itself after 1 hour
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app: job-cleanup
+        spec:
+          serviceAccountName: job-cleanup
+          restartPolicy: Never
+          containers:
+          - name: cleanup
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "🧹 Starting cleanup of completed jobs..."
+              echo ""
+
+              # Delete completed successful jobs
+              echo "Deleting successful jobs..."
+              DELETED=$(kubectl delete jobs -n match-scraper \
+                --field-selector status.successful=1 \
+                --ignore-not-found=true 2>&1)
+
+              if [ -n "$DELETED" ]; then
+                echo "$DELETED"
+              else
+                echo "  No successful jobs to delete"
+              fi
+              echo ""
+
+              # Delete failed jobs older than 7 days (keep recent failures for debugging)
+              echo "Checking for old failed jobs (>7 days)..."
+              CURRENT_TIME=$(date +%s)
+              SEVEN_DAYS_AGO=$((CURRENT_TIME - 604800))
+
+              # Get all jobs and filter for failed ones with jq
+              FAILED_JOBS=$(kubectl get jobs -n match-scraper -o json | \
+                jq -r '.items[] | select(.status.failed != null and .status.failed > 0) | .metadata.name + " " + .metadata.creationTimestamp')
+
+              if [ -z "$FAILED_JOBS" ]; then
+                echo "  No failed jobs found"
+              else
+                DELETED_COUNT=0
+                while IFS= read -r line; do
+                  JOB_NAME=$(echo "$line" | awk '{print $1}')
+                  CREATED=$(echo "$line" | awk '{print $2}')
+                  # Use GNU date if available, otherwise BSD date
+                  CREATED_TIMESTAMP=$(date -d "$CREATED" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED" +%s 2>/dev/null)
+
+                  if [ $CREATED_TIMESTAMP -lt $SEVEN_DAYS_AGO ]; then
+                    echo "  Deleting old failed job: $JOB_NAME"
+                    kubectl delete job "$JOB_NAME" -n match-scraper
+                    DELETED_COUNT=$((DELETED_COUNT + 1))
+                  fi
+                done <<< "$FAILED_JOBS"
+
+                if [ $DELETED_COUNT -eq 0 ]; then
+                  echo "  No failed jobs older than 7 days"
+                else
+                  echo "  Deleted $DELETED_COUNT old failed job(s)"
+                fi
+              fi
+              echo ""
+
+              echo "✅ Cleanup complete"
+              echo ""
+              echo "📊 Current job status:"
+              kubectl get jobs -n match-scraper
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "100m"
+              limits:
+                memory: "128Mi"
+                cpu: "200m"

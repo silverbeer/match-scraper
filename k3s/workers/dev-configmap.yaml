@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: missing-table-worker-dev-config
+  namespace: match-scraper
+  labels:
+    app: missing-table-worker
+    environment: dev
+data:
+  # Celery Configuration
+  CELERY_BROKER_URL: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+  CELERY_RESULT_BACKEND: "rpc://"
+
+  # RabbitMQ Configuration
+  RABBITMQ_URL: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+
+  # Queue Configuration - DEV queue only
+  QUEUE_NAME: "matches.dev"
+
+  # Supabase Configuration (DEV)
+  SUPABASE_URL: "https://ppgxasqgqbnauvxozmjw.supabase.co"
+
+  # Application Configuration
+  ENVIRONMENT: "development"
+  LOG_LEVEL: "INFO"

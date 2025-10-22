@@ -10,10 +10,8 @@ import asyncio
 import time
 from typing import Any, Optional
 
-from ..api.missing_table_client import MissingTableClient
 from ..utils.logger import get_logger
 from ..utils.metrics import get_metrics
-from .api_integration import MatchAPIIntegrator
 from .browser import BrowserConfig, BrowserManager, PageNavigator
 from .calendar_interaction import CalendarInteractionError, MLSCalendarInteractor
 from .config import ScrapingConfig
@@ -52,7 +50,6 @@ class MLSScraper:
         self,
         config: ScrapingConfig,
         headless: bool = True,
-        enable_api_integration: bool = True,
     ):
         """
         Initialize MLS scraper with configuration.
@@ -60,11 +57,9 @@ class MLSScraper:
         Args:
             config: Scraping configuration containing filters and settings
             headless: Whether to run browser in headless mode (default: True)
-            enable_api_integration: Whether to post matches to missing-table API (default: True)
         """
         self.config = config
         self.headless = headless
-        self.enable_api_integration = enable_api_integration
         self.browser_manager: Optional[BrowserManager] = None
         self.execution_metrics = ScrapingMetrics(
             games_scheduled=0,
@@ -74,23 +69,6 @@ class MLSScraper:
             execution_duration_ms=0,
             errors_encountered=0,
         )
-
-        # Store API integration results
-        self.api_results: dict = {}
-
-        # Initialize API integration if enabled
-        self.api_integrator: Optional[MatchAPIIntegrator] = None
-        if self.enable_api_integration:
-            try:
-                api_client = MissingTableClient(
-                    base_url=config.missing_table_api_url,
-                    api_token=config.missing_table_api_key,
-                )
-                self.api_integrator = MatchAPIIntegrator(api_client, config)
-                logger.info("API integration enabled")
-            except Exception as e:
-                logger.warning(f"Failed to initialize API integration: {e}")
-                self.enable_api_integration = False
 
     async def scrape_matches(self) -> list[Match]:
         """
@@ -147,53 +125,6 @@ class MLSScraper:
                     "duration_ms": execution_duration_ms,
                 },
             )
-
-            # Post matches to missing-table API if integration is enabled
-            if self.enable_api_integration and self.api_integrator and matches:
-                try:
-                    # Choose between sync and async API based on configuration
-                    if self.config.use_async_api:
-                        logger.info("Starting async API integration to post matches")
-                        api_results = await self.api_integrator.post_matches_async(
-                            matches, self.config.age_group, self.config.division
-                        )
-                    else:
-                        logger.info("Starting sync API integration to post matches")
-                        api_results = await self.api_integrator.post_matches(
-                            matches, self.config.age_group, self.config.division
-                        )
-
-                    # Store the full API results for later retrieval
-                    self.api_results = api_results
-
-                    # Update metrics
-                    self.execution_metrics.api_calls_successful += api_results.get(
-                        "posted", 0
-                    ) + api_results.get("updated", 0)
-                    self.execution_metrics.api_calls_failed += api_results.get(
-                        "errors", 0
-                    )
-
-                    logger.info(
-                        "API integration completed",
-                        extra={
-                            "posted": api_results.get("posted", 0),
-                            "errors": api_results.get("errors", 0),
-                            "skipped": api_results.get("skipped", 0),
-                            "duplicates": api_results.get("duplicates", 0),
-                            "use_async": self.config.use_async_api,
-                        },
-                    )
-                except Exception as e:
-                    # Log technical details only in verbose mode
-                    if self.config.log_level == "DEBUG":
-                        logger.error(f"API integration failed: {e}")
-                    else:
-                        # For user-friendly CLI output, we'll let the CLI handle the error display
-                        pass
-                    self.execution_metrics.api_calls_failed += len(matches)
-                    # Re-raise so CLI can handle with user-friendly message
-                    raise
 
             return matches
 

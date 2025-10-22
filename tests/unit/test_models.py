@@ -78,7 +78,7 @@ class TestMatch:
             away_score="TBD",
         )
 
-        assert match.match_status == "TBD"
+        assert match.match_status == "tbd"
         assert not match.is_played()
         assert not match.has_score()
         assert match.get_score_string() is None
@@ -95,7 +95,7 @@ class TestMatch:
             away_score="TBD",
         )
 
-        assert match.match_status == "TBD"
+        assert match.match_status == "tbd"
         assert not match.has_score()
 
     def test_none_scores_past_match(self):
@@ -110,7 +110,7 @@ class TestMatch:
             away_score=None,
         )
 
-        assert match.match_status == "TBD"
+        assert match.match_status == "tbd"
         assert not match.has_score()
 
     def test_score_validation_positive_int(self):
