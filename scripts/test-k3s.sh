@@ -20,6 +20,7 @@
 #   --end              Days forward from today (0=today, 1=tomorrow)
 #   --queue            Target specific queue (matches.dev or matches.prod)
 #   --exchange         Use custom exchange (default: matches-fanout for both envs)
+#   --watch, -w        Watch mode: Monitor job through completion with live logs
 #
 # Examples:
 #   ./scripts/test-k3s.sh trigger                                    # Default: fanout to BOTH dev and prod
@@ -29,6 +30,8 @@
 #   ./scripts/test-k3s.sh trigger -a U13 -d Northeast --club IFA     # U13 Northeast IFA (both envs)
 #   ./scripts/test-k3s.sh trigger --from 2025-10-16 --to 2025-10-20  # Specific dates
 #   ./scripts/test-k3s.sh trigger --start 7 --end 0                  # Last 7 days
+#   ./scripts/test-k3s.sh trigger --watch                            # Default job with live monitoring
+#   ./scripts/test-k3s.sh trigger -a U13 -d Northeast -w             # U13 with live monitoring
 #
 
 set -e
@@ -65,6 +68,7 @@ if [ $# -eq 0 ]; then
     echo "  --end <days>               Days forward from today"
     echo "  --queue <name>             Target specific queue (matches.dev or matches.prod)"
     echo "  --exchange <name>          Use custom exchange (default: matches-fanout)"
+    echo "  --watch, -w                Watch mode: Monitor job through completion"
     echo ""
     echo "Logs/Workers Options:"
     echo "  -f, --follow               Follow logs in real-time (Ctrl+C to exit)"
@@ -75,6 +79,7 @@ if [ $# -eq 0 ]; then
     echo "  $0 trigger --queue matches.prod             # Target prod only"
     echo "  $0 trigger -a U13 -d Northeast --club IFA"
     echo "  $0 trigger --from 2025-10-16 --to 2025-10-20"
+    echo "  $0 trigger --watch                          # Trigger with live monitoring"
     echo "  $0 logs -f"
     echo "  $0 workers -f"
     exit 1
@@ -95,6 +100,7 @@ case $COMMAND in
         END_OFFSET=""
         QUEUE_NAME=""
         EXCHANGE_NAME=""
+        WATCH_MODE=false
 
         while [[ $# -gt 0 ]]; do
             case $1 in
@@ -133,6 +139,10 @@ case $COMMAND in
                 --exchange)
                     EXCHANGE_NAME="$2"
                     shift 2
+                    ;;
+                --watch|-w)
+                    WATCH_MODE=true
+                    shift
                     ;;
                 *)
                     echo -e "${RED}Unknown option: $1${NC}"
@@ -199,7 +209,7 @@ spec:
       - name: scraper
         image: match-scraper:latest
         imagePullPolicy: Never
-        command: ["uv", "run", "mls-scraper", "scrape"]
+        command: ["python", "-m", "src.cli.main", "scrape"]
         args: $(printf '%s\n' "${ARGS[@]}" | jq -R . | jq -s .)
         env:
         - name: RABBITMQ_URL
@@ -213,10 +223,85 @@ EOF
 
         echo -e "${GREEN}✅ Job created: $JOB_NAME${NC}"
         echo ""
-        echo "Monitor with:"
-        echo "  kubectl logs -n $NAMESPACE -l job-name=$JOB_NAME --tail=100 -f"
-        echo ""
-        echo "Or run: ./scripts/test-k3s.sh logs"
+
+        # Watch mode: Monitor job through completion
+        if [ "$WATCH_MODE" = true ]; then
+            echo -e "${YELLOW}👀 Watch mode enabled - monitoring job progress...${NC}"
+            echo ""
+
+            # Wait for pod to be created
+            echo -e "${BLUE}⏳ Waiting for pod to be created...${NC}"
+            TIMEOUT=30
+            ELAPSED=0
+            POD_NAME=""
+
+            while [ $ELAPSED -lt $TIMEOUT ]; do
+                POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l job-name="$JOB_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+                if [ -n "$POD_NAME" ]; then
+                    break
+                fi
+                sleep 1
+                ELAPSED=$((ELAPSED + 1))
+            done
+
+            if [ -z "$POD_NAME" ]; then
+                echo -e "${RED}❌ Pod creation timeout after ${TIMEOUT}s${NC}"
+                echo "Check job status with: kubectl describe job $JOB_NAME -n $NAMESPACE"
+                exit 1
+            fi
+
+            echo -e "${GREEN}✅ Pod created: $POD_NAME${NC}"
+            echo ""
+
+            # Wait for pod to be ready or running
+            echo -e "${BLUE}⏳ Waiting for pod to start...${NC}"
+            kubectl wait --for=condition=Ready pod/"$POD_NAME" -n "$NAMESPACE" --timeout=60s 2>/dev/null || true
+
+            # Show initial pod status
+            POD_STATUS=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
+            echo -e "${BLUE}Pod Status:${NC} $POD_STATUS"
+            echo ""
+
+            # Follow logs
+            echo -e "${BLUE}📋 Scraper Logs (following):${NC}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            kubectl logs "$POD_NAME" -n "$NAMESPACE" -f 2>&1 || true
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+
+            # Check final status
+            FINAL_STATUS=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
+            echo -e "${BLUE}Final Pod Status:${NC} $FINAL_STATUS"
+
+            # Get exit code
+            EXIT_CODE=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null || echo "N/A")
+
+            if [ "$EXIT_CODE" = "0" ]; then
+                echo -e "${GREEN}✅ Job completed successfully (exit code: 0)${NC}"
+            elif [ "$EXIT_CODE" != "N/A" ]; then
+                echo -e "${RED}❌ Job failed (exit code: $EXIT_CODE)${NC}"
+            fi
+            echo ""
+
+            # Show RabbitMQ queue status
+            echo -e "${BLUE}🐰 RabbitMQ Queue Status:${NC}"
+            kubectl exec -n "$NAMESPACE" messaging-rabbitmq-0 -- rabbitmqctl list_queues name messages consumers 2>/dev/null | grep -E "(name|matches)" || echo "  (Unable to fetch queue status)"
+            echo ""
+
+            # Show worker activity hint
+            echo -e "${YELLOW}💡 To monitor worker processing:${NC}"
+            echo "  ./scripts/test-k3s.sh workers -f"
+            echo ""
+
+        else
+            echo "Monitor with:"
+            echo "  kubectl logs -n $NAMESPACE -l job-name=$JOB_NAME --tail=100 -f"
+            echo ""
+            echo "Or run: ./scripts/test-k3s.sh logs"
+            echo ""
+            echo -e "${YELLOW}💡 Tip: Use './scripts/test-k3s.sh trigger --watch' for automatic monitoring${NC}"
+        fi
         ;;
 
     status)

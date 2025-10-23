@@ -8,11 +8,11 @@ metadata:
     environment: prod
 data:
   # Celery Configuration
-  CELERY_BROKER_URL: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+  CELERY_BROKER_URL: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
   CELERY_RESULT_BACKEND: "rpc://"
 
   # RabbitMQ Configuration
-  RABBITMQ_URL: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
+  RABBITMQ_URL: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
 
   # Queue Configuration - PROD queue only
   QUEUE_NAME: "matches.prod"
