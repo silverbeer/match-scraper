@@ -558,6 +558,18 @@ class MLSCalendarInteractor:
                         and start_date.year == end_date.year
                     )
 
+                    # Check if end date is in the next month (adjacent month)
+                    # Calculate the next month from start_date
+                    next_month = start_date.month + 1 if start_date.month < 12 else 1
+                    next_year = (
+                        start_date.year
+                        if start_date.month < 12
+                        else start_date.year + 1
+                    )
+                    is_next_month = (
+                        end_date.month == next_month and end_date.year == next_year
+                    )
+
                     if same_month:
                         # Same month: Select end date from left calendar
                         logger.debug(
@@ -587,11 +599,75 @@ class MLSCalendarInteractor:
                                 f"Could not click end date {end_day} on left calendar"
                             )
                             return False
+                    elif is_next_month:
+                        # End date is in next month - it should be visible on RIGHT calendar
+                        # Try to click on right calendar first (no navigation needed)
+                        logger.debug(
+                            "End date is in next month - attempting to click on right calendar"
+                        )
+                        end_day = end_date.day
+                        end_date_selectors_right = [
+                            f'.daterangepicker .drp-calendar.right td:has-text("{end_day}"):not(.off)',
+                            f'.drp-calendar.right .calendar-table td:has-text("{end_day}"):not(.off)',
+                            f'.daterangepicker .right td:has-text("{end_day}"):not(.off)',
+                        ]
+
+                        end_clicked = False
+                        for end_selector in end_date_selectors_right:
+                            end_cell = self.iframe_content.locator(end_selector)
+                            if await end_cell.count() > 0:
+                                await end_cell.first.click()
+                                logger.info(
+                                    f"Clicked end date {end_day} on right calendar using selector: {end_selector}"
+                                )
+                                await asyncio.sleep(1)
+                                end_clicked = True
+                                break
+
+                        if not end_clicked:
+                            # Fallback: try left calendar after navigation
+                            logger.debug(
+                                "Could not click on right calendar, navigating to end month"
+                            )
+                            if not await self._navigate_daterangepicker_to_month(
+                                end_date.month, end_date.year
+                            ):
+                                logger.warning(
+                                    "Failed to navigate to end date month",
+                                    extra={
+                                        "target_month": end_date.month,
+                                        "target_year": end_date.year,
+                                    },
+                                )
+                                return False
+
+                            end_date_selectors_left = [
+                                f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
+                                f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
+                                f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
+                            ]
+
+                            for end_selector in end_date_selectors_left:
+                                end_cell = self.iframe_content.locator(end_selector)
+                                if await end_cell.count() > 0:
+                                    await end_cell.first.click()
+                                    logger.info(
+                                        f"Clicked end date {end_day} on left calendar after navigation using selector: {end_selector}"
+                                    )
+                                    await asyncio.sleep(1)
+                                    end_clicked = True
+                                    break
+
+                            if not end_clicked:
+                                logger.warning(
+                                    f"Could not click end date {end_day} even after navigation"
+                                )
+                                return False
                     else:
-                        # Different months: Navigate to end month (left calendar will update)
+                        # Different months (not adjacent): Navigate to end month
                         # then select end date from left calendar
                         logger.debug(
-                            "Start and end dates in different months - navigating to end month"
+                            "Start and end dates span multiple months - navigating to end month"
                         )
                         if not await self._navigate_daterangepicker_to_month(
                             end_date.month, end_date.year

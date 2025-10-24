@@ -40,7 +40,7 @@ class MyModel(BaseModel):
 ### Date Range Logic
 - CLI uses offset-based date arguments (--start, --end)
 - Negative values = past dates, positive = future dates, 0 = today
-- Calendar interaction has limitations with cross-month date ranges
+- Calendar supports cross-month date ranges by detecting adjacent months and using both left/right calendar panels
 
 ### Environment Variables
 - Use MISSING_TABLE_API_BASE_URL (not MISSING_TABLE_API_URL)
