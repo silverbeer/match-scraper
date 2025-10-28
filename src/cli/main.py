@@ -284,7 +284,7 @@ def display_matches_table(matches: list[Match]) -> None:
 
     # Create main matches table
     table = Table(show_header=True, header_style="bold magenta", box=None)
-    table.add_column("Match ID", style="dim", width=10)
+    table.add_column("MLS ID", style="dim", width=10)
     table.add_column("Date", style="cyan", width=12)
     table.add_column("Time", style="dim", width=8)
     table.add_column("Home Team", style="green", min_width=20)
@@ -350,7 +350,8 @@ def display_matches_table(matches: list[Match]) -> None:
         # Format venue - no truncation
         venue = match.location or "TBD"
 
-        # Format match_id (show last 8 characters for readability)
+        # Format MLS match_id (external ID from MLS website)
+        # Note: Internal database ID is assigned later by Celery workers
         match_id_display = (
             match.match_id[-8:] if len(match.match_id) > 8 else match.match_id
         )

@@ -513,25 +513,89 @@ class MLSCalendarInteractor:
                 if await calendar_picker.count() > 0:
                     logger.info("Calendar picker opened successfully")
 
-                    # Navigate to start_date's month if needed
-                    if not await self._navigate_daterangepicker_to_month(
-                        start_date.month, start_date.year
+                    # Check if both dates are in the same month
+                    same_month = (
+                        start_date.month == end_date.month
+                        and start_date.year == end_date.year
+                    )
+
+                    # Check what months are currently displayed on left and right calendars
+                    (
+                        left_month,
+                        left_year,
+                    ) = await self._get_daterangepicker_current_month_year()
+                    (
+                        right_month,
+                        right_year,
+                    ) = await self._get_daterangepicker_right_month_year()
+
+                    logger.info(
+                        "Calendar state check",
+                        extra={
+                            "left_calendar": f"{left_month}/{left_year}"
+                            if left_month and left_year
+                            else "None",
+                            "right_calendar": f"{right_month}/{right_year}"
+                            if right_month and right_year
+                            else "None",
+                            "target_month": start_date.month,
+                            "target_year": start_date.year,
+                            "same_month": same_month,
+                        },
+                    )
+
+                    # Determine if we should use right calendar without navigation
+                    use_right_calendar = False
+                    if (
+                        same_month
+                        and right_month == start_date.month
+                        and right_year == start_date.year
                     ):
-                        logger.warning(
-                            "Failed to navigate to start date month",
+                        # Both dates are in the same month AND that month is visible on right calendar
+                        logger.info(
+                            "Target month already visible on RIGHT calendar - selecting from right without navigation",
                             extra={
                                 "target_month": start_date.month,
                                 "target_year": start_date.year,
                             },
                         )
-                        return False
+                        use_right_calendar = True
+                    else:
+                        # Navigate to start_date's month
+                        logger.info(
+                            "Navigating to target month on LEFT calendar",
+                            extra={
+                                "target_month": start_date.month,
+                                "target_year": start_date.year,
+                            },
+                        )
+                        if not await self._navigate_daterangepicker_to_month(
+                            start_date.month, start_date.year
+                        ):
+                            logger.warning(
+                                "Failed to navigate to start date month",
+                                extra={
+                                    "target_month": start_date.month,
+                                    "target_year": start_date.year,
+                                },
+                            )
+                            return False
 
-                    # Click on start date - use left calendar only
-                    start_day = start_date.day  # Use actual start date
+                        # Wait for calendar to stabilize after navigation
+                        await asyncio.sleep(1.5)
+
+                    # Determine which calendar to use for selecting dates
+                    calendar_side = "right" if use_right_calendar else "left"
+                    logger.info(
+                        f"Selecting dates from {calendar_side.upper()} calendar"
+                    )
+
+                    # Click on start date
+                    start_day = start_date.day
                     start_date_selectors = [
-                        f'.daterangepicker .drp-calendar.left td:has-text("{start_day}"):not(.off)',
-                        f'.drp-calendar.left .calendar-table td:has-text("{start_day}"):not(.off)',
-                        f'.daterangepicker .left td:has-text("{start_day}"):not(.off)',
+                        f'.daterangepicker .drp-calendar.{calendar_side} td:has-text("{start_day}"):not(.off)',
+                        f'.drp-calendar.{calendar_side} .calendar-table td:has-text("{start_day}"):not(.off)',
+                        f'.daterangepicker .{calendar_side} td:has-text("{start_day}"):not(.off)',
                     ]
 
                     start_clicked = False
@@ -540,7 +604,7 @@ class MLSCalendarInteractor:
                         if await start_cell.count() > 0:
                             await start_cell.first.click()
                             logger.info(
-                                f"Clicked start date {start_day} on left calendar using selector: {start_selector}"
+                                f"Clicked start date {start_day} on {calendar_side.upper()} calendar using selector: {start_selector}"
                             )
                             await asyncio.sleep(1)
                             start_clicked = True
@@ -548,38 +612,23 @@ class MLSCalendarInteractor:
 
                     if not start_clicked:
                         logger.warning(
-                            f"Could not click start date {start_day} on left calendar"
+                            f"Could not click start date {start_day} on {calendar_side.upper()} calendar"
                         )
                         return False
 
-                    # Determine if end date is in the same month as start date
-                    same_month = (
-                        start_date.month == end_date.month
-                        and start_date.year == end_date.year
-                    )
-
-                    # Check if end date is in the next month (adjacent month)
-                    # Calculate the next month from start_date
-                    next_month = start_date.month + 1 if start_date.month < 12 else 1
-                    next_year = (
-                        start_date.year
-                        if start_date.month < 12
-                        else start_date.year + 1
-                    )
-                    is_next_month = (
-                        end_date.month == next_month and end_date.year == next_year
-                    )
-
-                    if same_month:
-                        # Same month: Select end date from left calendar
+                    # Now select end date from the same calendar side
+                    # If use_right_calendar is True, both dates are in the same month on the right calendar
+                    # If False, we navigated to the target month on the left calendar
+                    if use_right_calendar or same_month:
+                        # Both dates are on the same calendar panel
                         logger.debug(
-                            "Start and end dates in same month - selecting end date from left calendar"
+                            f"Start and end dates both on {calendar_side.upper()} calendar - selecting end date"
                         )
                         end_day = end_date.day
                         end_date_selectors = [
-                            f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
-                            f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
-                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
+                            f'.daterangepicker .drp-calendar.{calendar_side} td:has-text("{end_day}"):not(.off)',
+                            f'.drp-calendar.{calendar_side} .calendar-table td:has-text("{end_day}"):not(.off)',
+                            f'.daterangepicker .{calendar_side} td:has-text("{end_day}"):not(.off)',
                         ]
 
                         end_clicked = False
@@ -588,7 +637,7 @@ class MLSCalendarInteractor:
                             if await end_cell.count() > 0:
                                 await end_cell.first.click()
                                 logger.info(
-                                    f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                                    f"Clicked end date {end_day} on {calendar_side.upper()} calendar using selector: {end_selector}"
                                 )
                                 await asyncio.sleep(1)
                                 end_clicked = True
@@ -596,10 +645,10 @@ class MLSCalendarInteractor:
 
                         if not end_clicked:
                             logger.warning(
-                                f"Could not click end date {end_day} on left calendar"
+                                f"Could not click end date {end_day} on {calendar_side.upper()} calendar"
                             )
                             return False
-                    elif is_next_month:
+                    elif not use_right_calendar:
                         # End date is in next month - it should be visible on RIGHT calendar
                         # Try to click on right calendar first (no navigation needed)
                         logger.debug(
@@ -694,7 +743,7 @@ class MLSCalendarInteractor:
                             if await end_cell.count() > 0:
                                 await end_cell.first.click()
                                 logger.info(
-                                    f"Clicked end date {end_day} on left calendar using selector: {end_selector}"
+                                    f"Clicked end date {end_day} on {calendar_side.upper()} calendar using selector: {end_selector}"
                                 )
                                 await asyncio.sleep(1)
                                 end_clicked = True
@@ -870,6 +919,63 @@ class MLSCalendarInteractor:
             )
             return None, None
 
+    async def _get_daterangepicker_right_month_year(
+        self,
+    ) -> tuple[Optional[int], Optional[int]]:
+        """
+        Get the current month and year displayed in the daterangepicker RIGHT calendar.
+
+        This reads the month/year from the right calendar panel to check if the target
+        month is already visible without needing navigation.
+
+        Returns:
+            Tuple of (month, year) or (None, None) if not found
+        """
+        try:
+            if not self.iframe_content:
+                logger.info(
+                    "No iframe content available for daterangepicker RIGHT calendar check"
+                )
+                return None, None
+
+            # Selectors for daterangepicker RIGHT month/year display
+            month_year_selectors = [
+                ".daterangepicker .drp-calendar.right .month",
+                ".daterangepicker .drp-calendar.right th.month",
+                ".drp-calendar.right .calendar-table th.month",
+            ]
+
+            for selector in month_year_selectors:
+                month_element = self.iframe_content.locator(selector)
+                count = await month_element.count()
+                if count > 0:
+                    text = await month_element.first.text_content()
+                    if text:
+                        logger.info(
+                            "Found daterangepicker RIGHT month/year text",
+                            extra={"text": text.strip(), "selector": selector},
+                        )
+                        # Parse the text using existing helper
+                        month, year = self._parse_month_year_text(text.strip())
+                        if month and year:
+                            logger.info(
+                                "Parsed daterangepicker RIGHT month/year",
+                                extra={"month": month, "year": year},
+                            )
+                            return month, year
+
+            logger.warning(
+                "Could not find daterangepicker RIGHT month/year display - selectors returned no results"
+            )
+            return None, None
+
+        except Exception as e:
+            logger.error(
+                "Error getting daterangepicker RIGHT month/year",
+                extra={"error": str(e)},
+            )
+            return None, None
+
     async def _navigate_daterangepicker_to_month(
         self, target_month: int, target_year: int
     ) -> bool:
@@ -951,8 +1057,8 @@ class MLSCalendarInteractor:
                         logger.warning("Prev month button not found")
                         return False
 
-                # Wait for UI to update (reduced from 0.5s to 0.3s for faster navigation)
-                await asyncio.sleep(0.3)
+                # Wait for UI to update after clicking nav button
+                await asyncio.sleep(0.5)
 
                 # Check if we've reached the target month/year
                 (
