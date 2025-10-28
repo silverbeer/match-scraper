@@ -35,6 +35,86 @@ class MyModel(BaseModel):
         }
 ```
 
+## Pre-Commit Checks and Local Linting
+
+**CRITICAL: Always run linting checks locally before committing code changes.**
+
+### Why This Matters
+- Catches issues before they reach CI/CD
+- Prevents failed GitHub Actions runs
+- Ensures code quality and consistency
+- Saves time by catching errors early
+
+### Local Linting Command Sequence
+
+Run these commands in order before committing:
+
+```bash
+# 1. Check code formatting and style
+uv run ruff check src tests
+
+# 2. Verify code is properly formatted
+uv run ruff format --check src tests
+
+# 3. Run type checking with mypy
+uv run mypy src --show-error-codes
+
+# 4. Run unit tests with coverage (what CI runs)
+uv run python -m pytest tests/unit/ --cov=src --cov-report=term-missing -v
+```
+
+### Quick All-in-One Check
+
+Run all checks in sequence (stops on first failure):
+
+```bash
+uv run ruff check src tests && \
+uv run ruff format --check src tests && \
+uv run mypy src --show-error-codes && \
+uv run python -m pytest tests/unit/ --cov=src -v
+```
+
+### Expected Results
+
+- **Ruff check**: "All checks passed!"
+- **Ruff format**: "N files already formatted"
+- **Mypy**: "Success: no issues found" (or only import-untyped warnings for third-party libs)
+- **Pytest**: All tests passing with coverage ≥ 25%
+
+### Common Issues and Fixes
+
+**Type errors in mypy:**
+- Use Literal types for string enums
+- Add proper type hints to function signatures
+- Use Union types for fields that accept multiple types
+- Add `# type: ignore[error-code]` comments when necessary
+
+**Failing tests:**
+- Run specific test: `uv run pytest tests/unit/test_file.py::TestClass::test_name -v`
+- Check test output for assertion errors
+- Verify mock setups match actual implementation
+
+**Import errors:**
+- import-untyped warnings for third-party libraries are expected and can be ignored
+- Actual import errors need to be fixed
+
+### Pre-Commit Hooks
+
+The project uses pre-commit hooks that run automatically on `git commit`. These include:
+- Ruff linting and formatting
+- Diff-cover (coverage check for changed code)
+
+To bypass hooks temporarily (not recommended): `git commit --no-verify`
+
+### CI/CD Workflow
+
+GitHub Actions runs the same checks:
+1. Linting: `ruff check --fix --output-format=github .`
+2. Type checking: `mypy src/` (continue-on-error: true)
+3. Unit tests: Only `tests/unit/` with coverage reports
+
+View CI runs: https://github.com/silverbeer/match-scraper/actions
+
 ## Project-Specific Notes
 
 ### Date Range Logic
