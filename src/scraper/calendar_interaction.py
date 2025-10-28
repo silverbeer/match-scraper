@@ -712,48 +712,6 @@ class MLSCalendarInteractor:
                                     f"Could not click end date {end_day} even after navigation"
                                 )
                                 return False
-                    else:
-                        # Different months (not adjacent): Navigate to end month
-                        # then select end date from left calendar
-                        logger.debug(
-                            "Start and end dates span multiple months - navigating to end month"
-                        )
-                        if not await self._navigate_daterangepicker_to_month(
-                            end_date.month, end_date.year
-                        ):
-                            logger.warning(
-                                "Failed to navigate to end date month",
-                                extra={
-                                    "target_month": end_date.month,
-                                    "target_year": end_date.year,
-                                },
-                            )
-                            return False
-
-                        end_day = end_date.day
-                        end_date_selectors = [
-                            f'.daterangepicker .drp-calendar.left td:has-text("{end_day}"):not(.off)',
-                            f'.drp-calendar.left .calendar-table td:has-text("{end_day}"):not(.off)',
-                            f'.daterangepicker .left td:has-text("{end_day}"):not(.off)',
-                        ]
-
-                        end_clicked = False
-                        for end_selector in end_date_selectors:
-                            end_cell = self.iframe_content.locator(end_selector)
-                            if await end_cell.count() > 0:
-                                await end_cell.first.click()
-                                logger.info(
-                                    f"Clicked end date {end_day} on {calendar_side.upper()} calendar using selector: {end_selector}"
-                                )
-                                await asyncio.sleep(1)
-                                end_clicked = True
-                                break
-
-                        if not end_clicked:
-                            logger.warning(
-                                f"Could not click end date {end_day} on left calendar"
-                            )
-                            return False
 
                     # Click Apply button
                     apply_selectors = [

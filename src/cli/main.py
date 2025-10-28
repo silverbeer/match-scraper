@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 import typer
 from rich.console import Console
@@ -783,7 +783,7 @@ def scrape(
                             "away_score": match.away_score
                             if isinstance(match.away_score, int)
                             else None,
-                            "match_status": match.match_status or "scheduled",
+                            "match_status": match.match_status,
                             "external_match_id": match.match_id,
                             "location": match.location,
                             "source": "match-scraper",  # Data source identifier
@@ -912,7 +912,7 @@ def upcoming(
     config = create_config(age_group, division, 0, days, verbose=verbose)
 
     try:
-        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose))
+        matches = asyncio.run(run_scraper(config, verbose))
         upcoming_matches = [m for m in matches if m.match_status == "scheduled"]
 
         if not upcoming_matches:
@@ -1018,7 +1018,7 @@ def interactive(
         return
 
     try:
-        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose))
+        matches = asyncio.run(run_scraper(config, verbose))
 
         console.print()
         display_matches_table(matches)
@@ -1324,7 +1324,13 @@ async def test_navigation(headless: bool, timeout: int) -> None:
             navigator = PageNavigator(page, max_retries=1)
 
             # Try different wait strategies
-            wait_strategies = ["load", "domcontentloaded", "networkidle"]
+            wait_strategies: list[
+                Literal["load", "domcontentloaded", "networkidle", "commit"]
+            ] = [
+                "load",
+                "domcontentloaded",
+                "networkidle",
+            ]
 
             for strategy in wait_strategies:
                 console.print(f"   🔄 Trying wait strategy: {strategy}")

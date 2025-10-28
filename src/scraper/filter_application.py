@@ -149,7 +149,7 @@ class MLSFilterApplicator:
         try:
             logger.info("Discovering available filter options from iframe")
 
-            options = {
+            options: dict[str, set[str]] = {
                 "age_group": set(),
                 "club": set(),
                 "competition": set(),

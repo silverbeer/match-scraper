@@ -472,6 +472,9 @@ class MLSScraper:
                         f"Match extraction failed after {self.MAX_RETRIES + 1} attempts: {e}"
                     ) from e
 
+        # This line should never be reached as the loop either returns or raises
+        raise MLSScraperError("Match extraction failed unexpectedly")
+
     async def _emit_final_metrics(self, matches: list[Match]) -> None:
         """
         Emit final metrics for the scraping operation.
@@ -551,11 +554,8 @@ class MLSScraper:
 
             # Group matches by status for better organization
             scheduled_matches = [m for m in matches if m.match_status == "scheduled"]
-            played_matches = [m for m in matches if m.match_status == "played"]
-            tbd_matches = [m for m in matches if m.match_status == "TBD"]
-            in_progress_matches = [
-                m for m in matches if m.match_status == "in_progress"
-            ]
+            completed_matches = [m for m in matches if m.match_status == "completed"]
+            tbd_matches = [m for m in matches if m.match_status == "tbd"]
 
             # Log scheduled matches
             if scheduled_matches:
@@ -576,10 +576,10 @@ class MLSScraper:
                         },
                     )
 
-            # Log played matches with scores
-            if played_matches:
-                logger.info(f"=== PLAYED MATCHES ({len(played_matches)}) ===")
-                for i, match in enumerate(played_matches, 1):
+            # Log completed matches with scores
+            if completed_matches:
+                logger.info(f"=== COMPLETED MATCHES ({len(completed_matches)}) ===")
+                for i, match in enumerate(completed_matches, 1):
                     score_info = match.get_score_string() or "Score unknown"
                     logger.info(
                         f"PLAYED #{i}: {match.home_team} vs {match.away_team} - {score_info}",
@@ -619,37 +619,14 @@ class MLSScraper:
                         },
                     )
 
-            # Log in-progress matches
-            if in_progress_matches:
-                logger.info(f"=== IN-PROGRESS MATCHES ({len(in_progress_matches)}) ===")
-                for i, match in enumerate(in_progress_matches, 1):
-                    score_info = match.get_score_string() or "Score unknown"
-                    logger.info(
-                        f"IN-PROGRESS #{i}: {match.home_team} vs {match.away_team} - {score_info}",
-                        extra={
-                            "match_id": match.match_id,
-                            "date": str(match.match_datetime.date())
-                            if match.match_datetime
-                            else "Unknown",
-                            "time": match.match_datetime.strftime("%I:%M %p")
-                            if match.match_datetime
-                            else "Unknown",
-                            "venue": match.location or "Unknown",
-                            "competition": match.competition or "Unknown",
-                            "home_score": match.home_score,
-                            "away_score": match.away_score,
-                        },
-                    )
-
             # Summary statistics
             logger.info(
                 "=== MATCH DISCOVERY STATISTICS ===",
                 extra={
                     "total_matches": len(matches),
                     "scheduled_matches": len(scheduled_matches),
-                    "played_matches": len(played_matches),
+                    "completed_matches": len(completed_matches),
                     "tbd_matches": len(tbd_matches),
-                    "in_progress_matches": len(in_progress_matches),
                     "matches_with_scores": len([m for m in matches if m.has_score()]),
                     "matches_with_venues": len([m for m in matches if m.location]),
                     "matches_with_times": len([m for m in matches if m.match_datetime]),

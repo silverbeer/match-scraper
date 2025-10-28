@@ -8,7 +8,7 @@ and handling different match statuses with comprehensive error handling.
 
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from playwright.async_api import Frame, Page
 
@@ -1153,7 +1153,7 @@ class MLSMatchExtractor:
 
     def _parse_score_and_status(
         self, score_text: str, status_text: str, match_date: Optional[datetime] = None
-    ) -> tuple[Optional[int], Optional[int], str]:
+    ) -> tuple[Optional[Union[int, str]], Optional[Union[int, str]], str]:
         """
         Parse score and status information.
 
@@ -1166,8 +1166,8 @@ class MLSMatchExtractor:
             Tuple of (home_score, away_score, status)
         """
         try:
-            home_score: Optional[str | int] = None
-            away_score: Optional[str | int] = None
+            home_score: Optional[Union[int, str]] = None
+            away_score: Optional[Union[int, str]] = None
             status = "scheduled"
 
             # Check for explicit status indicators

@@ -7,7 +7,7 @@ and resource cleanup functionality optimized for containerized execution.
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from playwright.async_api import (
     Browser,
@@ -168,14 +168,20 @@ class PageNavigator:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    async def navigate_to(self, url: str, wait_until: str = "networkidle") -> bool:
+    async def navigate_to(
+        self,
+        url: str,
+        wait_until: Literal[
+            "load", "domcontentloaded", "networkidle", "commit"
+        ] = "networkidle",
+    ) -> bool:
         """
         Navigate to URL with retry logic.
 
         Args:
             url: Target URL
             wait_until: When to consider navigation complete
-                       ("load", "domcontentloaded", "networkidle")
+                       ("load", "domcontentloaded", "networkidle", "commit")
 
         Returns:
             True if navigation successful, False otherwise
@@ -251,7 +257,10 @@ class ElementInteractor:
         self.default_timeout = default_timeout
 
     async def wait_for_element(
-        self, selector: str, timeout: Optional[int] = None, state: str = "visible"
+        self,
+        selector: str,
+        timeout: Optional[int] = None,
+        state: Literal["visible", "hidden", "attached", "detached"] = "visible",
     ) -> bool:
         """
         Wait for element to be in specified state.
