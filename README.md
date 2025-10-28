@@ -1,4 +1,4 @@
-# MLS Match Scraper
+# Match Scraper
 
 [![Tests](https://github.com/silverbeer/match-scraper/actions/workflows/test-and-publish.yml/badge.svg)](https://github.com/silverbeer/match-scraper/actions/workflows/test-and-publish.yml)
 [![Coverage](https://img.shields.io/badge/coverage-25.2%25-green)](https://silverbeer.github.io/match-scraper/)
@@ -8,11 +8,11 @@
 
 🏆 **[View Test Reports & Coverage](https://silverbeer.github.io/match-scraper/)**
 
-Automated MLS match data scraper for missing-table.com API integration.
+Automated soccer match data scraper with RabbitMQ queue integration.
 
 ## Overview
 
-This application scrapes match data from the MLS Next website and posts it to the missing-table.com API. Deployed on Google Kubernetes Engine (GKE) as a scheduled CronJob, built with Playwright and comprehensive monitoring.
+This application scrapes match data from youth soccer websites and sends it to a RabbitMQ queue for processing by backend workers. Deployed on Google Kubernetes Engine (GKE) as a scheduled CronJob, built with Playwright and comprehensive monitoring.
 
 ## 📚 Documentation
 
@@ -28,8 +28,8 @@ Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
 
 ## Features
 
-- **Automated Scraping**: Playwright-based web scraping of MLS Next match data
-- **API Integration**: Direct posting to missing-table.com API
+- **Automated Scraping**: Playwright-based web scraping of youth soccer match data
+- **Queue Integration**: RabbitMQ message queue for reliable async processing
 - **Scheduled Execution**: Kubernetes CronJob runs daily at 6 AM UTC
 - **Containerized Deployment**: GKE deployment with optimized Docker container
 - **Data Validation**: Pydantic models for robust data validation and serialization
@@ -152,9 +152,9 @@ OTEL_METRIC_EXPORT_TIMEOUT=30000
 
 The scraper uses environment variables for configuration. See `src/scraper/config.py` for available options:
 
-- `MLS_BASE_URL`: Base URL for MLS Next website
-- `API_BASE_URL`: Base URL for missing-table.com API
-- `API_KEY`: Authentication key for missing-table.com API
+- `BASE_URL`: Base URL for the soccer website
+- `RABBITMQ_URL`: RabbitMQ connection URL (e.g., "amqp://user:pass@host:5672/")
+- `QUEUE_NAME`: Queue name for match data (default: "matches")
 - `DEFAULT_AGE_GROUP`: Default age group to scrape (e.g., "U14")
 - `DEFAULT_DIVISION`: Default division to scrape (e.g., "Northeast")
 - `DEFAULT_LOOK_BACK_DAYS`: Number of days to look back for matches
@@ -170,7 +170,7 @@ src/
 │   ├── calendar_interaction.py # Calendar widget handling
 │   ├── config.py          # Configuration management
 │   ├── consent_handler.py # Cookie consent handling
-│   ├── filter_application.py # MLS filter interactions
+│   ├── filter_application.py # Website filter interactions
 │   ├── match_extraction.py # Match data extraction
 │   ├── mls_scraper.py     # Main scraper orchestration
 │   └── models.py          # Pydantic data models
@@ -185,7 +185,7 @@ tests/
 k8s/                      # Kubernetes manifests (GKE)
 ├── namespace.yaml         # Kubernetes namespace
 ├── configmap.yaml         # Configuration
-├── secret.yaml           # API tokens
+├── secret.yaml           # Credentials
 └── cronjob.yaml          # Scheduled job
 k3s/                      # K3s/local manifests
 ├── rabbitmq/             # RabbitMQ deployment
@@ -292,7 +292,7 @@ For local/cost-effective deployments, run match-scraper with RabbitMQ in k3s:
 
 **Architecture:**
 ```
-match-scraper (CronJob) → RabbitMQ → missing-table workers → Supabase
+match-scraper (CronJob) → RabbitMQ → backend workers → database
 ```
 
 **Benefits:**
@@ -315,7 +315,7 @@ match-scraper (CronJob) → RabbitMQ → missing-table workers → Supabase
 
 ## CLI Tool
 
-The project includes **mls-scraper**, a beautiful command-line interface for scraping and displaying MLS match data:
+The project includes **mls-scraper**, a beautiful command-line interface for scraping and displaying youth soccer match data:
 
 ```bash
 # Basic scraping with rich formatting
