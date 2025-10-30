@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: match-scraper-cronjob
+  name: mls-scraper-cronjob
   namespace: match-scraper
   labels:
     app: match-scraper
@@ -105,7 +105,7 @@ spec:
             resources:
               requests:
                 memory: "1Gi"
-                cpu: "500m"
+                cpu: "250m"
               limits:
                 memory: "2Gi"
                 cpu: "1000m"
