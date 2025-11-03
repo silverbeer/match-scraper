@@ -61,6 +61,22 @@ class MLSFilterApplicator:
         "California": "42",  # May need to verify these
     }
 
+    # Conference value mappings (for Academy Division and Homegrown Division pages)
+    # On these pages, regional filtering uses "Conference" instead of "Division"
+    CONFERENCE_VALUES = {
+        "New England": "41",  # Maps to same value as Northeast
+        "Northeast": "41",  # Allow both names
+        "Mid-Atlantic": "68",
+        "Southeast": "37",
+        "Florida": "46",
+        "Central": "34",
+        "Great Lakes": "39",
+        "Texas": "40",
+        "Southwest": "36",
+        "Northwest": "38",
+        "California": "42",
+    }
+
     # Bootstrap Select selectors for iframe filtering
     CLUB_SELECTOR = 'select[name="academy"][js-academy]'
     COMPETITION_SELECTOR = 'select[name="competition"]'
@@ -643,6 +659,167 @@ class MLSFilterApplicator:
             )
             return False
 
+    async def _is_on_special_league_page(self) -> bool:
+        """
+        Check if we're on an Academy Division or Homegrown Division page.
+        These pages use "Conference" instead of "Division" for regional filtering.
+
+        Returns:
+            True if on Academy or Homegrown Division page, False otherwise
+        """
+        try:
+            current_url = self.page.url
+            is_special = (
+                "/academy_division/" in current_url
+                or "/homegrown-division/" in current_url
+            )
+
+            if is_special:
+                logger.info(
+                    "Detected special league page (Academy/Homegrown)",
+                    extra={"url": current_url},
+                )
+
+            return is_special
+        except Exception as e:
+            logger.debug(f"Error checking page type: {e}")
+            return False
+
+    async def apply_conference_filter(self, conference: str) -> bool:
+        """
+        Apply conference filter on Academy Division or Homegrown Division pages.
+        These pages use "Conference" instead of "Division" for regional filtering.
+
+        Args:
+            conference: Conference name to filter by (e.g., "New England")
+
+        Returns:
+            True if filter applied successfully, False otherwise
+        """
+        try:
+            logger.info(
+                "Applying conference filter in iframe", extra={"conference": conference}
+            )
+
+            if not conference:
+                logger.debug("Empty conference provided, skipping filter")
+                return True
+
+            # Validate conference option - accept both conference names and division names
+            if (
+                conference not in self.CONFERENCE_VALUES
+                and conference not in self.VALID_DIVISIONS
+            ):
+                logger.warning("Invalid conference", extra={"conference": conference})
+                return False
+
+            # Get iframe content
+            iframe_content = await self._get_iframe_content()
+            if not iframe_content:
+                logger.error("Could not access iframe content for conference filter")
+                return False
+
+            # Strategy 1: Try direct select option with retries (same approach as divisions)
+            for attempt in range(3):
+                try:
+                    conference_value = self.CONFERENCE_VALUES.get(conference)
+                    logger.info(
+                        f"Attempting direct select for conference {conference} with value {conference_value} (attempt {attempt + 1})"
+                    )
+
+                    if conference_value:
+                        # Find all select elements - conference is still the 4th select on Academy pages
+                        all_selects = await iframe_content.locator("select").all()
+                        logger.info(f"Found {len(all_selects)} select elements total")
+
+                        if (
+                            len(all_selects) >= 4
+                        ):  # Make sure we have at least 4 selects
+                            conference_select = all_selects[
+                                3
+                            ]  # Index 3 is the 4th select (conference/division)
+                            await conference_select.select_option(
+                                value=conference_value
+                            )
+                            logger.info(
+                                f"Selected conference option with value {conference_value}"
+                            )
+
+                            # Give time for Bootstrap Select to update
+                            await asyncio.sleep(2)
+
+                            logger.info(
+                                "Conference filter applied via direct select",
+                                extra={
+                                    "conference": conference,
+                                    "value": conference_value,
+                                },
+                            )
+                            return True
+                        else:
+                            if attempt < 2:  # Only wait if we have more attempts
+                                logger.info(
+                                    f"Not enough select elements found ({len(all_selects)}), waiting before retry {attempt + 1}"
+                                )
+                                await asyncio.sleep(3)  # Wait for elements to load
+                            else:
+                                logger.warning(
+                                    f"Not enough select elements found after all retries: {len(all_selects)}"
+                                )
+                    else:
+                        logger.warning(
+                            f"No value mapping found for conference: {conference}"
+                        )
+                        break  # No point retrying if we don't have the value
+
+                except Exception as e:
+                    logger.warning(
+                        f"Direct select method failed on attempt {attempt + 1}: {e}"
+                    )
+                    if attempt < 2:
+                        await asyncio.sleep(2)  # Wait before retry
+
+            # Strategy 2: Try Bootstrap Select UI interaction - as fallback
+            try:
+                # Click the conference dropdown toggle (label might say "Conference" or "Division")
+                conference_dropdown = iframe_content.locator(
+                    'label:has-text("Conference") + div .dropdown-toggle, label:has-text("Division") + div .dropdown-toggle'
+                )
+                if await conference_dropdown.count() > 0:
+                    await conference_dropdown.first.click()
+                    await asyncio.sleep(0.5)
+
+                    # Click the specific conference option
+                    conference_option = iframe_content.locator(
+                        f'span.text:has-text("{conference}")'
+                    )
+                    if await conference_option.count() > 0:
+                        await conference_option.first.click()
+                        await asyncio.sleep(0.5)
+
+                        logger.info(
+                            "Conference filter applied via Bootstrap UI",
+                            extra={"conference": conference},
+                        )
+                        return True
+
+            except Exception as e:
+                logger.debug(f"Bootstrap UI method failed: {e}")
+
+            logger.error("All conference filter strategies failed")
+            return False
+
+        except Exception as e:
+            logger.error(
+                "Error applying conference filter",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "conference": conference,
+                },
+            )
+            return False
+
     async def apply_division_filter(self, division: str) -> bool:
         """
         Apply division filter using iframe Bootstrap Select dropdown.
@@ -771,6 +948,15 @@ class MLSFilterApplicator:
 
             except Exception as e:
                 logger.debug(f"Bootstrap UI method failed: {e}")
+
+            # Strategy 4: For Academy/Homegrown divisions, try URL navigation as final fallback
+            division_lower = division.lower()
+            if "academy" in division_lower or "homegrown" in division_lower:
+                logger.info(
+                    "Trying URL navigation for special division",
+                    extra={"division": division},
+                )
+                return await self._apply_division_via_url(division)
 
             logger.error("All division filter strategies failed")
             return False
@@ -1167,8 +1353,18 @@ class MLSFilterApplicator:
                 },
             )
 
-            # Stay on the current page - use URL navigation for filtering on /schedule/all/
-            # Only use iframe if we're already on a division page that has one
+            # Check if we need to navigate to a special league page first
+            # Academy Division and Homegrown Division require URL navigation
+            if config.division:
+                division_lower = config.division.lower()
+                if "academy" in division_lower or "homegrown" in division_lower:
+                    logger.info(
+                        "Navigating to special league page via URL",
+                        extra={"division": config.division},
+                    )
+                    if not await self._apply_division_via_url(config.division):
+                        logger.error("Failed to navigate to special league page")
+                        return False
 
             # Discover available options from current page
             await self.discover_available_options()
@@ -1192,14 +1388,65 @@ class MLSFilterApplicator:
                         logger.error("Failed to apply age group filter via iframe")
                         return False
 
-                # Apply division filter via iframe
+                # Check if we're on a special league page (Academy/Homegrown)
+                is_special_league = await self._is_on_special_league_page()
+
+                # Apply division/conference filter via iframe
                 if config.division:
-                    if await self.apply_division_filter(config.division):
+                    # On Academy/Homegrown pages, check if division is a regional conference
+                    # If division is "Academy Division" or "Homegrown Division", it was already
+                    # applied via URL navigation, so skip division filter but still check for conference
+                    division_lower = config.division.lower()
+                    if "academy" in division_lower or "homegrown" in division_lower:
+                        logger.info(
+                            "Skipping division filter - already applied via URL navigation",
+                            extra={"division": config.division},
+                        )
                         filters_applied.append("division")
-                        await asyncio.sleep(1)
+                        # Don't return - continue to check for conference filter below
+                    elif is_special_league:
+                        # On Academy/Homegrown pages, treat division as conference
+                        logger.info(
+                            "Using conference filter for regional filtering on special league page",
+                            extra={"conference": config.division},
+                        )
+                        if await self.apply_conference_filter(config.division):
+                            filters_applied.append("conference")
+                            await asyncio.sleep(1)
+                        else:
+                            logger.error("Failed to apply conference filter via iframe")
+                            return False
                     else:
-                        logger.error("Failed to apply division filter via iframe")
-                        return False
+                        # Normal division filtering
+                        if await self.apply_division_filter(config.division):
+                            filters_applied.append("division")
+                            await asyncio.sleep(1)
+                        else:
+                            logger.error("Failed to apply division filter via iframe")
+                            return False
+
+                # Apply conference filter if explicitly provided
+                # This applies on special league pages (Academy/Homegrown) regardless of division setting
+                if config.conference:
+                    if is_special_league:
+                        logger.info(
+                            "Applying explicit conference filter on special league page",
+                            extra={"conference": config.conference},
+                        )
+                        if await self.apply_conference_filter(config.conference):
+                            filters_applied.append("conference")
+                            await asyncio.sleep(1)
+                        else:
+                            logger.error("Failed to apply conference filter via iframe")
+                            return False
+                    else:
+                        logger.warning(
+                            "Conference filter only applies to Academy/Homegrown Division pages",
+                            extra={
+                                "conference": config.conference,
+                                "current_url": self.page.url,
+                            },
+                        )
 
             else:
                 # Fallback to URL navigation only if no iframe is available

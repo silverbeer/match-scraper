@@ -87,6 +87,8 @@ VALID_DIVISIONS = [
     "Great Lakes",
     "Texas",
     "California",
+    "Academy Division",
+    "Homegrown Division",
 ]
 
 
@@ -169,6 +171,7 @@ def create_config(
     end_offset: int,
     club: str = "",
     competition: str = "",
+    conference: str = "",
     verbose: bool = False,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
@@ -215,6 +218,7 @@ def create_config(
         club=club,
         competition=competition,
         division=division,
+        conference=conference,
         look_back_days=abs(start_offset)
         if start_offset < 0
         else 0,  # Keep for backwards compatibility
@@ -641,6 +645,13 @@ def scrape(
         str,
         typer.Option("--competition", "-comp", help="Filter by specific competition"),
     ] = "",
+    conference: Annotated[
+        str,
+        typer.Option(
+            "--conference",
+            help="Filter by conference on Academy/Homegrown Division pages (e.g., 'New England', 'Northeast')",
+        ),
+    ] = "",
     upcoming_only: Annotated[
         bool, typer.Option("--upcoming", "-u", help="Show only upcoming games")
     ] = False,
@@ -723,6 +734,7 @@ def scrape(
         end,
         club,
         competition,
+        conference,
         verbose,
         from_date,
         to_date,
