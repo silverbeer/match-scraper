@@ -42,3 +42,6 @@ data:
   # Format: https://logs-{zone}.grafana.net/loki/api/v1/push
   # Example: https://logs-prod-us-central-0.grafana.net/loki/api/v1/push
   LOKI_ENDPOINT: "https://logs-prod-036.grafana.net/loki/api/v1/push"
+
+  # RabbitMQ Configuration
+  RABBITMQ_URL: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"

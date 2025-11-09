@@ -20,6 +20,10 @@ class ScrapingConfig(BaseModel):
     club: str = Field(default="", description="Club filter")
     competition: str = Field(default="", description="Competition filter")
     division: str = Field(..., description="Division for scraping")
+    conference: str = Field(
+        default="",
+        description="Conference filter for Academy/Homegrown Division pages (e.g., 'New England')",
+    )
     look_back_days: int = Field(ge=0, description="Number of days to look back")
     start_date: date = Field(..., description="Start date for scraping")
     end_date: date = Field(..., description="End date for scraping")

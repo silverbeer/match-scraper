@@ -280,6 +280,8 @@ class TestConstants:
             "Great Lakes",
             "Texas",
             "California",
+            "Academy Division",
+            "Homegrown Division",
         ]
         assert VALID_DIVISIONS == expected_divisions
 
