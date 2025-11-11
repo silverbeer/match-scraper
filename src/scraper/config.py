@@ -23,7 +23,9 @@ class ScrapingConfig(BaseModel):
     )
     club: str = Field(default="", description="Club filter")
     competition: str = Field(default="", description="Competition filter")
-    division: str = Field(..., description="Division for scraping (used with Homegrown league)")
+    division: str = Field(
+        ..., description="Division for scraping (used with Homegrown league)"
+    )
     conference: str = Field(
         default="",
         description="Conference filter for Academy league (e.g., 'New England')",
@@ -92,9 +94,7 @@ class ScrapingConfig(BaseModel):
         """Validate league type."""
         valid_leagues = ["Homegrown", "Academy"]
         if v and v not in valid_leagues:
-            raise ValueError(
-                f"Invalid league: {v}. Must be one of {valid_leagues}"
-            )
+            raise ValueError(f"Invalid league: {v}. Must be one of {valid_leagues}")
         return v
 
     @field_validator("log_level")

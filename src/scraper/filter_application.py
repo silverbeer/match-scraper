@@ -732,7 +732,8 @@ class MLSFilterApplicator:
 
                 # Use JavaScript to find and select the conference option
                 # The conference select is the 4th select element (index 3)
-                js_result = await iframe_content.evaluate("""
+                js_result = await iframe_content.evaluate(
+                    """
                     (conference) => {
                         // Get all select elements
                         const selects = document.querySelectorAll('select');
@@ -778,7 +779,9 @@ class MLSFilterApplicator:
                             text: targetOption.text.trim()
                         };
                     }
-                """, conference)
+                """,
+                    conference,
+                )
 
                 logger.info(f"JavaScript result: {js_result}")
 
@@ -786,11 +789,16 @@ class MLSFilterApplicator:
                     await asyncio.sleep(1)  # Wait for selection to apply
                     logger.info(
                         "Conference filter applied via JavaScript",
-                        extra={"conference": conference, "value": js_result.get("value")},
+                        extra={
+                            "conference": conference,
+                            "value": js_result.get("value"),
+                        },
                     )
                     return True
                 else:
-                    logger.warning(f"JavaScript method failed: {js_result.get('error')}, available options: {js_result.get('available', [])}")
+                    logger.warning(
+                        f"JavaScript method failed: {js_result.get('error')}, available options: {js_result.get('available', [])}"
+                    )
 
             except Exception as e:
                 logger.warning(f"JavaScript method failed with exception: {e}")
@@ -816,7 +824,7 @@ class MLSFilterApplicator:
                             ]  # Index 3 is the 4th select (conference/division)
                             await conference_select.select_option(
                                 value=conference_value,
-                                timeout=5000  # Reduced timeout since this is fallback
+                                timeout=5000,  # Reduced timeout since this is fallback
                             )
                             logger.info(
                                 f"Selected conference option with value {conference_value}"

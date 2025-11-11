@@ -8,7 +8,6 @@ Usage:
 
 import json
 import sys
-from pathlib import Path
 from typing import Optional
 
 
@@ -31,7 +30,7 @@ def extract_teams(
         output_file: Output JSON file path
     """
     # Load clubs data
-    with open(clubs_file, "r") as f:
+    with open(clubs_file) as f:
         clubs = json.load(f)
 
     # Extract matching teams
