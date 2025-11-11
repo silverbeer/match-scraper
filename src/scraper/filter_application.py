@@ -719,7 +719,91 @@ class MLSFilterApplicator:
                 logger.error("Could not access iframe content for conference filter")
                 return False
 
-            # Strategy 1: Try direct select option with retries (same approach as divisions)
+            # Strategy 1: Try JavaScript manipulation of select element (primary method)
+            # The Bootstrap selectpicker has the select element overlaying the button,
+            # blocking clicks. We use JavaScript to directly manipulate the select.
+            try:
+                logger.info(
+                    f"Attempting JavaScript select manipulation for conference {conference} (attempt 1)"
+                )
+
+                # Wait a bit for the dropdown to be ready
+                await asyncio.sleep(1)
+
+                # Use JavaScript to find and select the conference option
+                # The conference select is the 4th select element (index 3)
+                js_result = await iframe_content.evaluate(
+                    """
+                    (conference) => {
+                        // Get all select elements
+                        const selects = document.querySelectorAll('select');
+                        if (selects.length < 4) {
+                            return { success: false, error: 'Not enough select elements', count: selects.length };
+                        }
+
+                        // Conference is the 4th select (index 3)
+                        const conferenceSelect = selects[3];
+
+                        // Find the option with matching text
+                        const options = Array.from(conferenceSelect.options);
+                        const targetOption = options.find(opt => opt.text.trim() === conference);
+
+                        if (!targetOption) {
+                            const availableOptions = options.map(opt => opt.text.trim()).filter(t => t);
+                            return {
+                                success: false,
+                                error: 'Option not found',
+                                available: availableOptions
+                            };
+                        }
+
+                        // Select the option
+                        targetOption.selected = true;
+
+                        // Trigger change event to notify Bootstrap selectpicker
+                        const changeEvent = new Event('change', { bubbles: true });
+                        conferenceSelect.dispatchEvent(changeEvent);
+
+                        // Also trigger Bootstrap selectpicker refresh if available
+                        if (window.jQuery && window.jQuery.fn.selectpicker) {
+                            try {
+                                window.jQuery(conferenceSelect).selectpicker('refresh');
+                            } catch (e) {
+                                // Ignore jQuery errors
+                            }
+                        }
+
+                        return {
+                            success: true,
+                            value: targetOption.value,
+                            text: targetOption.text.trim()
+                        };
+                    }
+                """,
+                    conference,
+                )
+
+                logger.info(f"JavaScript result: {js_result}")
+
+                if js_result.get("success"):
+                    await asyncio.sleep(1)  # Wait for selection to apply
+                    logger.info(
+                        "Conference filter applied via JavaScript",
+                        extra={
+                            "conference": conference,
+                            "value": js_result.get("value"),
+                        },
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        f"JavaScript method failed: {js_result.get('error')}, available options: {js_result.get('available', [])}"
+                    )
+
+            except Exception as e:
+                logger.warning(f"JavaScript method failed with exception: {e}")
+
+            # Strategy 2: Try direct select option as fallback
             for attempt in range(3):
                 try:
                     conference_value = self.CONFERENCE_VALUES.get(conference)
@@ -728,7 +812,7 @@ class MLSFilterApplicator:
                     )
 
                     if conference_value:
-                        # Find all select elements - conference is still the 4th select on Academy pages
+                        # Find all select elements - conference might be a hidden select
                         all_selects = await iframe_content.locator("select").all()
                         logger.info(f"Found {len(all_selects)} select elements total")
 
@@ -739,7 +823,8 @@ class MLSFilterApplicator:
                                 3
                             ]  # Index 3 is the 4th select (conference/division)
                             await conference_select.select_option(
-                                value=conference_value
+                                value=conference_value,
+                                timeout=5000,  # Reduced timeout since this is fallback
                             )
                             logger.info(
                                 f"Selected conference option with value {conference_value}"
@@ -761,7 +846,7 @@ class MLSFilterApplicator:
                                 logger.info(
                                     f"Not enough select elements found ({len(all_selects)}), waiting before retry {attempt + 1}"
                                 )
-                                await asyncio.sleep(3)  # Wait for elements to load
+                                await asyncio.sleep(2)  # Reduced wait time
                             else:
                                 logger.warning(
                                     f"Not enough select elements found after all retries: {len(all_selects)}"
@@ -777,34 +862,7 @@ class MLSFilterApplicator:
                         f"Direct select method failed on attempt {attempt + 1}: {e}"
                     )
                     if attempt < 2:
-                        await asyncio.sleep(2)  # Wait before retry
-
-            # Strategy 2: Try Bootstrap Select UI interaction - as fallback
-            try:
-                # Click the conference dropdown toggle (label might say "Conference" or "Division")
-                conference_dropdown = iframe_content.locator(
-                    'label:has-text("Conference") + div .dropdown-toggle, label:has-text("Division") + div .dropdown-toggle'
-                )
-                if await conference_dropdown.count() > 0:
-                    await conference_dropdown.first.click()
-                    await asyncio.sleep(0.5)
-
-                    # Click the specific conference option
-                    conference_option = iframe_content.locator(
-                        f'span.text:has-text("{conference}")'
-                    )
-                    if await conference_option.count() > 0:
-                        await conference_option.first.click()
-                        await asyncio.sleep(0.5)
-
-                        logger.info(
-                            "Conference filter applied via Bootstrap UI",
-                            extra={"conference": conference},
-                        )
-                        return True
-
-            except Exception as e:
-                logger.debug(f"Bootstrap UI method failed: {e}")
+                        await asyncio.sleep(1)  # Reduced wait before retry
 
             logger.error("All conference filter strategies failed")
             return False
@@ -1347,24 +1405,13 @@ class MLSFilterApplicator:
                 "Applying all filters",
                 extra={
                     "age_group": config.age_group,
+                    "league": config.league,
                     "club": config.club,
                     "competition": config.competition,
                     "division": config.division,
+                    "conference": config.conference,
                 },
             )
-
-            # Check if we need to navigate to a special league page first
-            # Academy Division and Homegrown Division require URL navigation
-            if config.division:
-                division_lower = config.division.lower()
-                if "academy" in division_lower or "homegrown" in division_lower:
-                    logger.info(
-                        "Navigating to special league page via URL",
-                        extra={"division": config.division},
-                    )
-                    if not await self._apply_division_via_url(config.division):
-                        logger.error("Failed to navigate to special league page")
-                        return False
 
             # Discover available options from current page
             await self.discover_available_options()
@@ -1388,49 +1435,25 @@ class MLSFilterApplicator:
                         logger.error("Failed to apply age group filter via iframe")
                         return False
 
-                # Check if we're on a special league page (Academy/Homegrown)
-                is_special_league = await self._is_on_special_league_page()
-
-                # Apply division/conference filter via iframe
-                if config.division:
-                    # On Academy/Homegrown pages, check if division is a regional conference
-                    # If division is "Academy Division" or "Homegrown Division", it was already
-                    # applied via URL navigation, so skip division filter but still check for conference
-                    division_lower = config.division.lower()
-                    if "academy" in division_lower or "homegrown" in division_lower:
+                # Apply division/conference filter based on league type
+                if config.league == "Homegrown":
+                    # Use division filter for Homegrown league
+                    if config.division:
                         logger.info(
-                            "Skipping division filter - already applied via URL navigation",
+                            "Applying division filter for Homegrown league",
                             extra={"division": config.division},
                         )
-                        filters_applied.append("division")
-                        # Don't return - continue to check for conference filter below
-                    elif is_special_league:
-                        # On Academy/Homegrown pages, treat division as conference
-                        logger.info(
-                            "Using conference filter for regional filtering on special league page",
-                            extra={"conference": config.division},
-                        )
-                        if await self.apply_conference_filter(config.division):
-                            filters_applied.append("conference")
-                            await asyncio.sleep(1)
-                        else:
-                            logger.error("Failed to apply conference filter via iframe")
-                            return False
-                    else:
-                        # Normal division filtering
                         if await self.apply_division_filter(config.division):
                             filters_applied.append("division")
                             await asyncio.sleep(1)
                         else:
                             logger.error("Failed to apply division filter via iframe")
                             return False
-
-                # Apply conference filter if explicitly provided
-                # This applies on special league pages (Academy/Homegrown) regardless of division setting
-                if config.conference:
-                    if is_special_league:
+                elif config.league == "Academy":
+                    # Use conference filter for Academy league
+                    if config.conference:
                         logger.info(
-                            "Applying explicit conference filter on special league page",
+                            "Applying conference filter for Academy league",
                             extra={"conference": config.conference},
                         )
                         if await self.apply_conference_filter(config.conference):
@@ -1439,14 +1462,6 @@ class MLSFilterApplicator:
                         else:
                             logger.error("Failed to apply conference filter via iframe")
                             return False
-                    else:
-                        logger.warning(
-                            "Conference filter only applies to Academy/Homegrown Division pages",
-                            extra={
-                                "conference": config.conference,
-                                "current_url": self.page.url,
-                            },
-                        )
 
             else:
                 # Fallback to URL navigation only if no iframe is available

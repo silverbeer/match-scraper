@@ -70,13 +70,16 @@ atexit.register(_shutdown_metrics)
 
 # Configuration defaults
 DEFAULT_AGE_GROUP = "U14"
+DEFAULT_LEAGUE = "Homegrown"
 DEFAULT_DIVISION = "Northeast"
+DEFAULT_CONFERENCE = "New England"
 DEFAULT_START_OFFSET = 1  # 1 day backward from today = Yesterday
 DEFAULT_END_OFFSET = 1  # 1 day forward from today = Tomorrow
 DEFAULT_DAYS = 3  # Keep for upcoming command backward compatibility
 
 # Valid options
 VALID_AGE_GROUPS = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
+VALID_LEAGUES = ["Homegrown", "Academy"]
 VALID_DIVISIONS = [
     "Northeast",
     "Southeast",
@@ -87,8 +90,18 @@ VALID_DIVISIONS = [
     "Great Lakes",
     "Texas",
     "California",
-    "Academy Division",
-    "Homegrown Division",
+]
+VALID_CONFERENCES = [
+    "New England",
+    "Northeast",
+    "Mid-Atlantic",
+    "Southeast",
+    "Great Lakes",
+    "Central",
+    "Texas",
+    "Southwest",
+    "Northwest",
+    "California",
 ]
 
 
@@ -166,6 +179,7 @@ def handle_cli_error(e: Exception, verbose: bool = False) -> None:
 
 def create_config(
     age_group: str,
+    league: str,
     division: str,
     start_offset: int,
     end_offset: int,
@@ -215,6 +229,7 @@ def create_config(
 
     return ScrapingConfig(
         age_group=age_group,
+        league=league,
         club=club,
         competition=competition,
         division=division,
@@ -262,8 +277,15 @@ def display_config_summary(config: ScrapingConfig) -> None:
     config_table.add_column("Setting", style="cyan")
     config_table.add_column("Value", style="white")
 
+    config_table.add_row("League", config.league)
     config_table.add_row("Age Group", config.age_group)
-    config_table.add_row("Division", config.division)
+
+    # Display division or conference based on league type
+    if config.league == "Homegrown":
+        config_table.add_row("Division", config.division)
+    elif config.league == "Academy":
+        config_table.add_row("Conference", config.conference)
+
     # Display dates in chronological order (earlier to later)
     from_date = min(config.start_date, config.end_date)
     to_date = max(config.start_date, config.end_date)
@@ -608,9 +630,29 @@ def scrape(
     age_group: Annotated[
         str, typer.Option("--age-group", "-a", help="Age group to scrape")
     ] = DEFAULT_AGE_GROUP,
+    league: Annotated[
+        str,
+        typer.Option(
+            "--league",
+            "-lg",
+            help="League type: 'Homegrown' (default) or 'Academy'",
+        ),
+    ] = DEFAULT_LEAGUE,
     division: Annotated[
-        str, typer.Option("--division", "-d", help="Division to scrape")
+        str,
+        typer.Option(
+            "--division",
+            "-d",
+            help="Division to scrape (used with Homegrown league)",
+        ),
     ] = DEFAULT_DIVISION,
+    conference: Annotated[
+        str,
+        typer.Option(
+            "--conference",
+            help="Conference filter for Academy league (e.g., 'New England', 'Northeast')",
+        ),
+    ] = DEFAULT_CONFERENCE,
     start: Annotated[
         int,
         typer.Option(
@@ -644,13 +686,6 @@ def scrape(
     competition: Annotated[
         str,
         typer.Option("--competition", "-comp", help="Filter by specific competition"),
-    ] = "",
-    conference: Annotated[
-        str,
-        typer.Option(
-            "--conference",
-            help="Filter by conference on Academy/Homegrown Division pages (e.g., 'New England', 'Northeast')",
-        ),
     ] = "",
     upcoming_only: Annotated[
         bool, typer.Option("--upcoming", "-u", help="Show only upcoming games")
@@ -718,10 +753,32 @@ def scrape(
         console.print(f"Valid options: {', '.join(VALID_AGE_GROUPS)}")
         raise typer.Exit(1)
 
-    if division not in VALID_DIVISIONS:
-        console.print(f"[red]❌ Invalid division: {division}[/red]")
-        console.print(f"Valid options: {', '.join(VALID_DIVISIONS)}")
+    if league not in VALID_LEAGUES:
+        console.print(f"[red]❌ Invalid league: {league}[/red]")
+        console.print(f"Valid options: {', '.join(VALID_LEAGUES)}")
         raise typer.Exit(1)
+
+    # Validate league-specific parameters
+    if league == "Homegrown":
+        if division not in VALID_DIVISIONS:
+            console.print(f"[red]❌ Invalid division: {division}[/red]")
+            console.print(f"Valid options: {', '.join(VALID_DIVISIONS)}")
+            raise typer.Exit(1)
+        # Warn if conference is provided but league is Homegrown
+        if conference and conference != DEFAULT_CONFERENCE:
+            console.print(
+                "[yellow]⚠️  --conference is only used with --league Academy. It will be ignored.[/yellow]"
+            )
+    elif league == "Academy":
+        if conference not in VALID_CONFERENCES:
+            console.print(f"[red]❌ Invalid conference: {conference}[/red]")
+            console.print(f"Valid options: {', '.join(VALID_CONFERENCES)}")
+            raise typer.Exit(1)
+        # Warn if division is provided but league is Academy
+        if division and division != DEFAULT_DIVISION:
+            console.print(
+                "[yellow]⚠️  --division is only used with --league Homegrown. It will be ignored.[/yellow]"
+            )
 
     if not quiet:
         display_header()
@@ -729,6 +786,7 @@ def scrape(
     # Create configuration
     config = create_config(
         age_group,
+        league,
         division,
         start,
         end,

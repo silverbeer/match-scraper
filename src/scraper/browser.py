@@ -71,10 +71,11 @@ class BrowserManager:
 
             self._playwright = await async_playwright().start()
 
-            # Launch browser with container-optimized settings
-            self._browser = await self._playwright.chromium.launch(
-                headless=self.config.headless,
-                args=[
+            # Launch browser with appropriate settings for headless/non-headless mode
+            # In non-headless mode, avoid flags that can interfere with window display
+            if self.config.headless:
+                # Container-optimized settings for headless mode
+                browser_args = [
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
@@ -83,7 +84,19 @@ class BrowserManager:
                     "--no-zygote",
                     "--single-process",
                     "--disable-extensions",
-                ],
+                ]
+            else:
+                # Minimal settings for non-headless mode to ensure window visibility
+                browser_args = [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--no-first-run",
+                    "--disable-extensions",
+                ]
+
+            self._browser = await self._playwright.chromium.launch(
+                headless=self.config.headless,
+                args=browser_args,
             )
 
             # Create browser context with viewport and user agent
