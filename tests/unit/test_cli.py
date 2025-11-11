@@ -67,7 +67,11 @@ class TestCliUtilityFunctions:
         """Test basic config creation using offset-based dates."""
         # Use start_offset=1 (1 day back) and end_offset=1 (1 day forward)
         config = create_config(
-            age_group="U14", division="Northeast", start_offset=1, end_offset=1
+            age_group="U14",
+            league="Homegrown",
+            division="Northeast",
+            start_offset=1,
+            end_offset=1,
         )
 
         assert config.age_group == "U14"
@@ -87,6 +91,7 @@ class TestCliUtilityFunctions:
         """Test config creation with optional parameters."""
         config = create_config(
             age_group="U16",
+            league="Homegrown",
             division="Southwest",
             start_offset=2,
             end_offset=5,
@@ -280,8 +285,6 @@ class TestConstants:
             "Great Lakes",
             "Texas",
             "California",
-            "Academy Division",
-            "Homegrown Division",
         ]
         assert VALID_DIVISIONS == expected_divisions
 

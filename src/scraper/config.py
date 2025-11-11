@@ -17,12 +17,16 @@ class ScrapingConfig(BaseModel):
     """Configuration for scraping parameters."""
 
     age_group: str = Field(..., description="Age group for scraping (e.g., U14)")
+    league: str = Field(
+        default="Homegrown",
+        description="League type: 'Homegrown' or 'Academy'",
+    )
     club: str = Field(default="", description="Club filter")
     competition: str = Field(default="", description="Competition filter")
-    division: str = Field(..., description="Division for scraping")
+    division: str = Field(..., description="Division for scraping (used with Homegrown league)")
     conference: str = Field(
         default="",
-        description="Conference filter for Academy/Homegrown Division pages (e.g., 'New England')",
+        description="Conference filter for Academy league (e.g., 'New England')",
     )
     look_back_days: int = Field(ge=0, description="Number of days to look back")
     start_date: date = Field(..., description="Start date for scraping")
@@ -82,6 +86,17 @@ class ScrapingConfig(BaseModel):
             )
         return v
 
+    @field_validator("league")
+    @classmethod
+    def validate_league(cls, v: str) -> str:
+        """Validate league type."""
+        valid_leagues = ["Homegrown", "Academy"]
+        if v and v not in valid_leagues:
+            raise ValueError(
+                f"Invalid league: {v}. Must be one of {valid_leagues}"
+            )
+        return v
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
@@ -119,9 +134,11 @@ class ScrapingConfig(BaseModel):
         json_schema_extra = {
             "example": {
                 "age_group": "U14",
+                "league": "Homegrown",
                 "club": "",
                 "competition": "",
                 "division": "Northeast",
+                "conference": "",
                 "look_back_days": 1,
                 "start_date": "2025-09-28",
                 "end_date": "2025-09-29",
@@ -160,9 +177,11 @@ def load_config() -> ScrapingConfig:
 
     # Optional environment variables with defaults
     age_group = os.getenv("AGE_GROUP", "U14")
+    league = os.getenv("LEAGUE", "Homegrown")
     club = os.getenv("CLUB", "")
     competition = os.getenv("COMPETITION", "")
     division = os.getenv("DIVISION", "Northeast")
+    conference = os.getenv("CONFERENCE", "New England")
     log_level = os.getenv("LOG_LEVEL", "INFO")
 
     # Parse look_back_days with validation
@@ -199,9 +218,11 @@ def load_config() -> ScrapingConfig:
     # Create and validate config using Pydantic
     return ScrapingConfig(
         age_group=age_group,
+        league=league,
         club=club,
         competition=competition,
         division=division,
+        conference=conference,
         look_back_days=look_back_days,
         start_date=start_date,
         end_date=end_date,

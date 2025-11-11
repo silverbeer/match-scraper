@@ -277,7 +277,67 @@ class MLSScraper:
         if not page_ready:
             logger.warning("Page readiness check failed, continuing anyway")
 
+        # Click Academy Division tab if needed
+        if self.config.league == "Academy":
+            await self._click_academy_tab(page)
+
         logger.info("Navigation and consent handling completed")
+
+    async def _click_academy_tab(self, page: Any) -> None:
+        """
+        Click the Academy Division tab on the MLS Next schedule page.
+
+        Args:
+            page: Playwright page instance
+
+        Raises:
+            MLSScraperError: If clicking the Academy Division tab fails
+        """
+        from .browser import ElementInteractor
+
+        logger.info("Clicking Academy Division tab")
+
+        try:
+            interactor = ElementInteractor(page)
+
+            # Look for the Academy Division tab link
+            # Based on Playwright MCP inspection, the link is: "MLS NEXT Academy Division Schedule"
+            academy_tab_selectors = [
+                "a:has-text('MLS NEXT Academy Division Schedule')",
+                "text='MLS NEXT Academy Division Schedule'",
+                "[href*='academy_division']",
+                "[href*='/mlsnext/schedule/academy']",
+            ]
+
+            tab_clicked = False
+            for selector in academy_tab_selectors:
+                logger.info(
+                    f"Trying to click Academy Division tab with selector: {selector}"
+                )
+
+                # Use click_element which handles waiting and clicking
+                clicked = await interactor.click_element(selector, timeout=5000)
+
+                if clicked:
+                    logger.info(
+                        f"Successfully clicked Academy Division tab with selector: {selector}"
+                    )
+                    # Wait for the page to navigate
+                    await page.wait_for_timeout(2000)
+                    tab_clicked = True
+                    break
+
+            if not tab_clicked:
+                logger.warning(
+                    "Could not find or click Academy Division tab - page structure may have changed"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to click Academy Division tab: {e}",
+                extra={"error": str(e), "error_type": type(e).__name__},
+            )
+            raise MLSScraperError(f"Failed to click Academy Division tab: {e}") from e
 
     async def _apply_filters_with_retry(self, page: Any) -> None:
         """
