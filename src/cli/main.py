@@ -36,6 +36,7 @@ from src.cli.env_config import (  # noqa: E402
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
+from src.utils.division_lookup import get_division_id_for_league  # noqa: E402
 
 # Initialize Rich console and Typer app
 # Respect NO_COLOR env var for cleaner container logs in Kubernetes
@@ -832,6 +833,23 @@ def scrape(
                     # Convert Match objects to dict for queue submission
                     match_dicts = []
                     for match in matches:
+                        # Determine division/conference name based on league type
+                        # Academy league uses conference, Homegrown uses division
+                        division_name = (
+                            config.conference
+                            if config.league == "Academy" and config.conference
+                            else config.division
+                            if config.division
+                            else None
+                        )
+
+                        # Look up division_id using the appropriate league type
+                        division_id = get_division_id_for_league(
+                            league=config.league,
+                            division=config.division,
+                            conference=config.conference,
+                        )
+
                         match_dict = {
                             "home_team": normalize_team_name_for_display(
                                 match.home_team
@@ -845,7 +863,8 @@ def scrape(
                             "season": "2024-25",  # TODO: derive from match date
                             "age_group": config.age_group,
                             "match_type": "League",
-                            "division": config.division if config.division else None,
+                            "division": division_name,
+                            "division_id": division_id,
                             # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
                             "home_score": match.home_score
                             if isinstance(match.home_score, int)

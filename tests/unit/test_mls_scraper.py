@@ -1,7 +1,7 @@
 """Unit tests for MLS scraper module."""
 
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -278,3 +278,660 @@ class TestMLSScraperIntegration:
         # Check initial values
         assert scraper.browser_manager is None
         assert scraper.execution_metrics.errors_encountered == 0
+
+
+# Phase 1: Core Workflow Tests
+class TestMLSScraperWorkflow:
+    """Test main scraping workflow orchestration."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock ScrapingConfig."""
+        return ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            league="Homegrown",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date() + timedelta(days=1),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+
+    @pytest.fixture
+    def mls_scraper(self, mock_config):
+        """Create MLSScraper instance."""
+        return MLSScraper(mock_config, headless=True)
+
+    @pytest.fixture
+    def sample_matches(self):
+        """Create sample matches for testing."""
+        return [
+            Match(
+                match_id="match_1",
+                home_team="Team A",
+                away_team="Team B",
+                match_datetime=datetime.now(),
+            ),
+            Match(
+                match_id="match_2",
+                home_team="Team C",
+                away_team="Team D",
+                match_datetime=datetime.now() + timedelta(days=1),
+                home_score=2,
+                away_score=1,
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_success(self, mls_scraper, sample_matches):
+        """Test successful scraping workflow."""
+        with (
+            patch.object(
+                mls_scraper, "_initialize_browser_with_retry", new_callable=AsyncMock
+            ) as mock_init,
+            patch.object(
+                mls_scraper,
+                "_execute_scraping_workflow",
+                new_callable=AsyncMock,
+                return_value=sample_matches,
+            ) as mock_execute,
+            patch.object(
+                mls_scraper, "_emit_final_metrics", new_callable=AsyncMock
+            ) as mock_emit,
+        ):
+            # Mock browser manager for cleanup
+            mls_scraper.browser_manager = MagicMock()
+            mls_scraper.browser_manager.cleanup = AsyncMock()
+
+            matches = await mls_scraper.scrape_matches()
+
+            assert len(matches) == 2
+            assert matches == sample_matches
+            mock_init.assert_called_once()
+            mock_execute.assert_called_once()
+            mock_emit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_browser_init_failure(self, mls_scraper):
+        """Test scraping workflow when browser init fails."""
+        with patch.object(
+            mls_scraper,
+            "_initialize_browser_with_retry",
+            new_callable=AsyncMock,
+            side_effect=MLSScraperError("Browser init failed"),
+        ):
+            with pytest.raises(MLSScraperError) as exc_info:
+                await mls_scraper.scrape_matches()
+
+            assert "Browser init failed" in str(exc_info.value)
+            assert mls_scraper.execution_metrics.errors_encountered == 1
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_workflow_failure(self, mls_scraper):
+        """Test scraping workflow when execution fails."""
+        with (
+            patch.object(
+                mls_scraper, "_initialize_browser_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper,
+                "_execute_scraping_workflow",
+                new_callable=AsyncMock,
+                side_effect=Exception("Workflow failed"),
+            ),
+        ):
+            # Mock browser manager for cleanup
+            mls_scraper.browser_manager = MagicMock()
+            mls_scraper.browser_manager.cleanup = AsyncMock()
+
+            with pytest.raises(MLSScraperError) as exc_info:
+                await mls_scraper.scrape_matches()
+
+            assert "Workflow failed" in str(exc_info.value)
+            assert mls_scraper.execution_metrics.errors_encountered == 1
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_cleanup_on_error(self, mls_scraper):
+        """Test that cleanup is called even when errors occur."""
+        with (
+            patch.object(
+                mls_scraper, "_initialize_browser_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper,
+                "_execute_scraping_workflow",
+                new_callable=AsyncMock,
+                side_effect=Exception("Test error"),
+            ),
+        ):
+            # Mock browser manager
+            mock_browser = MagicMock()
+            mock_browser.cleanup = AsyncMock()
+            mls_scraper.browser_manager = mock_browser
+
+            with pytest.raises(MLSScraperError):
+                await mls_scraper.scrape_matches()
+
+            # Verify cleanup was called
+            mock_browser.cleanup.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_metrics_timing(self, mls_scraper, sample_matches):
+        """Test that execution duration is tracked."""
+        with (
+            patch.object(
+                mls_scraper, "_initialize_browser_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper,
+                "_execute_scraping_workflow",
+                new_callable=AsyncMock,
+                return_value=sample_matches,
+            ),
+            patch.object(mls_scraper, "_emit_final_metrics", new_callable=AsyncMock),
+        ):
+            # Mock browser manager
+            mls_scraper.browser_manager = MagicMock()
+            mls_scraper.browser_manager.cleanup = AsyncMock()
+
+            await mls_scraper.scrape_matches()
+
+            # Verify metrics were updated
+            assert mls_scraper.execution_metrics.execution_duration_ms > 0
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_error_count_tracking(self, mls_scraper):
+        """Test that errors are counted in metrics."""
+        with patch.object(
+            mls_scraper,
+            "_initialize_browser_with_retry",
+            new_callable=AsyncMock,
+            side_effect=Exception("Init error"),
+        ):
+            mls_scraper.browser_manager = MagicMock()
+            mls_scraper.browser_manager.cleanup = AsyncMock()
+
+            with pytest.raises(MLSScraperError):
+                await mls_scraper.scrape_matches()
+
+            assert mls_scraper.execution_metrics.errors_encountered == 1
+
+
+# Phase 2: Browser Initialization Tests
+class TestMLSScraperBrowserInit:
+    """Test browser initialization with retry logic."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock ScrapingConfig."""
+        return ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+
+    @pytest.fixture
+    def mls_scraper(self, mock_config):
+        """Create MLSScraper instance."""
+        return MLSScraper(mock_config)
+
+    @pytest.mark.asyncio
+    async def test_initialize_browser_success(self, mls_scraper):
+        """Test successful browser initialization."""
+        with patch(
+            "src.scraper.mls_scraper.BrowserManager"
+        ) as mock_browser_manager_class:
+            mock_manager = MagicMock()
+            mock_manager.initialize = AsyncMock()
+            mock_browser_manager_class.return_value = mock_manager
+
+            await mls_scraper._initialize_browser_with_retry()
+
+            assert mls_scraper.browser_manager is not None
+            mock_manager.initialize.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_initialize_browser_retry_on_failure(self, mls_scraper):
+        """Test browser initialization retries on failure."""
+        with patch(
+            "src.scraper.mls_scraper.BrowserManager"
+        ) as mock_browser_manager_class:
+            mock_manager = MagicMock()
+            # Fail twice, then succeed
+            mock_manager.initialize = AsyncMock(
+                side_effect=[Exception("Fail 1"), Exception("Fail 2"), None]
+            )
+            mock_browser_manager_class.return_value = mock_manager
+
+            with patch(
+                "asyncio.sleep", new_callable=AsyncMock
+            ):  # Mock sleep to speed up test
+                await mls_scraper._initialize_browser_with_retry()
+
+            # Should have tried 3 times
+            assert mock_manager.initialize.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_initialize_browser_max_retries_exceeded(self, mls_scraper):
+        """Test browser init fails after max retries."""
+        with patch(
+            "src.scraper.mls_scraper.BrowserManager"
+        ) as mock_browser_manager_class:
+            mock_manager = MagicMock()
+            # Always fail
+            mock_manager.initialize = AsyncMock(side_effect=Exception("Always fail"))
+            mock_browser_manager_class.return_value = mock_manager
+
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                with pytest.raises(MLSScraperError) as exc_info:
+                    await mls_scraper._initialize_browser_with_retry()
+
+                assert "after" in str(exc_info.value).lower()
+                assert "attempts" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_initialize_browser_retry_delay(self, mls_scraper):
+        """Test that retry delays use exponential backoff."""
+        with patch(
+            "src.scraper.mls_scraper.BrowserManager"
+        ) as mock_browser_manager_class:
+            mock_manager = MagicMock()
+            mock_manager.initialize = AsyncMock(side_effect=[Exception("Fail"), None])
+            mock_browser_manager_class.return_value = mock_manager
+
+            with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                await mls_scraper._initialize_browser_with_retry()
+
+                # Verify sleep was called with calculated delay
+                mock_sleep.assert_called_once()
+                delay = mock_sleep.call_args[0][0]
+                assert delay > 0
+
+
+# Phase 3: Workflow Execution Tests
+class TestMLSScraperWorkflowExecution:
+    """Test workflow step execution."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock ScrapingConfig."""
+        return ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+
+    @pytest.fixture
+    def mls_scraper(self, mock_config):
+        """Create MLSScraper instance with browser manager."""
+        scraper = MLSScraper(mock_config)
+        # Mock browser manager
+        scraper.browser_manager = MagicMock()
+        return scraper
+
+    @pytest.mark.asyncio
+    async def test_execute_scraping_workflow_success(self, mls_scraper):
+        """Test successful workflow execution."""
+        mock_page = MagicMock()
+        sample_matches = [
+            Match(
+                match_id="test_1",
+                home_team="Team A",
+                away_team="Team B",
+                match_datetime=datetime.now(),
+            )
+        ]
+
+        # Mock the page context manager
+        mls_scraper.browser_manager.get_page = MagicMock()
+        mls_scraper.browser_manager.get_page.return_value.__aenter__ = MagicMock(
+            return_value=mock_page
+        )
+        mls_scraper.browser_manager.get_page.return_value.__aexit__ = MagicMock(
+            return_value=None
+        )
+
+        with (
+            patch.object(mls_scraper, "_navigate_to_mls_website"),
+            patch.object(mls_scraper, "_apply_filters_with_retry"),
+            patch.object(mls_scraper, "_set_date_range_with_retry"),
+            patch.object(
+                mls_scraper, "_extract_matches_with_retry", return_value=sample_matches
+            ),
+        ):
+            matches = await mls_scraper._execute_scraping_workflow()
+
+            assert len(matches) == 1
+            assert matches[0].match_id == "test_1"
+
+    @pytest.mark.asyncio
+    async def test_execute_scraping_workflow_browser_not_initialized(self):
+        """Test workflow fails if browser not initialized."""
+        mock_config = ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+        scraper = MLSScraper(mock_config)
+        # Don't set browser_manager
+
+        with pytest.raises(MLSScraperError) as exc_info:
+            await scraper._execute_scraping_workflow()
+
+        assert "not initialized" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_scraping_workflow_with_page_context(self, mls_scraper):
+        """Test that workflow uses page context manager properly."""
+        mock_page = MagicMock()
+        sample_matches = []
+
+        # Track context manager calls
+        enter_called = False
+        exit_called = False
+
+        async def mock_aenter(*args):
+            nonlocal enter_called
+            enter_called = True
+            return mock_page
+
+        async def mock_aexit(*args):
+            nonlocal exit_called
+            exit_called = True
+
+        mls_scraper.browser_manager.get_page = MagicMock()
+        mls_scraper.browser_manager.get_page.return_value.__aenter__ = mock_aenter
+        mls_scraper.browser_manager.get_page.return_value.__aexit__ = mock_aexit
+
+        with (
+            patch.object(mls_scraper, "_navigate_to_mls_website"),
+            patch.object(mls_scraper, "_apply_filters_with_retry"),
+            patch.object(mls_scraper, "_set_date_range_with_retry"),
+            patch.object(
+                mls_scraper, "_extract_matches_with_retry", return_value=sample_matches
+            ),
+        ):
+            await mls_scraper._execute_scraping_workflow()
+
+            assert enter_called
+            assert exit_called
+
+
+# Phase 4: Navigation & Academy Tab Tests
+class TestMLSScraperNavigation:
+    """Test navigation and Academy tab logic."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock ScrapingConfig."""
+        return ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            league="Homegrown",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+
+    @pytest.fixture
+    def mls_scraper(self, mock_config):
+        """Create MLSScraper instance."""
+        return MLSScraper(mock_config)
+
+    @pytest.mark.asyncio
+    async def test_navigate_to_mls_website(self, mls_scraper):
+        """Test navigation to MLS website."""
+        mock_page = MagicMock()
+
+        with (
+            patch("src.scraper.mls_scraper.PageNavigator") as mock_navigator_class,
+            patch("src.scraper.mls_scraper.MLSConsentHandler") as mock_consent_class,
+        ):
+            mock_navigator = MagicMock()
+            mock_navigator.navigate_to = MagicMock(return_value=True)
+            mock_navigator_class.return_value = mock_navigator
+
+            mock_consent = MagicMock()
+            mock_consent.handle_consent_banner = MagicMock(return_value=True)
+            mock_consent.wait_for_page_ready = MagicMock(return_value=True)
+            mock_consent_class.return_value = mock_consent
+
+            await mls_scraper._navigate_to_mls_website(mock_page)
+
+            mock_navigator.navigate_to.assert_called_once()
+            mock_consent.handle_consent_banner.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_navigate_consent_handling(self, mls_scraper):
+        """Test consent banner handling during navigation."""
+        mock_page = MagicMock()
+
+        with (
+            patch("src.scraper.mls_scraper.PageNavigator") as mock_navigator_class,
+            patch("src.scraper.mls_scraper.MLSConsentHandler") as mock_consent_class,
+        ):
+            mock_navigator = MagicMock()
+            mock_navigator.navigate_to = MagicMock(return_value=True)
+            mock_navigator_class.return_value = mock_navigator
+
+            mock_consent = MagicMock()
+            mock_consent.handle_consent_banner = MagicMock(return_value=False)
+            mock_consent.wait_for_page_ready = MagicMock(return_value=True)
+            mock_consent_class.return_value = mock_consent
+
+            # Should not raise error even if consent fails
+            await mls_scraper._navigate_to_mls_website(mock_page)
+
+            mock_consent.handle_consent_banner.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_click_academy_tab_success(self):
+        """Test clicking Academy tab successfully."""
+        mock_config = ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            league="Academy",  # Academy league
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+        scraper = MLSScraper(mock_config)
+        mock_page = MagicMock()
+
+        with patch(
+            "src.scraper.mls_scraper.ElementInteractor"
+        ) as mock_interactor_class:
+            mock_interactor = MagicMock()
+            mock_interactor.click_element = MagicMock(return_value=True)
+            mock_interactor_class.return_value = mock_interactor
+
+            await scraper._click_academy_tab(mock_page)
+
+            mock_interactor.click_element.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_click_academy_tab_not_found(self):
+        """Test Academy tab not found (graceful handling)."""
+        mock_config = ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            league="Academy",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+        scraper = MLSScraper(mock_config)
+        mock_page = MagicMock()
+
+        with patch(
+            "src.scraper.mls_scraper.ElementInteractor"
+        ) as mock_interactor_class:
+            mock_interactor = MagicMock()
+            # All selectors fail
+            mock_interactor.click_element = MagicMock(return_value=False)
+            mock_interactor_class.return_value = mock_interactor
+
+            # Should log warning but not raise error
+            await scraper._click_academy_tab(mock_page)
+
+
+# Phase 5: Retry Logic Tests
+class TestMLSScraperRetryLogic:
+    """Test retry logic for filters, dates, and matches."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock ScrapingConfig."""
+        return ScrapingConfig(
+            age_group="U14",
+            division="Northeast",
+            club="",
+            competition="",
+            look_back_days=1,
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            missing_table_api_url="https://api.test.com",
+            missing_table_api_key="test-key",
+            log_level="INFO",
+        )
+
+    @pytest.fixture
+    def mls_scraper(self, mock_config):
+        """Create MLSScraper instance."""
+        return MLSScraper(mock_config)
+
+    @pytest.mark.asyncio
+    async def test_apply_filters_with_retry_success(self, mls_scraper):
+        """Test filter application succeeds."""
+        mock_page = MagicMock()
+
+        with patch(
+            "src.scraper.mls_scraper.MLSFilterApplicator"
+        ) as mock_applicator_class:
+            mock_applicator = MagicMock()
+            mock_applicator.apply_all_filters = MagicMock(return_value=True)
+            mock_applicator_class.return_value = mock_applicator
+
+            await mls_scraper._apply_filters_with_retry(mock_page)
+
+            mock_applicator.apply_all_filters.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_filters_retry_on_failure(self, mls_scraper):
+        """Test filter application retries on failure."""
+        mock_page = MagicMock()
+
+        with (
+            patch(
+                "src.scraper.mls_scraper.MLSFilterApplicator"
+            ) as mock_applicator_class,
+            patch("asyncio.sleep"),
+        ):
+            mock_applicator = MagicMock()
+            # Fail twice, then succeed
+            mock_applicator.apply_all_filters = MagicMock(
+                side_effect=[Exception("Fail 1"), Exception("Fail 2"), True]
+            )
+            mock_applicator_class.return_value = mock_applicator
+
+            await mls_scraper._apply_filters_with_retry(mock_page)
+
+            assert mock_applicator.apply_all_filters.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_with_retry_success(self, mls_scraper):
+        """Test date range setting succeeds."""
+        mock_page = MagicMock()
+
+        with patch(
+            "src.scraper.mls_scraper.MLSCalendarInteractor"
+        ) as mock_calendar_class:
+            mock_calendar = MagicMock()
+            mock_calendar.set_date_range_filter = MagicMock(return_value=True)
+            mock_calendar_class.return_value = mock_calendar
+
+            await mls_scraper._set_date_range_with_retry(mock_page)
+
+            mock_calendar.set_date_range_filter.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_extract_matches_with_retry_success(self, mls_scraper):
+        """Test match extraction succeeds."""
+        mock_page = MagicMock()
+        sample_matches = [
+            Match(
+                match_id="test_1",
+                home_team="Team A",
+                away_team="Team B",
+                match_datetime=datetime.now(),
+            )
+        ]
+
+        with patch("src.scraper.mls_scraper.MLSMatchExtractor") as mock_extractor_class:
+            mock_extractor = MagicMock()
+            mock_extractor.extract_matches = MagicMock(return_value=sample_matches)
+            mock_extractor_class.return_value = mock_extractor
+
+            matches = await mls_scraper._extract_matches_with_retry(mock_page)
+
+            assert len(matches) == 1
+            assert mls_scraper.execution_metrics.games_scheduled == 1
+
+    @pytest.mark.asyncio
+    async def test_emit_final_metrics(self, mls_scraper):
+        """Test final metrics emission."""
+        sample_matches = [
+            Match(
+                match_id="test_1",
+                home_team="Team A",
+                away_team="Team B",
+                match_datetime=datetime.now(),
+            )
+        ]
+
+        # Set some metrics
+        mls_scraper.execution_metrics.games_scheduled = 1
+        mls_scraper.execution_metrics.games_scored = 0
+
+        # Should not raise error
+        await mls_scraper._emit_final_metrics(sample_matches)

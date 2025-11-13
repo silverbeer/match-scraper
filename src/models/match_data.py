@@ -33,6 +33,7 @@ class MatchData(BaseModel):
 
     # Optional fields
     division: str | None = Field(None, description="Division name")
+    division_id: int | None = Field(None, ge=1, description="Division ID")
     home_score: int | None = Field(None, ge=0, description="Home team score")
     away_score: int | None = Field(None, ge=0, description="Away team score")
     match_status: (
@@ -60,6 +61,7 @@ class MatchData(BaseModel):
                     "age_group": "U14",
                     "match_type": "League",
                     "division": "Northeast",
+                    "division_id": 41,
                     "home_score": 2,
                     "away_score": 1,
                     "match_status": "completed",
