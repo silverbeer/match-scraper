@@ -1,0 +1,96 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-homegrown-u14
+  namespace: match-scraper
+  labels:
+    app: match-scraper
+    league: homegrown
+    age-group: u14
+spec:
+  # Run daily at 6 AM UTC
+  schedule: "0 6 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: match-scraper
+            league: homegrown
+            age-group: u14
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: match-scraper
+            image: match-scraper:latest
+            imagePullPolicy: Never  # Use local image
+            command:
+              - python
+              - -m
+              - src.cli.main
+              - scrape
+              - --league
+              - Homegrown
+              - --age-group
+              - U14
+              - --division
+              - Northeast
+              - --start
+              - "7"
+              - --end
+              - "30"
+              - --submit-queue
+            env:
+            # RabbitMQ Connection (use messaging-rabbitmq, not rabbitmq)
+            - name: RABBITMQ_URL
+              value: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
+            # Logging Configuration
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: NO_COLOR
+              value: "1"  # Disable colors for K8s logs
+            # Browser Configuration
+            - name: HEADLESS
+              value: "true"
+            - name: BROWSER_TIMEOUT
+              value: "30000"
+            # Scraping Configuration
+            - name: MAX_RETRIES
+              value: "3"
+            - name: RETRY_DELAY
+              value: "5"
+            # Deployment Environment
+            - name: DEPLOYMENT_ENV
+              value: "k3s-homegrown"
+            - name: K8S_NAMESPACE
+              value: "match-scraper"
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "250m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+            # Security context
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false
+              capabilities:
+                drop:
+                - ALL
+            # Volume mounts
+            volumeMounts:
+            - name: audit-logs
+              mountPath: /var/log/scraper/audit
+          # Volumes
+          volumes:
+          - name: audit-logs
+            hostPath:
+              path: /Users/silverbeer/gitrepos/match-scraper/audit
+              type: DirectoryOrCreate
