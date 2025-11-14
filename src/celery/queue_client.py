@@ -29,8 +29,13 @@ class MatchQueueClient:
     The "consumer" (Celery workers in missing-table) will process them.
 
     Supports two routing modes:
-    1. Fanout Exchange: Publish to exchange that routes to multiple queues (prod + dev)
+    1. Fanout Exchange: Publish to exchange that routes to multiple queues (local + dev)
     2. Direct Queue: Publish directly to a specific queue (for manual targeting)
+
+    Environment Setup (as of 2025-11-14):
+    - matches-fanout exchange routes to: matches.local + matches.dev
+    - Production (missingtable.com) now points to dev environment
+    - Local queue for local development/testing
     """
 
     def __init__(
@@ -57,7 +62,7 @@ class MatchQueueClient:
             ValueError: If broker_url is not provided and RABBITMQ_URL env var is not set
 
         Example:
-            # Fanout to both dev and prod (default)
+            # Fanout to local + dev (default)
             client = MatchQueueClient()
 
             # Target specific queue

@@ -1,3 +1,7 @@
+# ⚠️ DEPRECATED - This configmap is no longer used
+# As of 2025-11-14, missingtable.com points to dev environment only
+# This file is kept for reference only
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,6 +10,7 @@ metadata:
   labels:
     app: missing-table-worker
     environment: prod
+    deprecated: "true"
 data:
   # Celery Configuration
   CELERY_BROKER_URL: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
