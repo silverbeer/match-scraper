@@ -100,3 +100,8 @@ github-actions-secrets.txt
 # K8s secrets (never commit actual secrets!)
 k3s/workers/prod-secret.yaml
 k8s/workers/prod-secret.yaml
+
+# Audit logs (keep directory structure but exclude log files)
+audit/*.jsonl
+audit/.state/*.json
+!audit/.gitkeep

@@ -94,10 +94,32 @@ class BrowserManager:
                     "--disable-extensions",
                 ]
 
-            self._browser = await self._playwright.chromium.launch(
-                headless=self.config.headless,
-                args=browser_args,
-            )
+            # Try to use system Chrome when not headless for better visibility
+            launch_options = {
+                "headless": self.config.headless,
+                "args": browser_args,
+            }
+
+            # Use Chrome channel if available and not in headless mode
+            if not self.config.headless:
+                try:
+                    logger.info("Attempting to launch system Chrome browser")
+                    self._browser = await self._playwright.chromium.launch(
+                        **launch_options,
+                        channel="chrome",  # Use system Chrome
+                        slow_mo=500,  # Slow down actions by 500ms for visibility
+                    )
+                    logger.info("Successfully launched system Chrome")
+                except Exception as e:
+                    # Fall back to regular chromium if Chrome not available
+                    logger.warning(
+                        f"Failed to launch Chrome, falling back to Chromium: {e}"
+                    )
+                    self._browser = await self._playwright.chromium.launch(
+                        **launch_options
+                    )
+            else:
+                self._browser = await self._playwright.chromium.launch(**launch_options)
 
             # Create browser context with viewport and user agent
             self._context = await self._browser.new_context(

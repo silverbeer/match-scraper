@@ -100,7 +100,10 @@ class MLSMatchExtractor:
         self, age_group: str, division: str, competition: Optional[str] = None
     ) -> list[Match]:
         """
-        Extract all matches from the current page.
+        Extract all matches from all paginated pages.
+
+        This method handles pagination automatically, extracting matches from
+        all available pages and returning the complete list.
 
         Args:
             age_group: Age group for the matches (e.g., "U14")
@@ -108,11 +111,214 @@ class MLSMatchExtractor:
             competition: Optional competition name
 
         Returns:
-            List of Match objects extracted from the page
+            List of Match objects extracted from all pages
         """
         try:
             logger.info(
-                "Extracting matches from page",
+                "Starting paginated match extraction",
+                extra={
+                    "age_group": age_group,
+                    "division": division,
+                    "competition": competition,
+                },
+            )
+
+            # Extract matches from all pages with pagination
+            all_matches = await self._extract_all_pages(
+                age_group, division, competition
+            )
+
+            logger.info(
+                "Paginated match extraction completed",
+                extra={
+                    "total_matches": len(all_matches),
+                    "age_group": age_group,
+                    "division": division,
+                },
+            )
+
+            return all_matches
+
+        except Exception as e:
+            logger.error(
+                "Error in paginated match extraction",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "age_group": age_group,
+                    "division": division,
+                },
+            )
+            raise MatchExtractionError(f"Failed to extract matches: {e}") from e
+
+    async def _extract_all_pages(
+        self, age_group: str, division: str, competition: Optional[str] = None
+    ) -> list[Match]:
+        """
+        Extract matches from all paginated pages.
+
+        Strategy:
+        1. Initialize iframe access
+        2. Detect total number of pages by looking for page number buttons
+        3. Extract matches from page 1
+        4. For each additional page: click Next, wait, extract matches
+        5. Return all matches from all pages
+
+        Args:
+            age_group: Age group for the matches
+            division: Division for the matches
+            competition: Optional competition name
+
+        Returns:
+            List of all matches from all pages
+        """
+        all_matches = []
+
+        # CRITICAL: Access iframe content first before pagination detection
+        logger.info("Initializing iframe access for pagination detection...")
+        if not await self._access_iframe_content():
+            logger.warning(
+                "Cannot access iframe content - pagination detection will fail"
+            )
+            # Fall back to single page extraction
+            return await self._extract_from_current_page(
+                age_group, division, competition
+            )
+
+        # Wait for results to load
+        logger.info("Waiting for results to load...")
+        if not await self._wait_for_results():
+            logger.warning(
+                "Results not loaded - pagination detection may not work correctly"
+            )
+
+        # Now determine how many pages exist
+        total_pages = await self._get_total_pages()
+
+        if total_pages == 0:
+            logger.warning(
+                "Could not determine number of pages, will try single page extraction"
+            )
+            total_pages = 1
+
+        logger.info(f"Detected {total_pages} page(s) of results")
+
+        # Extract matches from each page
+        for current_page in range(1, total_pages + 1):
+            logger.info(f"Extracting matches from page {current_page} of {total_pages}")
+
+            # Extract matches from current page
+            page_matches = await self._extract_from_current_page(
+                age_group, division, competition
+            )
+
+            if page_matches:
+                all_matches.extend(page_matches)
+                logger.info(
+                    f"Page {current_page}/{total_pages}: Found {len(page_matches)} matches "
+                    f"(total so far: {len(all_matches)})"
+                )
+            else:
+                logger.info(f"Page {current_page}/{total_pages}: No matches found")
+
+            # If there are more pages, navigate to the next one
+            if current_page < total_pages:
+                logger.info(f"Navigating to page {current_page + 1}")
+
+                if not await self._navigate_to_next_page():
+                    logger.warning(
+                        f"Failed to navigate to page {current_page + 1}, stopping pagination"
+                    )
+                    break
+
+                # Wait for new results to load
+                import asyncio
+
+                await asyncio.sleep(2)
+
+        logger.info(
+            f"Pagination complete: Extracted {len(all_matches)} total matches from {current_page} page(s)"
+        )
+        return all_matches
+
+    async def _get_total_pages(self) -> int:
+        """
+        Determine the total number of pages by looking for page number buttons.
+
+        Returns:
+            Total number of pages, or 0 if cannot determine
+        """
+        try:
+            if not self.iframe_content:
+                logger.warning("No iframe content available to detect pages")
+                logger.info(
+                    "⚠️  WARNING: No iframe content available - cannot detect pagination"
+                )
+                return 0
+
+            logger.info("🔍 Scanning for pagination buttons in results...")
+
+            # Look for page number buttons (1, 2, 3, etc.)
+            # We'll check for numbers 1-20 and find the highest one
+            max_page = 0
+
+            for page_num in range(1, 21):  # Check up to 20 pages
+                try:
+                    page_button = self.iframe_content.get_by_text(
+                        str(page_num), exact=True
+                    )
+                    count = await page_button.count()
+
+                    if count > 0:
+                        # Verify this is actually a page button, not just any text with that number
+                        # by checking if it's clickable or in a pagination context
+                        max_page = page_num
+                        logger.info(f"  ✓ Found pagination button for page {page_num}")
+                    else:
+                        # If we don't find a sequential number, stop checking
+                        if max_page > 0:
+                            logger.debug(
+                                f"Stopping scan at page {page_num} (no more buttons found)"
+                            )
+                            break
+                except Exception as e:
+                    logger.debug(f"Error checking for page {page_num}: {e}")
+                    if max_page > 0:
+                        break
+
+            if max_page > 0:
+                logger.info(
+                    f"📄 PAGINATION DETECTED: {max_page} page(s) of results found"
+                )
+                return max_page
+            else:
+                logger.info(
+                    "📄 No pagination buttons found - assuming single page of results"
+                )
+                return 1
+
+        except Exception as e:
+            logger.error(f"Error detecting total pages: {e}")
+            logger.info(f"❌ ERROR detecting pages: {e}")
+            return 0
+
+    async def _extract_from_current_page(
+        self, age_group: str, division: str, competition: Optional[str] = None
+    ) -> list[Match]:
+        """
+        Extract all matches from the current page (without pagination handling).
+
+        Args:
+            age_group: Age group for the matches (e.g., "U14")
+            division: Division for the matches
+            competition: Optional competition name
+
+        Returns:
+            List of Match objects extracted from the current page
+        """
+        try:
+            logger.debug(
+                "Extracting matches from current page",
                 extra={
                     "age_group": age_group,
                     "division": division,
@@ -140,25 +346,20 @@ class MLSMatchExtractor:
 
             # If table extraction fails, try card-based extraction
             if not matches:
-                logger.info(
+                logger.debug(
                     "Table extraction found no matches, trying card-based extraction"
                 )
                 matches = await self._extract_from_cards(
                     age_group, division, competition
                 )
             else:
-                logger.info(f"Table extraction found {len(matches)} matches")
-
-            logger.info(
-                "Match extraction completed",
-                extra={"matches_found": len(matches), "age_group": age_group},
-            )
+                logger.debug(f"Table extraction found {len(matches)} matches")
 
             return matches
 
         except Exception as e:
             logger.error(
-                "Error extracting matches",
+                "Error extracting matches from current page",
                 extra={
                     "error": str(e),
                     "error_type": type(e).__name__,
@@ -167,6 +368,70 @@ class MLSMatchExtractor:
                 },
             )
             raise MatchExtractionError(f"Failed to extract matches: {e}") from e
+
+    async def _has_next_page(self) -> bool:
+        """
+        Check if there's a next page available in pagination.
+
+        Returns:
+            True if next page exists, False otherwise
+        """
+        try:
+            if not self.iframe_content:
+                return False
+
+            # Check if "Next" button exists and is enabled
+            next_button = self.iframe_content.get_by_text("Next")
+            button_count = await next_button.count()
+
+            if button_count == 0:
+                logger.debug("Next button not found - no pagination")
+                return False
+
+            # Check if the button is disabled
+            first_button = next_button.first
+            is_disabled = await first_button.evaluate(
+                "el => el.classList.contains('disabled') || el.disabled || el.getAttribute('aria-disabled') === 'true'"
+            )
+
+            if is_disabled:
+                logger.debug("Next button is disabled - last page reached")
+                return False
+
+            logger.debug("Next button available - more pages exist")
+            return True
+
+        except Exception as e:
+            logger.debug(f"Error checking for next page: {e}")
+            return False
+
+    async def _navigate_to_next_page(self) -> bool:
+        """
+        Navigate to the next page of results.
+
+        Returns:
+            True if navigation successful, False otherwise
+        """
+        try:
+            if not self.iframe_content:
+                logger.warning("No iframe content available for pagination")
+                return False
+
+            logger.debug("Clicking Next button to navigate to next page")
+
+            # Click the "Next" button
+            next_button = self.iframe_content.get_by_text("Next")
+            await next_button.first.click()
+
+            logger.debug("Successfully clicked Next button")
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to navigate to next page: {e}",
+                extra={"error": str(e), "error_type": type(e).__name__},
+            )
+            return False
 
     async def _access_iframe_content(self) -> bool:
         """
