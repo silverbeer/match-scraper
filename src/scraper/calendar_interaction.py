@@ -513,6 +513,196 @@ class MLSCalendarInteractor:
                 if await calendar_picker.count() > 0:
                     logger.info("Calendar picker opened successfully")
 
+                    # Calculate month difference to determine best approach
+                    month_diff = (end_date.year - start_date.year) * 12 + (
+                        end_date.month - start_date.month
+                    )
+                    logger.info(
+                        f"Date range spans {month_diff} months",
+                        extra={
+                            "start_date": str(start_date),
+                            "end_date": str(end_date),
+                            "month_diff": month_diff,
+                        },
+                    )
+
+                    # For ranges spanning multiple months, handle differently based on span
+                    if month_diff >= 1:
+                        logger.info(f"Multi-month range detected ({month_diff} months)")
+
+                        # For adjacent months (diff = 1), both calendars should show them
+                        # Just click FROM on LEFT and TO on RIGHT without navigation
+                        if month_diff == 1:
+                            logger.info(
+                                "Adjacent months - clicking dates on LEFT and RIGHT calendars"
+                            )
+
+                            # Click From date on left calendar
+                            from_day = start_date.day
+                            from_date_selectors = [
+                                f'.daterangepicker .drp-calendar.left td:has-text("{from_day}"):not(.off)',
+                                f'.drp-calendar.left .calendar-table td:has-text("{from_day}"):not(.off)',
+                            ]
+
+                            from_clicked = False
+                            for selector in from_date_selectors:
+                                from_cell = self.iframe_content.locator(selector)
+                                if await from_cell.count() > 0:
+                                    await from_cell.first.click()
+                                    logger.info(
+                                        f"Clicked From date {start_date.month}/{from_day}/{start_date.year} on LEFT calendar"
+                                    )
+                                    await asyncio.sleep(1)
+                                    from_clicked = True
+                                    break
+
+                            if not from_clicked:
+                                logger.error(
+                                    f"Could not click From date {from_day} on LEFT calendar"
+                                )
+                                return False
+
+                            # Click To date on right calendar
+                            to_day = end_date.day
+                            to_date_selectors = [
+                                f'.daterangepicker .drp-calendar.right td:has-text("{to_day}"):not(.off)',
+                                f'.drp-calendar.right .calendar-table td:has-text("{to_day}"):not(.off)',
+                            ]
+
+                            to_clicked = False
+                            for selector in to_date_selectors:
+                                to_cell = self.iframe_content.locator(selector)
+                                if await to_cell.count() > 0:
+                                    await to_cell.first.click()
+                                    logger.info(
+                                        f"Clicked To date {end_date.month}/{to_day}/{end_date.year} on RIGHT calendar"
+                                    )
+                                    await asyncio.sleep(1)
+                                    to_clicked = True
+                                    break
+
+                            if not to_clicked:
+                                logger.error(
+                                    f"Could not click To date {to_day} on RIGHT calendar"
+                                )
+                                return False
+
+                        # For wider spans (diff >= 2), navigate to position months correctly
+                        else:
+                            logger.info(
+                                f"Wide range ({month_diff} months) - using navigation strategy"
+                            )
+
+                            # Step 1: Navigate to From date's month and click From date
+                            logger.info(
+                                f"Step 1: Navigating to From date month: {start_date.month}/{start_date.year}"
+                            )
+                            if not await self._navigate_daterangepicker_to_month(
+                                start_date.month, start_date.year
+                            ):
+                                logger.error("Failed to navigate to From date month")
+                                return False
+
+                            await asyncio.sleep(1.5)
+
+                            # Click From date on left calendar
+                            from_day = start_date.day
+                            from_date_selectors = [
+                                f'.daterangepicker .drp-calendar.left td:has-text("{from_day}"):not(.off)',
+                                f'.drp-calendar.left .calendar-table td:has-text("{from_day}"):not(.off)',
+                            ]
+
+                            from_clicked = False
+                            for selector in from_date_selectors:
+                                from_cell = self.iframe_content.locator(selector)
+                                if await from_cell.count() > 0:
+                                    await from_cell.first.click()
+                                    logger.info(
+                                        f"Clicked From date {start_date.month}/{from_day}/{start_date.year} on LEFT calendar"
+                                    )
+                                    await asyncio.sleep(1)
+                                    from_clicked = True
+                                    break
+
+                            if not from_clicked:
+                                logger.error(f"Could not click From date {from_day}")
+                                return False
+
+                            # Step 2: Navigate to To date's month
+                            logger.info(
+                                f"Step 2: Navigating to To date month: {end_date.month}/{end_date.year}"
+                            )
+                            if not await self._navigate_daterangepicker_to_month(
+                                end_date.month, end_date.year
+                            ):
+                                logger.error("Failed to navigate to To date month")
+                                return False
+
+                            await asyncio.sleep(1.5)
+
+                            # Step 3: Click To date on left calendar (which now shows To month)
+                            to_day = end_date.day
+                            to_date_selectors = [
+                                f'.daterangepicker .drp-calendar.left td:has-text("{to_day}"):not(.off)',
+                                f'.drp-calendar.left .calendar-table td:has-text("{to_day}"):not(.off)',
+                            ]
+
+                            to_clicked = False
+                            for selector in to_date_selectors:
+                                to_cell = self.iframe_content.locator(selector)
+                                if await to_cell.count() > 0:
+                                    await to_cell.first.click()
+                                    logger.info(
+                                        f"Clicked To date {end_date.month}/{to_day}/{end_date.year} on LEFT calendar"
+                                    )
+                                    await asyncio.sleep(1)
+                                    to_clicked = True
+                                    break
+
+                            if not to_clicked:
+                                logger.error(f"Could not click To date {to_day}")
+                                return False
+
+                        # Click Apply button (common for both strategies)
+                        logger.info("Clicking Apply button")
+                        apply_button_selectors = [
+                            ".daterangepicker .applyBtn",
+                            ".daterangepicker button.applyBtn",
+                            ".applyBtn",
+                        ]
+
+                        apply_clicked = False
+                        for selector in apply_button_selectors:
+                            try:
+                                apply_button = self.iframe_content.locator(selector)
+                                if await apply_button.count() > 0:
+                                    await apply_button.first.click()
+                                    logger.info("Clicked Apply button")
+                                    apply_clicked = True
+                                    break
+                            except Exception as e:
+                                logger.debug(
+                                    f"Apply button selector '{selector}' failed: {e}"
+                                )
+                                continue
+
+                        if not apply_clicked:
+                            logger.error("Could not click Apply button")
+                            return False
+
+                        # Wait for results to load
+                        await asyncio.sleep(3)
+
+                        logger.info(
+                            "Multi-month calendar navigation completed successfully",
+                            extra={
+                                "from_date": str(start_date),
+                                "to_date": str(end_date),
+                                "months_spanned": month_diff,
+                            },
+                        )
+                        return True
+
                     # Check if both dates are in the same month
                     same_month = (
                         start_date.month == end_date.month
@@ -774,14 +964,52 @@ class MLSCalendarInteractor:
                             break
 
                     if apply_clicked:
-                        logger.info(
-                            "Date filter applied via calendar date picker",
-                            extra={
-                                "start_date": str(start_date),
-                                "end_date": str(end_date),
-                            },
-                        )
-                        return True
+                        # Verify the date range was set correctly
+                        await asyncio.sleep(1)
+                        try:
+                            date_field_value = await date_field.input_value()
+                            logger.info(
+                                "Verifying date range after calendar picker",
+                                extra={
+                                    "expected": date_range_text,
+                                    "actual": date_field_value,
+                                },
+                            )
+
+                            # Check if the dates are present in the field (format may vary)
+                            start_date_str = start_date.strftime("%m/%d/%Y")
+                            end_date_str = end_date.strftime("%m/%d/%Y")
+
+                            if (
+                                start_date_str in date_field_value
+                                and end_date_str in date_field_value
+                            ):
+                                logger.info(
+                                    "Date range verification successful",
+                                    extra={
+                                        "start_date": str(start_date),
+                                        "end_date": str(end_date),
+                                        "method": "calendar_picker",
+                                    },
+                                )
+                                return True
+                            else:
+                                logger.warning(
+                                    "Date range verification failed - dates don't match",
+                                    extra={
+                                        "expected_start": start_date_str,
+                                        "expected_end": end_date_str,
+                                        "actual_value": date_field_value,
+                                    },
+                                )
+                                return False
+                        except Exception as verify_error:
+                            logger.warning(
+                                "Could not verify date range",
+                                extra={"error": str(verify_error)},
+                            )
+                            # Still return True since Apply was clicked successfully
+                            return True
                     else:
                         logger.warning("Apply button not found in calendar picker")
                         return False
@@ -1034,8 +1262,9 @@ class MLSCalendarInteractor:
             max_iterations = min(iterations, 24)  # Max 2 years navigation
 
             # Selectors for daterangepicker navigation buttons
-            prev_selector = ".daterangepicker .drp-calendar.left .prev"
-            next_selector = ".daterangepicker .drp-calendar.left .next"
+            # Based on Playwright codegen: simple selectors work best
+            prev_selector = ".prev > span"
+            next_selector = ".next > span"
 
             for i in range(max_iterations):
                 if is_forward:

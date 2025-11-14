@@ -20,6 +20,7 @@ This application scrapes match data from youth soccer websites and sends it to a
 
 Quick links:
 - **[CLI Usage Guide](docs/guides/cli-usage.md)** - Complete CLI reference and examples
+- **[Audit System Guide](docs/guides/audit-system.md)** - Match processing audit trail and validation
 - **[GKE Deployment](docs/deployment/gke-deployment.md)** - Kubernetes deployment guide
 - **[Testing Guide](docs/development/testing.md)** - Unit, integration, and E2E tests
 - **[Observability Setup](docs/observability/grafana-cloud-setup.md)** - Metrics and logging with Grafana Cloud
@@ -30,6 +31,7 @@ Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
 
 - **Automated Scraping**: Playwright-based web scraping of youth soccer match data
 - **Queue Integration**: RabbitMQ message queue for reliable async processing
+- **Audit Trail**: JSONL audit logs with change tracking and validation (see [Audit Guide](docs/guides/audit-system.md))
 - **Scheduled Execution**: Kubernetes CronJob runs daily at 6 AM UTC
 - **Containerized Deployment**: GKE deployment with optimized Docker container
 - **Data Validation**: Pydantic models for robust data validation and serialization
@@ -147,6 +149,58 @@ OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <your-token>
 OTEL_METRIC_EXPORT_INTERVAL=5000
 OTEL_METRIC_EXPORT_TIMEOUT=30000
 ```
+
+## Audit & Validation
+
+The audit system provides comprehensive tracking of all match processing activity with JSONL logs and change detection.
+
+### View Audit Logs
+
+```bash
+# View today's activity
+match-scraper audit view
+
+# View specific date
+match-scraper audit view --date 2025-11-13
+
+# Filter by league
+match-scraper audit view --league Homegrown
+
+# Show only changes (scheduled → scored)
+match-scraper audit view --changes-only
+
+# Get statistics
+match-scraper audit stats
+```
+
+### Audit Features
+
+- ✅ **Match Discovery Tracking**: Every match is logged when first discovered
+- ✅ **Change Detection**: Automatically detects and logs score/status updates
+- ✅ **Queue Correlation**: Links matches to RabbitMQ task IDs for troubleshooting
+- ✅ **League Tracking**: Always knows if match is from Homegrown or Academy
+- ✅ **Daily Rotation**: JSONL files rotate daily, accessible on local filesystem
+- ✅ **Manual Querying**: Use `jq` for ad-hoc analysis
+
+### Example: Find Queue Failures
+
+```bash
+# Check for queue submission failures
+match-scraper audit view --event-type queue_failed
+
+# Find specific match journey
+cat audit/match-audit-2025-11-13.jsonl | jq 'select(.correlation_id == "100436")'
+```
+
+### Audit File Location
+
+Audit logs are stored in `./audit/` and are accessible directly from your Mac:
+
+```bash
+tail -f audit/match-audit-2025-11-13.jsonl
+```
+
+**[📖 Full Audit System Guide →](docs/guides/audit-system.md)**
 
 ## Configuration
 

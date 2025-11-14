@@ -33,10 +33,13 @@ from src.cli.env_config import (  # noqa: E402
     set_variable,
     validate_config,
 )
+from src.models.audit import RunMetadata, RunSummary  # noqa: E402
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
+from src.utils.audit_logger import AuditLogger  # noqa: E402
 from src.utils.division_lookup import get_division_id_for_league  # noqa: E402
+from src.utils.match_comparison import MatchComparison  # noqa: E402
 
 # Initialize Rich console and Typer app
 # Respect NO_COLOR env var for cleaner container logs in Kubernetes
@@ -216,17 +219,11 @@ def create_config(
         )
 
     else:
-        # Use relative offsets (enhanced with negative support for --end)
+        # Use relative offsets
+        # Negative offset = past, positive offset = future
         today = date.today()
-        start_date = today - timedelta(
-            days=start_offset
-        )  # --start: backward from today
-
-        # --end: positive = forward, negative = backward from today
-        if end_offset >= 0:
-            end_date = today + timedelta(days=end_offset)  # Forward
-        else:
-            end_date = today - timedelta(days=abs(end_offset))  # Backward
+        start_date = today + timedelta(days=start_offset)  # negative = past days
+        end_date = today + timedelta(days=end_offset)  # 0 = today, positive = future
 
     return ScrapingConfig(
         age_group=age_group,
@@ -805,12 +802,40 @@ def scrape(
 
     try:
         # Run scraper with execution time tracking
+        import secrets
+        from datetime import datetime
+
         from src.utils.metrics import get_metrics
 
         metrics = get_metrics()
 
+        # Generate run ID for audit logging
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        run_id = f"{timestamp}-{secrets.token_hex(3)}"
+
+        # Initialize audit logger
+        run_metadata = RunMetadata(
+            league=config.league,
+            age_group=config.age_group,
+            division=config.division or config.conference,
+            date_range=f"{config.start_date} to {config.end_date}",
+        )
+        audit_logger = AuditLogger(run_id=run_id, run_metadata=run_metadata)
+        audit_logger.log_run_started()
+
         with metrics.time_execution():
             matches = asyncio.run(run_scraper(config, verbose, headless))
+
+        # Initialize match comparison for change detection
+        comparison = MatchComparison(audit_logger.get_state_file_path())
+        comparison.load_previous_state()
+
+        # Track counts for summary
+        discovered_count = 0
+        updated_count = 0
+        unchanged_count = 0
+        queue_submitted_count = 0
+        queue_failed_count = 0
 
         # Submit to RabbitMQ queue if requested
         if submit_queue and matches:
@@ -865,6 +890,7 @@ def scrape(
                             "match_type": "League",
                             "division": division_name,
                             "division_id": division_id,
+                            "league": config.league,  # Add league field
                             # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
                             "home_score": match.home_score
                             if isinstance(match.home_score, int)
@@ -877,10 +903,42 @@ def scrape(
                             "location": match.location,
                             "source": "match-scraper",  # Data source identifier
                         }
+
+                        # Compare match and log audit event
+                        status, changes = comparison.compare_match(
+                            match.match_id, match_dict
+                        )
+                        if status == "discovered":
+                            audit_logger.log_match_discovered(
+                                match.match_id, match_dict
+                            )
+                            discovered_count += 1
+                        elif status == "updated":
+                            audit_logger.log_match_updated(
+                                match.match_id, match_dict, changes
+                            )
+                            updated_count += 1
+                        else:  # unchanged
+                            audit_logger.log_match_unchanged(match.match_id, match_dict)
+                            unchanged_count += 1
+
                         match_dicts.append(match_dict)
 
                     # Submit batch
                     task_ids = queue_client.submit_matches_batch(match_dicts)
+
+                    # Log queue submission success for each match
+                    for match_dict, task_id in zip(match_dicts, task_ids):
+                        if task_id:
+                            audit_logger.log_queue_submitted(
+                                match_dict["external_match_id"], task_id
+                            )
+                            queue_submitted_count += 1
+                        else:
+                            audit_logger.log_queue_failed(
+                                match_dict["external_match_id"], "No task ID returned"
+                            )
+                            queue_failed_count += 1
 
                     console.print(
                         f"[green]✅ {len(task_ids)} matches queued for processing[/green]"
@@ -888,8 +946,126 @@ def scrape(
 
             except Exception as e:
                 console.print(f"[red]❌ Queue submission failed: {e}[/red]")
+                # Log queue failures for all matches
+                for match in matches:
+                    audit_logger.log_queue_failed(match.match_id, str(e))
+                    queue_failed_count += 1
                 if verbose:
                     console.print_exception()
+        else:
+            # If not submitting to queue, still log match discovery/updates
+            if matches:
+                for match in matches:
+                    # Build match_dict for comparison (without submitting)
+                    division_name = (
+                        config.conference
+                        if config.league == "Academy" and config.conference
+                        else config.division
+                        if config.division
+                        else None
+                    )
+                    division_id = get_division_id_for_league(
+                        league=config.league,
+                        division=config.division,
+                        conference=config.conference,
+                    )
+
+                    match_dict = {
+                        "home_team": normalize_team_name_for_display(match.home_team),
+                        "away_team": normalize_team_name_for_display(match.away_team),
+                        "match_date": match.match_datetime.date().isoformat()
+                        if match.match_datetime
+                        else date.today().isoformat(),
+                        "season": "2024-25",
+                        "age_group": config.age_group,
+                        "match_type": "League",
+                        "division": division_name,
+                        "division_id": division_id,
+                        "league": config.league,
+                        "home_score": match.home_score
+                        if isinstance(match.home_score, int)
+                        else None,
+                        "away_score": match.away_score
+                        if isinstance(match.away_score, int)
+                        else None,
+                        "match_status": match.match_status or "scheduled",
+                        "external_match_id": match.match_id,
+                        "location": match.location,
+                        "source": "match-scraper",
+                    }
+
+                    # Compare and log
+                    status, changes = comparison.compare_match(
+                        match.match_id, match_dict
+                    )
+                    if status == "discovered":
+                        audit_logger.log_match_discovered(match.match_id, match_dict)
+                        discovered_count += 1
+                    elif status == "updated":
+                        audit_logger.log_match_updated(
+                            match.match_id, match_dict, changes
+                        )
+                        updated_count += 1
+                    else:
+                        audit_logger.log_match_unchanged(match.match_id, match_dict)
+                        unchanged_count += 1
+
+        # Save current state and log run completion
+        if matches:
+            # Build state from all matches
+            all_match_dicts = []
+            for match in matches:
+                division_name = (
+                    config.conference
+                    if config.league == "Academy" and config.conference
+                    else config.division
+                    if config.division
+                    else None
+                )
+                division_id = get_division_id_for_league(
+                    league=config.league,
+                    division=config.division,
+                    conference=config.conference,
+                )
+                match_dict = {
+                    "home_team": normalize_team_name_for_display(match.home_team),
+                    "away_team": normalize_team_name_for_display(match.away_team),
+                    "match_date": match.match_datetime.date().isoformat()
+                    if match.match_datetime
+                    else date.today().isoformat(),
+                    "season": "2024-25",
+                    "age_group": config.age_group,
+                    "match_type": "League",
+                    "division": division_name,
+                    "division_id": division_id,
+                    "league": config.league,
+                    "home_score": match.home_score
+                    if isinstance(match.home_score, int)
+                    else None,
+                    "away_score": match.away_score
+                    if isinstance(match.away_score, int)
+                    else None,
+                    "match_status": match.match_status or "scheduled",
+                    "external_match_id": match.match_id,
+                    "location": match.location,
+                    "source": "match-scraper",
+                }
+                all_match_dicts.append(match_dict)
+
+            state = comparison.build_state_from_matches(all_match_dicts)
+            comparison.save_current_state(run_id, state)
+
+        # Log run completion
+        run_metadata.total_matches = len(matches) if matches else 0
+        summary = RunSummary(
+            total_matches=len(matches) if matches else 0,
+            discovered=discovered_count,
+            updated=updated_count,
+            unchanged=unchanged_count,
+            queue_submitted=queue_submitted_count,
+            queue_failed=queue_failed_count,
+        )
+        audit_logger.log_run_completed(summary)
 
         # Filter for upcoming only if requested
         if upcoming_only:
@@ -1918,6 +2094,11 @@ async def inspect_browser(headless: bool, timeout: int) -> None:
 # Create config subcommand group
 config_app = typer.Typer(name="config", help="⚙️ Configuration management")
 app.add_typer(config_app, name="config")
+
+# Import and add audit commands
+from src.cli.audit_commands import app as audit_app  # noqa: E402
+
+app.add_typer(audit_app, name="audit")
 
 
 @config_app.command("show")

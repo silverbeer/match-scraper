@@ -12,7 +12,7 @@ via the JSON schema and contract tests, not shared Python code.
 from datetime import date as DateType
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class MatchData(BaseModel):
@@ -34,6 +34,7 @@ class MatchData(BaseModel):
     # Optional fields
     division: str | None = Field(None, description="Division name")
     division_id: int | None = Field(None, ge=1, description="Division ID")
+    league: str | None = Field(None, description="League name (Homegrown or Academy)")
     home_score: int | None = Field(None, ge=0, description="Home team score")
     away_score: int | None = Field(None, ge=0, description="Away team score")
     match_status: (
@@ -47,6 +48,14 @@ class MatchData(BaseModel):
     source: str | None = Field(
         None, description="Data source (e.g., 'match-scraper', 'manual')"
     )
+
+    @field_validator("league")
+    @classmethod
+    def validate_league(cls, v: str | None) -> str | None:
+        """Validate league is either Homegrown or Academy."""
+        if v is not None and v not in ["Homegrown", "Academy"]:
+            raise ValueError("League must be 'Homegrown' or 'Academy'")
+        return v
 
     class Config:
         """Pydantic configuration."""
@@ -62,6 +71,7 @@ class MatchData(BaseModel):
                     "match_type": "League",
                     "division": "Northeast",
                     "division_id": 41,
+                    "league": "Homegrown",
                     "home_score": 2,
                     "away_score": 1,
                     "match_status": "completed",

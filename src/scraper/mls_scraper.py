@@ -486,6 +486,26 @@ class MLSScraper:
                         competition=self.config.competition,
                     )
 
+                # Apply client-side club filtering if specified
+                # This serves as a fallback when website-side filtering fails
+                if self.config.club:
+                    total_before_filter = len(matches)
+                    matches = [
+                        m
+                        for m in matches
+                        if m.home_team == self.config.club
+                        or m.away_team == self.config.club
+                    ]
+                    logger.info(
+                        "Applied client-side club filter",
+                        extra={
+                            "club": self.config.club,
+                            "matches_before": total_before_filter,
+                            "matches_after": len(matches),
+                            "filtered_out": total_before_filter - len(matches),
+                        },
+                    )
+
                 # Update metrics based on extracted matches
                 games_scheduled = len(
                     [m for m in matches if m.match_status == "scheduled"]

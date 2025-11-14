@@ -118,3 +118,13 @@ spec:
               capabilities:
                 drop:
                 - ALL
+            # Volume mounts
+            volumeMounts:
+            - name: audit-logs
+              mountPath: /var/log/scraper/audit
+          # Volumes
+          volumes:
+          - name: audit-logs
+            hostPath:
+              path: /Users/silverbeer/gitrepos/match-scraper/audit
+              type: DirectoryOrCreate

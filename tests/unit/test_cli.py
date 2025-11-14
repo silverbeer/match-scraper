@@ -65,12 +65,13 @@ class TestCliUtilityFunctions:
 
     def test_create_config_basic(self):
         """Test basic config creation using offset-based dates."""
-        # Use start_offset=1 (1 day back) and end_offset=1 (1 day forward)
+        # Use start_offset=-1 (1 day back) and end_offset=1 (1 day forward)
+        # New convention: negative = past, positive = future
         config = create_config(
             age_group="U14",
             league="Homegrown",
             division="Northeast",
-            start_offset=1,
+            start_offset=-1,
             end_offset=1,
         )
 
@@ -81,7 +82,7 @@ class TestCliUtilityFunctions:
 
         # Test date range calculation with offsets
         today = date.today()
-        expected_start = today - timedelta(days=1)  # start_offset=1 means 1 day back
+        expected_start = today + timedelta(days=-1)  # start_offset=-1 means 1 day back
         expected_end = today + timedelta(days=1)  # end_offset=1 means 1 day forward
 
         assert config.start_date == expected_start
