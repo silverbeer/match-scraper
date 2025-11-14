@@ -70,7 +70,7 @@ data:
       ],
       "queues": [
         {
-          "name": "matches.prod",
+          "name": "matches.local",
           "vhost": "/",
           "durable": true,
           "auto_delete": false,
@@ -92,7 +92,7 @@ data:
         {
           "source": "matches-fanout",
           "vhost": "/",
-          "destination": "matches.prod",
+          "destination": "matches.local",
           "destination_type": "queue",
           "routing_key": "",
           "arguments": {}
