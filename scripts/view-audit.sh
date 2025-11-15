@@ -206,8 +206,14 @@ format_event() {
           --arg RED $'\033[0;31m' \
           --arg MAGENTA $'\033[0;35m' \
           --arg NC $'\033[0m' '
-        # Format timestamp
-        (.timestamp // "" | split("T")[1] // "" | split(".")[0] // "??:??:??") as $time |
+        # Format timestamp - Convert UTC to EDT and format as MM-DD-YYYY:HH:MM:SS
+        (.timestamp // "" |
+         if . != "" then
+             # Strip microseconds and add Z for ISO8601 parsing
+             ((. | split(".")[0]) + "Z" | fromdateiso8601 - 14400) | strftime("%m-%d-%Y:%H:%M:%S")
+         else
+             "??-??-????:??:??:??"
+         end) as $time |
 
         # Format based on event type
         if .event_type == "run_started" then
