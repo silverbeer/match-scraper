@@ -8,8 +8,8 @@ metadata:
     league: homegrown
     age-group: u14
 spec:
-  # Run daily at 6 AM UTC
-  schedule: "0 6 * * *"
+  # Run daily at 7 AM EST (12 PM UTC)
+  schedule: "0 12 * * *"
   timeZone: "UTC"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
