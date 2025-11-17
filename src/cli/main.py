@@ -125,6 +125,23 @@ def normalize_team_name_for_display(team_name: str) -> str:
     return TEAM_NAME_MAPPINGS.get(team_name, team_name)
 
 
+def apply_league_specific_team_name(team_name: str, league: str) -> str:
+    """Apply league-specific suffixes to team names for disambiguation.
+
+    Args:
+        team_name: The normalized team name
+        league: The league being scraped (e.g., "Homegrown", "Academy")
+
+    Returns:
+        Team name with league-specific suffix if needed
+    """
+    # IFA has teams in both Homegrown and Academy leagues
+    # Add "HG" suffix for Homegrown to distinguish from Academy teams
+    if team_name == "IFA" and league == "Homegrown":
+        return "IFA HG"
+    return team_name
+
+
 def setup_environment(verbose: bool = False) -> None:
     """Set up environment variables for CLI usage."""
     # Load .env file first
@@ -837,8 +854,79 @@ def scrape(
         queue_submitted_count = 0
         queue_failed_count = 0
 
+        # Build match dicts and perform audit logging for ALL matches
+        # This happens regardless of queue submission
+        match_dicts = []
+        if matches:
+            for match in matches:
+                # Determine division/conference name based on league type
+                # Academy league uses conference, Homegrown uses division
+                division_name = (
+                    config.conference
+                    if config.league == "Academy" and config.conference
+                    else config.division
+                    if config.division
+                    else None
+                )
+
+                # Look up division_id using the appropriate league type
+                division_id = get_division_id_for_league(
+                    league=config.league,
+                    division=config.division,
+                    conference=config.conference,
+                )
+
+                # Normalize team names and apply league-specific suffixes
+                home_team_normalized = normalize_team_name_for_display(match.home_team)
+                away_team_normalized = normalize_team_name_for_display(match.away_team)
+                home_team_final = apply_league_specific_team_name(
+                    home_team_normalized, config.league
+                )
+                away_team_final = apply_league_specific_team_name(
+                    away_team_normalized, config.league
+                )
+
+                match_dict = {
+                    "home_team": home_team_final,
+                    "away_team": away_team_final,
+                    "match_date": match.match_datetime.date().isoformat()
+                    if match.match_datetime
+                    else date.today().isoformat(),
+                    "season": "2024-25",  # TODO: derive from match date
+                    "age_group": config.age_group,
+                    "match_type": "League",
+                    "division": division_name,
+                    "division_id": division_id,
+                    "league": config.league,  # Add league field
+                    # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
+                    "home_score": match.home_score
+                    if isinstance(match.home_score, int)
+                    else None,
+                    "away_score": match.away_score
+                    if isinstance(match.away_score, int)
+                    else None,
+                    "match_status": match.match_status or "scheduled",
+                    "external_match_id": match.match_id,
+                    "location": match.location,
+                    "source": "match-scraper",  # Data source identifier
+                }
+
+                # Compare match and log audit event
+                status, changes = comparison.compare_match(match.match_id, match_dict)
+                if status == "discovered":
+                    audit_logger.log_match_discovered(match.match_id, match_dict)
+                    discovered_count += 1
+                elif status == "updated":
+                    audit_logger.log_match_updated(match.match_id, match_dict, changes)
+                    updated_count += 1
+                else:  # unchanged
+                    audit_logger.log_match_unchanged(match.match_id, match_dict)
+                    unchanged_count += 1
+
+                match_dicts.append(match_dict)
+
         # Submit to RabbitMQ queue if requested
-        if submit_queue and matches:
+        if submit_queue and match_dicts:
             from src.celery.queue_client import MatchQueueClient
 
             console.print("\n[cyan]📨 Submitting matches to RabbitMQ...[/cyan]")
@@ -855,75 +943,6 @@ def scrape(
                         "[red]❌ Cannot connect to RabbitMQ - matches not queued[/red]"
                     )
                 else:
-                    # Convert Match objects to dict for queue submission
-                    match_dicts = []
-                    for match in matches:
-                        # Determine division/conference name based on league type
-                        # Academy league uses conference, Homegrown uses division
-                        division_name = (
-                            config.conference
-                            if config.league == "Academy" and config.conference
-                            else config.division
-                            if config.division
-                            else None
-                        )
-
-                        # Look up division_id using the appropriate league type
-                        division_id = get_division_id_for_league(
-                            league=config.league,
-                            division=config.division,
-                            conference=config.conference,
-                        )
-
-                        match_dict = {
-                            "home_team": normalize_team_name_for_display(
-                                match.home_team
-                            ),
-                            "away_team": normalize_team_name_for_display(
-                                match.away_team
-                            ),
-                            "match_date": match.match_datetime.date().isoformat()
-                            if match.match_datetime
-                            else date.today().isoformat(),
-                            "season": "2024-25",  # TODO: derive from match date
-                            "age_group": config.age_group,
-                            "match_type": "League",
-                            "division": division_name,
-                            "division_id": division_id,
-                            "league": config.league,  # Add league field
-                            # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
-                            "home_score": match.home_score
-                            if isinstance(match.home_score, int)
-                            else None,
-                            "away_score": match.away_score
-                            if isinstance(match.away_score, int)
-                            else None,
-                            "match_status": match.match_status or "scheduled",
-                            "external_match_id": match.match_id,
-                            "location": match.location,
-                            "source": "match-scraper",  # Data source identifier
-                        }
-
-                        # Compare match and log audit event
-                        status, changes = comparison.compare_match(
-                            match.match_id, match_dict
-                        )
-                        if status == "discovered":
-                            audit_logger.log_match_discovered(
-                                match.match_id, match_dict
-                            )
-                            discovered_count += 1
-                        elif status == "updated":
-                            audit_logger.log_match_updated(
-                                match.match_id, match_dict, changes
-                            )
-                            updated_count += 1
-                        else:  # unchanged
-                            audit_logger.log_match_unchanged(match.match_id, match_dict)
-                            unchanged_count += 1
-
-                        match_dicts.append(match_dict)
-
                     # Submit batch
                     task_ids = queue_client.submit_matches_batch(match_dicts)
 
@@ -947,112 +966,17 @@ def scrape(
             except Exception as e:
                 console.print(f"[red]❌ Queue submission failed: {e}[/red]")
                 # Log queue failures for all matches
-                for match in matches:
-                    audit_logger.log_queue_failed(match.match_id, str(e))
+                for match_dict in match_dicts:
+                    audit_logger.log_queue_failed(
+                        match_dict["external_match_id"], str(e)
+                    )
                     queue_failed_count += 1
                 if verbose:
                     console.print_exception()
-        else:
-            # If not submitting to queue, still log match discovery/updates
-            if matches:
-                for match in matches:
-                    # Build match_dict for comparison (without submitting)
-                    division_name = (
-                        config.conference
-                        if config.league == "Academy" and config.conference
-                        else config.division
-                        if config.division
-                        else None
-                    )
-                    division_id = get_division_id_for_league(
-                        league=config.league,
-                        division=config.division,
-                        conference=config.conference,
-                    )
 
-                    match_dict = {
-                        "home_team": normalize_team_name_for_display(match.home_team),
-                        "away_team": normalize_team_name_for_display(match.away_team),
-                        "match_date": match.match_datetime.date().isoformat()
-                        if match.match_datetime
-                        else date.today().isoformat(),
-                        "season": "2024-25",
-                        "age_group": config.age_group,
-                        "match_type": "League",
-                        "division": division_name,
-                        "division_id": division_id,
-                        "league": config.league,
-                        "home_score": match.home_score
-                        if isinstance(match.home_score, int)
-                        else None,
-                        "away_score": match.away_score
-                        if isinstance(match.away_score, int)
-                        else None,
-                        "match_status": match.match_status or "scheduled",
-                        "external_match_id": match.match_id,
-                        "location": match.location,
-                        "source": "match-scraper",
-                    }
-
-                    # Compare and log
-                    status, changes = comparison.compare_match(
-                        match.match_id, match_dict
-                    )
-                    if status == "discovered":
-                        audit_logger.log_match_discovered(match.match_id, match_dict)
-                        discovered_count += 1
-                    elif status == "updated":
-                        audit_logger.log_match_updated(
-                            match.match_id, match_dict, changes
-                        )
-                        updated_count += 1
-                    else:
-                        audit_logger.log_match_unchanged(match.match_id, match_dict)
-                        unchanged_count += 1
-
-        # Save current state and log run completion
-        if matches:
-            # Build state from all matches
-            all_match_dicts = []
-            for match in matches:
-                division_name = (
-                    config.conference
-                    if config.league == "Academy" and config.conference
-                    else config.division
-                    if config.division
-                    else None
-                )
-                division_id = get_division_id_for_league(
-                    league=config.league,
-                    division=config.division,
-                    conference=config.conference,
-                )
-                match_dict = {
-                    "home_team": normalize_team_name_for_display(match.home_team),
-                    "away_team": normalize_team_name_for_display(match.away_team),
-                    "match_date": match.match_datetime.date().isoformat()
-                    if match.match_datetime
-                    else date.today().isoformat(),
-                    "season": "2024-25",
-                    "age_group": config.age_group,
-                    "match_type": "League",
-                    "division": division_name,
-                    "division_id": division_id,
-                    "league": config.league,
-                    "home_score": match.home_score
-                    if isinstance(match.home_score, int)
-                    else None,
-                    "away_score": match.away_score
-                    if isinstance(match.away_score, int)
-                    else None,
-                    "match_status": match.match_status or "scheduled",
-                    "external_match_id": match.match_id,
-                    "location": match.location,
-                    "source": "match-scraper",
-                }
-                all_match_dicts.append(match_dict)
-
-            state = comparison.build_state_from_matches(all_match_dicts)
+        # Save current state
+        if match_dicts:
+            state = comparison.build_state_from_matches(match_dicts)
             comparison.save_current_state(run_id, state)
 
         # Log run completion
