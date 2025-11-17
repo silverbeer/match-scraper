@@ -381,7 +381,7 @@ class MLSMatchExtractor:
                 return False
 
             # Check if "Next" button exists and is enabled
-            next_button = self.iframe_content.get_by_text("Next")
+            next_button = self.iframe_content.get_by_text("Next", exact=True)
             button_count = await next_button.count()
 
             if button_count == 0:
@@ -420,7 +420,7 @@ class MLSMatchExtractor:
             logger.debug("Clicking Next button to navigate to next page")
 
             # Click the "Next" button
-            next_button = self.iframe_content.get_by_text("Next")
+            next_button = self.iframe_content.get_by_text("Next", exact=True)
             await next_button.first.click()
 
             logger.debug("Successfully clicked Next button")
