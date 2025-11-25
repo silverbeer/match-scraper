@@ -11,7 +11,7 @@ import atexit
 import json
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -334,7 +334,6 @@ def display_matches_table(matches: list[Match]) -> None:
     table.add_column("Venue", style="blue", min_width=20)
 
     # Sort matches by date
-    from datetime import datetime
 
     sorted_matches = sorted(
         matches, key=lambda m: m.match_datetime if m.match_datetime else datetime.min
@@ -827,7 +826,7 @@ def scrape(
         metrics = get_metrics()
 
         # Generate run ID for audit logging
-        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         run_id = f"{timestamp}-{secrets.token_hex(3)}"
 
         # Initialize audit logger
@@ -1232,7 +1231,6 @@ def test_quiet() -> None:
 
     Shows how quiet mode looks for scripting purposes.
     """
-    from datetime import datetime
 
     # Create sample matches
     sample_matches = [
@@ -1292,7 +1290,6 @@ def demo() -> None:
 
     Shows how the CLI looks with sample match data without scraping.
     """
-    from datetime import datetime
 
     display_header()
 
