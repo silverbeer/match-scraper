@@ -243,10 +243,13 @@ class MLSMatchExtractor:
 
     async def _get_total_pages(self) -> int:
         """
-        Determine the total number of pages by looking for page number buttons.
+        Determine the total number of pages by looking for pagination controls.
+
+        Uses a more reliable approach: checks for "Next" button presence and
+        looks for pagination buttons within proper pagination containers.
 
         Returns:
-            Total number of pages, or 0 if cannot determine
+            Total number of pages, or 1 if cannot determine (default to single page)
         """
         try:
             if not self.iframe_content:
@@ -254,53 +257,89 @@ class MLSMatchExtractor:
                 logger.info(
                     "⚠️  WARNING: No iframe content available - cannot detect pagination"
                 )
-                return 0
+                return 1  # Default to 1 page instead of 0
 
-            logger.info("🔍 Scanning for pagination buttons in results...")
+            logger.info("🔍 Scanning for pagination controls in results...")
 
-            # Look for page number buttons (1, 2, 3, etc.)
-            # We'll check for numbers 1-20 and find the highest one
-            max_page = 0
+            # First, check if pagination exists at all by looking for common pagination containers
+            pagination_selectors = [
+                ".pagination",
+                "nav[aria-label*='pagination']",
+                "[class*='pagination']",
+                ".pager",
+                "[class*='pager']",
+            ]
 
-            for page_num in range(1, 21):  # Check up to 20 pages
+            pagination_container = None
+            for selector in pagination_selectors:
                 try:
-                    page_button = self.iframe_content.get_by_text(
-                        str(page_num), exact=True
+                    container = await self.iframe_content.query_selector(selector)
+                    if container:
+                        pagination_container = container
+                        logger.info(f"  ✓ Found pagination container: {selector}")
+                        break
+                except Exception:
+                    continue
+
+            if not pagination_container:
+                # No pagination container found - check for Next button as fallback
+                try:
+                    next_button = self.iframe_content.get_by_text("Next", exact=True)
+                    next_count = await next_button.count()
+                    if next_count == 0:
+                        logger.info(
+                            "📄 No pagination controls found - single page of results"
+                        )
+                        return 1
+                except Exception:
+                    logger.info(
+                        "📄 No pagination controls found - single page of results"
                     )
+                    return 1
+
+            # If we have a pagination container, look for page numbers within it
+            max_page = 1
+
+            # Look for page number buttons within the pagination container
+            for page_num in range(2, 21):  # Start from 2, we already know page 1 exists
+                try:
+                    # Use locator within the pagination container only
+                    if pagination_container:
+                        page_button = pagination_container.get_by_text(
+                            str(page_num), exact=True
+                        )
+                    else:
+                        # Fallback: look for Next button and estimate pages
+                        break
+
                     count = await page_button.count()
 
                     if count > 0:
-                        # Verify this is actually a page button, not just any text with that number
-                        # by checking if it's clickable or in a pagination context
                         max_page = page_num
-                        logger.info(f"  ✓ Found pagination button for page {page_num}")
+                        logger.debug(f"  ✓ Found pagination button for page {page_num}")
                     else:
                         # If we don't find a sequential number, stop checking
-                        if max_page > 0:
-                            logger.debug(
-                                f"Stopping scan at page {page_num} (no more buttons found)"
-                            )
-                            break
+                        logger.debug(
+                            f"Stopping scan at page {page_num} (no more buttons found)"
+                        )
+                        break
                 except Exception as e:
                     logger.debug(f"Error checking for page {page_num}: {e}")
-                    if max_page > 0:
-                        break
+                    break
 
-            if max_page > 0:
+            if max_page > 1:
                 logger.info(
                     f"📄 PAGINATION DETECTED: {max_page} page(s) of results found"
                 )
-                return max_page
             else:
-                logger.info(
-                    "📄 No pagination buttons found - assuming single page of results"
-                )
-                return 1
+                logger.info("📄 Single page of results")
+
+            return max_page
 
         except Exception as e:
             logger.error(f"Error detecting total pages: {e}")
             logger.info(f"❌ ERROR detecting pages: {e}")
-            return 0
+            return 1  # Default to 1 page on error
 
     async def _extract_from_current_page(
         self, age_group: str, division: str, competition: Optional[str] = None
@@ -1469,41 +1508,21 @@ class MLSMatchExtractor:
                         home_score_val = int(score_match.group(1))
                         away_score_val = int(score_match.group(2))
 
-                        # Check if this is a placeholder score for games without real scores
-                        # Only treat 0-0 as a placeholder - other scores might be real
-                        placeholder_scores = [
-                            (0, 0)
-                        ]  # TODO: Get from config when available
-                        if (home_score_val, away_score_val) in placeholder_scores:
-                            # This is likely a placeholder - treat as TBD
-                            home_score = "TBD"
-                            away_score = "TBD"
-                            logger.info(
-                                "Detected placeholder score, treating as TBD",
-                                extra={
-                                    "match_date": match_date.isoformat()
-                                    if match_date
-                                    else None,
-                                    "original_score": cleaned_score,
-                                    "status_text": status_text,
-                                    "placeholder_score": f"{home_score_val}-{away_score_val}",
-                                },
-                            )
-                        else:
-                            # Real scores
-                            home_score = home_score_val
-                            away_score = away_score_val
-                            logger.info(
-                                "Parsed real score",
-                                extra={
-                                    "match_date": match_date.isoformat()
-                                    if match_date
-                                    else None,
-                                    "original_score": cleaned_score,
-                                    "parsed_score": f"{home_score_val}-{away_score_val}",
-                                    "status_text": status_text,
-                                },
-                            )
+                        # All numeric scores (including 0-0 draws) are real scores
+                        # The MLS website shows actual scores, not placeholders
+                        home_score = home_score_val
+                        away_score = away_score_val
+                        logger.info(
+                            "Parsed score",
+                            extra={
+                                "match_date": match_date.isoformat()
+                                if match_date
+                                else None,
+                                "original_score": cleaned_score,
+                                "parsed_score": f"{home_score_val}-{away_score_val}",
+                                "status_text": status_text,
+                            },
+                        )
 
             return home_score, away_score, status
 
