@@ -151,18 +151,19 @@ class MLSMatchExtractor:
             )
             raise MatchExtractionError(f"Failed to extract matches: {e}") from e
 
+    MAX_PAGES = 20
+
     async def _extract_all_pages(
         self, age_group: str, division: str, competition: Optional[str] = None
     ) -> list[Match]:
         """
-        Extract matches from all paginated pages.
+        Extract matches from all paginated pages using crawl-based pagination.
 
         Strategy:
         1. Initialize iframe access
-        2. Detect total number of pages by looking for page number buttons
-        3. Extract matches from page 1
-        4. For each additional page: click Next, wait, extract matches
-        5. Return all matches from all pages
+        2. Extract matches from page 1
+        3. Check for a Next button; if present and enabled, click it and repeat
+        4. Stop when no Next button, Next is disabled, or MAX_PAGES reached
 
         Args:
             age_group: Age group for the matches
@@ -172,15 +173,16 @@ class MLSMatchExtractor:
         Returns:
             List of all matches from all pages
         """
+        import asyncio
+
         all_matches = []
 
-        # CRITICAL: Access iframe content first before pagination detection
-        logger.info("Initializing iframe access for pagination detection...")
+        # CRITICAL: Access iframe content first
+        logger.info("Initializing iframe access for pagination...")
         if not await self._access_iframe_content():
             logger.warning(
-                "Cannot access iframe content - pagination detection will fail"
+                "Cannot access iframe content - falling back to single page extraction"
             )
-            # Fall back to single page extraction
             return await self._extract_from_current_page(
                 age_group, division, competition
             )
@@ -188,26 +190,12 @@ class MLSMatchExtractor:
         # Wait for results to load
         logger.info("Waiting for results to load...")
         if not await self._wait_for_results():
-            logger.warning(
-                "Results not loaded - pagination detection may not work correctly"
-            )
+            logger.warning("Results not loaded - attempting extraction anyway")
 
-        # Now determine how many pages exist
-        total_pages = await self._get_total_pages()
+        current_page = 1
+        while current_page <= self.MAX_PAGES:
+            logger.info(f"Extracting matches from page {current_page}")
 
-        if total_pages == 0:
-            logger.warning(
-                "Could not determine number of pages, will try single page extraction"
-            )
-            total_pages = 1
-
-        logger.info(f"Detected {total_pages} page(s) of results")
-
-        # Extract matches from each page
-        for current_page in range(1, total_pages + 1):
-            logger.info(f"Extracting matches from page {current_page} of {total_pages}")
-
-            # Extract matches from current page
             page_matches = await self._extract_from_current_page(
                 age_group, division, competition
             )
@@ -215,131 +203,36 @@ class MLSMatchExtractor:
             if page_matches:
                 all_matches.extend(page_matches)
                 logger.info(
-                    f"Page {current_page}/{total_pages}: Found {len(page_matches)} matches "
+                    f"Page {current_page}: Found {len(page_matches)} matches "
                     f"(total so far: {len(all_matches)})"
                 )
             else:
-                logger.info(f"Page {current_page}/{total_pages}: No matches found")
+                logger.info(f"Page {current_page}: No matches found")
 
-            # If there are more pages, navigate to the next one
-            if current_page < total_pages:
-                logger.info(f"Navigating to page {current_page + 1}")
+            # Check if there's a next page
+            if current_page >= self.MAX_PAGES:
+                logger.info(f"Reached MAX_PAGES limit ({self.MAX_PAGES}), stopping")
+                break
 
-                if not await self._navigate_to_next_page():
-                    logger.warning(
-                        f"Failed to navigate to page {current_page + 1}, stopping pagination"
-                    )
-                    break
+            if not await self._has_next_page():
+                logger.info("No next page available, pagination complete")
+                break
 
-                # Wait for new results to load
-                import asyncio
+            # Navigate to next page
+            if not await self._navigate_to_next_page():
+                logger.warning(
+                    f"Failed to navigate to page {current_page + 1}, stopping pagination"
+                )
+                break
 
-                await asyncio.sleep(2)
+            current_page += 1
+            await asyncio.sleep(2)
 
         logger.info(
-            f"Pagination complete: Extracted {len(all_matches)} total matches from {current_page} page(s)"
+            f"Pagination complete: Extracted {len(all_matches)} total matches "
+            f"from {current_page} page(s)"
         )
         return all_matches
-
-    async def _get_total_pages(self) -> int:
-        """
-        Determine the total number of pages by looking for pagination controls.
-
-        Uses a more reliable approach: checks for "Next" button presence and
-        looks for pagination buttons within proper pagination containers.
-
-        Returns:
-            Total number of pages, or 1 if cannot determine (default to single page)
-        """
-        try:
-            if not self.iframe_content:
-                logger.warning("No iframe content available to detect pages")
-                logger.info(
-                    "⚠️  WARNING: No iframe content available - cannot detect pagination"
-                )
-                return 1  # Default to 1 page instead of 0
-
-            logger.info("🔍 Scanning for pagination controls in results...")
-
-            # First, check if pagination exists at all by looking for common pagination containers
-            pagination_selectors = [
-                ".pagination",
-                "nav[aria-label*='pagination']",
-                "[class*='pagination']",
-                ".pager",
-                "[class*='pager']",
-            ]
-
-            pagination_container = None
-            for selector in pagination_selectors:
-                try:
-                    container = await self.iframe_content.query_selector(selector)
-                    if container:
-                        pagination_container = container
-                        logger.info(f"  ✓ Found pagination container: {selector}")
-                        break
-                except Exception:
-                    continue
-
-            if not pagination_container:
-                # No pagination container found - check for Next button as fallback
-                try:
-                    next_button = self.iframe_content.get_by_text("Next", exact=True)
-                    next_count = await next_button.count()
-                    if next_count == 0:
-                        logger.info(
-                            "📄 No pagination controls found - single page of results"
-                        )
-                        return 1
-                except Exception:
-                    logger.info(
-                        "📄 No pagination controls found - single page of results"
-                    )
-                    return 1
-
-            # If we have a pagination container, look for page numbers within it
-            max_page = 1
-
-            # Look for page number buttons within the pagination container
-            for page_num in range(2, 21):  # Start from 2, we already know page 1 exists
-                try:
-                    # Use locator within the pagination container only
-                    if pagination_container:
-                        page_button = pagination_container.get_by_text(
-                            str(page_num), exact=True
-                        )
-                    else:
-                        # Fallback: look for Next button and estimate pages
-                        break
-
-                    count = await page_button.count()
-
-                    if count > 0:
-                        max_page = page_num
-                        logger.debug(f"  ✓ Found pagination button for page {page_num}")
-                    else:
-                        # If we don't find a sequential number, stop checking
-                        logger.debug(
-                            f"Stopping scan at page {page_num} (no more buttons found)"
-                        )
-                        break
-                except Exception as e:
-                    logger.debug(f"Error checking for page {page_num}: {e}")
-                    break
-
-            if max_page > 1:
-                logger.info(
-                    f"📄 PAGINATION DETECTED: {max_page} page(s) of results found"
-                )
-            else:
-                logger.info("📄 Single page of results")
-
-            return max_page
-
-        except Exception as e:
-            logger.error(f"Error detecting total pages: {e}")
-            logger.info(f"❌ ERROR detecting pages: {e}")
-            return 1  # Default to 1 page on error
 
     async def _extract_from_current_page(
         self, age_group: str, division: str, competition: Optional[str] = None
@@ -408,33 +301,77 @@ class MLSMatchExtractor:
             )
             raise MatchExtractionError(f"Failed to extract matches: {e}") from e
 
+    # Selectors tried (in order) when looking for the "Next" pagination control
+    NEXT_BUTTON_SELECTORS = [
+        'a:has-text("Next")',
+        'button:has-text("Next")',
+        "[aria-label*='next' i]",
+        ".next a",
+        ".pagination .next",
+    ]
+
+    async def _find_next_button(self):
+        """Locate the Next pagination element using multiple selector strategies.
+
+        Returns:
+            The first matching Playwright locator/element, or None.
+        """
+        if not self.iframe_content:
+            return None
+
+        # Try CSS selectors first
+        for selector in self.NEXT_BUTTON_SELECTORS:
+            try:
+                locator = self.iframe_content.locator(selector)
+                if await locator.count() > 0:
+                    logger.debug(f"Found Next button via selector: {selector}")
+                    return locator.first
+            except Exception:
+                continue
+
+        # Fallback: Playwright text locator (exact match)
+        try:
+            locator = self.iframe_content.get_by_text("Next", exact=True)
+            if await locator.count() > 0:
+                logger.debug("Found Next button via get_by_text('Next')")
+                return locator.first
+        except Exception:
+            pass
+
+        return None
+
     async def _has_next_page(self) -> bool:
         """
         Check if there's a next page available in pagination.
+
+        Uses multiple selector strategies and checks both the element itself
+        and its parent ``<li>`` for the Bootstrap ``disabled`` pattern.
 
         Returns:
             True if next page exists, False otherwise
         """
         try:
-            if not self.iframe_content:
+            button = await self._find_next_button()
+            if not button:
+                logger.debug("Next button not found - no more pages")
                 return False
 
-            # Check if "Next" button exists and is enabled
-            next_button = self.iframe_content.get_by_text("Next", exact=True)
-            button_count = await next_button.count()
-
-            if button_count == 0:
-                logger.debug("Next button not found - no pagination")
-                return False
-
-            # Check if the button is disabled
-            first_button = next_button.first
-            is_disabled = await first_button.evaluate(
-                "el => el.classList.contains('disabled') || el.disabled || el.getAttribute('aria-disabled') === 'true'"
+            # Check if the element itself is disabled
+            is_disabled = await button.evaluate(
+                "el => el.classList.contains('disabled') || el.disabled "
+                "|| el.getAttribute('aria-disabled') === 'true'"
             )
-
             if is_disabled:
                 logger.debug("Next button is disabled - last page reached")
+                return False
+
+            # Bootstrap pattern: <li class="disabled"><a>Next</a></li>
+            parent_disabled = await button.evaluate(
+                "el => { const li = el.closest('li'); "
+                "return li ? li.classList.contains('disabled') : false; }"
+            )
+            if parent_disabled:
+                logger.debug("Next button parent <li> is disabled - last page reached")
                 return False
 
             logger.debug("Next button available - more pages exist")
@@ -448,19 +385,19 @@ class MLSMatchExtractor:
         """
         Navigate to the next page of results.
 
+        Uses the same flexible selector strategy as ``_has_next_page()``.
+
         Returns:
             True if navigation successful, False otherwise
         """
         try:
-            if not self.iframe_content:
-                logger.warning("No iframe content available for pagination")
+            button = await self._find_next_button()
+            if not button:
+                logger.warning("Next button not found - cannot navigate")
                 return False
 
             logger.debug("Clicking Next button to navigate to next page")
-
-            # Click the "Next" button
-            next_button = self.iframe_content.get_by_text("Next", exact=True)
-            await next_button.first.click()
+            await button.click()
 
             logger.debug("Successfully clicked Next button")
             return True

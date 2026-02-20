@@ -433,7 +433,11 @@ class TestMLSScraperWorkflow:
                 return_value=sample_matches,
             ),
             patch.object(mls_scraper, "_emit_final_metrics", new_callable=AsyncMock),
+            patch("src.scraper.mls_scraper.time") as mock_time,
         ):
+            # Simulate 500ms elapsed time
+            mock_time.time = MagicMock(side_effect=[1000.0, 1000.5])
+
             # Mock browser manager
             mls_scraper.browser_manager = MagicMock()
             mls_scraper.browser_manager.cleanup = AsyncMock()
@@ -600,21 +604,27 @@ class TestMLSScraperWorkflowExecution:
             )
         ]
 
-        # Mock the page context manager
-        mls_scraper.browser_manager.get_page = MagicMock()
-        mls_scraper.browser_manager.get_page.return_value.__aenter__ = MagicMock(
-            return_value=mock_page
-        )
-        mls_scraper.browser_manager.get_page.return_value.__aexit__ = MagicMock(
-            return_value=None
-        )
+        # Mock the async page context manager
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = mock_page
+        mock_ctx.__aexit__.return_value = None
+        mls_scraper.browser_manager.get_page = MagicMock(return_value=mock_ctx)
 
         with (
-            patch.object(mls_scraper, "_navigate_to_mls_website"),
-            patch.object(mls_scraper, "_apply_filters_with_retry"),
-            patch.object(mls_scraper, "_set_date_range_with_retry"),
             patch.object(
-                mls_scraper, "_extract_matches_with_retry", return_value=sample_matches
+                mls_scraper, "_navigate_to_mls_website", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper, "_apply_filters_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper, "_set_date_range_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper,
+                "_extract_matches_with_retry",
+                new_callable=AsyncMock,
+                return_value=sample_matches,
             ),
         ):
             matches = await mls_scraper._execute_scraping_workflow()
@@ -664,16 +674,26 @@ class TestMLSScraperWorkflowExecution:
             nonlocal exit_called
             exit_called = True
 
-        mls_scraper.browser_manager.get_page = MagicMock()
-        mls_scraper.browser_manager.get_page.return_value.__aenter__ = mock_aenter
-        mls_scraper.browser_manager.get_page.return_value.__aexit__ = mock_aexit
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = mock_aenter
+        mock_ctx.__aexit__ = mock_aexit
+        mls_scraper.browser_manager.get_page = MagicMock(return_value=mock_ctx)
 
         with (
-            patch.object(mls_scraper, "_navigate_to_mls_website"),
-            patch.object(mls_scraper, "_apply_filters_with_retry"),
-            patch.object(mls_scraper, "_set_date_range_with_retry"),
             patch.object(
-                mls_scraper, "_extract_matches_with_retry", return_value=sample_matches
+                mls_scraper, "_navigate_to_mls_website", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper, "_apply_filters_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper, "_set_date_range_with_retry", new_callable=AsyncMock
+            ),
+            patch.object(
+                mls_scraper,
+                "_extract_matches_with_retry",
+                new_callable=AsyncMock,
+                return_value=sample_matches,
             ),
         ):
             await mls_scraper._execute_scraping_workflow()
@@ -715,15 +735,17 @@ class TestMLSScraperNavigation:
 
         with (
             patch("src.scraper.mls_scraper.PageNavigator") as mock_navigator_class,
-            patch("src.scraper.mls_scraper.MLSConsentHandler") as mock_consent_class,
+            patch(
+                "src.scraper.consent_handler.MLSConsentHandler"
+            ) as mock_consent_class,
         ):
             mock_navigator = MagicMock()
-            mock_navigator.navigate_to = MagicMock(return_value=True)
+            mock_navigator.navigate_to = AsyncMock(return_value=True)
             mock_navigator_class.return_value = mock_navigator
 
             mock_consent = MagicMock()
-            mock_consent.handle_consent_banner = MagicMock(return_value=True)
-            mock_consent.wait_for_page_ready = MagicMock(return_value=True)
+            mock_consent.handle_consent_banner = AsyncMock(return_value=True)
+            mock_consent.wait_for_page_ready = AsyncMock(return_value=True)
             mock_consent_class.return_value = mock_consent
 
             await mls_scraper._navigate_to_mls_website(mock_page)
@@ -738,15 +760,17 @@ class TestMLSScraperNavigation:
 
         with (
             patch("src.scraper.mls_scraper.PageNavigator") as mock_navigator_class,
-            patch("src.scraper.mls_scraper.MLSConsentHandler") as mock_consent_class,
+            patch(
+                "src.scraper.consent_handler.MLSConsentHandler"
+            ) as mock_consent_class,
         ):
             mock_navigator = MagicMock()
-            mock_navigator.navigate_to = MagicMock(return_value=True)
+            mock_navigator.navigate_to = AsyncMock(return_value=True)
             mock_navigator_class.return_value = mock_navigator
 
             mock_consent = MagicMock()
-            mock_consent.handle_consent_banner = MagicMock(return_value=False)
-            mock_consent.wait_for_page_ready = MagicMock(return_value=True)
+            mock_consent.handle_consent_banner = AsyncMock(return_value=False)
+            mock_consent.wait_for_page_ready = AsyncMock(return_value=True)
             mock_consent_class.return_value = mock_consent
 
             # Should not raise error even if consent fails
@@ -772,12 +796,11 @@ class TestMLSScraperNavigation:
         )
         scraper = MLSScraper(mock_config)
         mock_page = MagicMock()
+        mock_page.wait_for_timeout = AsyncMock()
 
-        with patch(
-            "src.scraper.mls_scraper.ElementInteractor"
-        ) as mock_interactor_class:
+        with patch("src.scraper.browser.ElementInteractor") as mock_interactor_class:
             mock_interactor = MagicMock()
-            mock_interactor.click_element = MagicMock(return_value=True)
+            mock_interactor.click_element = AsyncMock(return_value=True)
             mock_interactor_class.return_value = mock_interactor
 
             await scraper._click_academy_tab(mock_page)
@@ -803,12 +826,10 @@ class TestMLSScraperNavigation:
         scraper = MLSScraper(mock_config)
         mock_page = MagicMock()
 
-        with patch(
-            "src.scraper.mls_scraper.ElementInteractor"
-        ) as mock_interactor_class:
+        with patch("src.scraper.browser.ElementInteractor") as mock_interactor_class:
             mock_interactor = MagicMock()
             # All selectors fail
-            mock_interactor.click_element = MagicMock(return_value=False)
+            mock_interactor.click_element = AsyncMock(return_value=False)
             mock_interactor_class.return_value = mock_interactor
 
             # Should log warning but not raise error
@@ -849,7 +870,7 @@ class TestMLSScraperRetryLogic:
             "src.scraper.mls_scraper.MLSFilterApplicator"
         ) as mock_applicator_class:
             mock_applicator = MagicMock()
-            mock_applicator.apply_all_filters = MagicMock(return_value=True)
+            mock_applicator.apply_all_filters = AsyncMock(return_value=True)
             mock_applicator_class.return_value = mock_applicator
 
             await mls_scraper._apply_filters_with_retry(mock_page)
@@ -865,11 +886,11 @@ class TestMLSScraperRetryLogic:
             patch(
                 "src.scraper.mls_scraper.MLSFilterApplicator"
             ) as mock_applicator_class,
-            patch("asyncio.sleep"),
+            patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             mock_applicator = MagicMock()
             # Fail twice, then succeed
-            mock_applicator.apply_all_filters = MagicMock(
+            mock_applicator.apply_all_filters = AsyncMock(
                 side_effect=[Exception("Fail 1"), Exception("Fail 2"), True]
             )
             mock_applicator_class.return_value = mock_applicator
@@ -887,7 +908,7 @@ class TestMLSScraperRetryLogic:
             "src.scraper.mls_scraper.MLSCalendarInteractor"
         ) as mock_calendar_class:
             mock_calendar = MagicMock()
-            mock_calendar.set_date_range_filter = MagicMock(return_value=True)
+            mock_calendar.set_date_range_filter = AsyncMock(return_value=True)
             mock_calendar_class.return_value = mock_calendar
 
             await mls_scraper._set_date_range_with_retry(mock_page)
@@ -903,13 +924,13 @@ class TestMLSScraperRetryLogic:
                 match_id="test_1",
                 home_team="Team A",
                 away_team="Team B",
-                match_datetime=datetime.now(),
+                match_datetime=datetime.now() + timedelta(days=7),
             )
         ]
 
         with patch("src.scraper.mls_scraper.MLSMatchExtractor") as mock_extractor_class:
             mock_extractor = MagicMock()
-            mock_extractor.extract_matches = MagicMock(return_value=sample_matches)
+            mock_extractor.extract_matches = AsyncMock(return_value=sample_matches)
             mock_extractor_class.return_value = mock_extractor
 
             matches = await mls_scraper._extract_matches_with_retry(mock_page)

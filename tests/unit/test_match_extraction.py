@@ -734,3 +734,177 @@ class TestMatchExtractionIntegration:
             assert in_progress_match.home_team == "Team E"
             assert in_progress_match.home_score == 1
             assert in_progress_match.away_score == 0
+
+
+class TestPagination:
+    """Tests for crawl-based pagination in MLSMatchExtractor."""
+
+    @pytest.fixture
+    def match_extractor(self):
+        page = AsyncMock()
+        return MLSMatchExtractor(page, timeout=5000)
+
+    def _make_match(self, idx: int) -> Match:
+        return Match(
+            match_id=f"match_{idx}",
+            home_team=f"Home {idx}",
+            away_team=f"Away {idx}",
+            match_datetime=datetime(2026, 3, 1, 15, 0),
+        )
+
+    @pytest.mark.asyncio
+    async def test_extract_all_pages_multi_page(self, match_extractor):
+        """Crawl two pages then stop when _has_next_page returns False."""
+        page1 = [self._make_match(1)]
+        page2 = [self._make_match(2)]
+
+        with (
+            patch.object(match_extractor, "_access_iframe_content", return_value=True),
+            patch.object(match_extractor, "_wait_for_results", return_value=True),
+            patch.object(
+                match_extractor,
+                "_extract_from_current_page",
+                side_effect=[page1, page2],
+            ),
+            patch.object(match_extractor, "_has_next_page", side_effect=[True, False]),
+            patch.object(match_extractor, "_navigate_to_next_page", return_value=True),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await match_extractor._extract_all_pages("U14", "NE")
+            assert len(result) == 2
+            assert result[0].match_id == "match_1"
+            assert result[1].match_id == "match_2"
+
+    @pytest.mark.asyncio
+    async def test_extract_all_pages_navigate_failure(self, match_extractor):
+        """Stop pagination when _navigate_to_next_page fails."""
+        page1 = [self._make_match(1)]
+
+        with (
+            patch.object(match_extractor, "_access_iframe_content", return_value=True),
+            patch.object(match_extractor, "_wait_for_results", return_value=True),
+            patch.object(
+                match_extractor,
+                "_extract_from_current_page",
+                return_value=page1,
+            ),
+            patch.object(match_extractor, "_has_next_page", return_value=True),
+            patch.object(match_extractor, "_navigate_to_next_page", return_value=False),
+        ):
+            result = await match_extractor._extract_all_pages("U14", "NE")
+            assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_extract_all_pages_max_pages_limit(self, match_extractor):
+        """Stop at MAX_PAGES even if _has_next_page would return True."""
+        match_extractor.MAX_PAGES = 2
+        page = [self._make_match(1)]
+
+        with (
+            patch.object(match_extractor, "_access_iframe_content", return_value=True),
+            patch.object(match_extractor, "_wait_for_results", return_value=True),
+            patch.object(
+                match_extractor,
+                "_extract_from_current_page",
+                return_value=page,
+            ),
+            patch.object(match_extractor, "_has_next_page", return_value=True),
+            patch.object(match_extractor, "_navigate_to_next_page", return_value=True),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await match_extractor._extract_all_pages("U14", "NE")
+            # Should stop after 2 pages (MAX_PAGES)
+            assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_find_next_button_css_selector(self, match_extractor):
+        """_find_next_button returns locator from CSS selector match."""
+        mock_locator = AsyncMock()
+        mock_locator.count = AsyncMock(return_value=1)
+        mock_locator.first = AsyncMock()
+
+        mock_frame = AsyncMock()
+        mock_frame.locator = lambda _sel: mock_locator
+        match_extractor.iframe_content = mock_frame
+
+        result = await match_extractor._find_next_button()
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_find_next_button_no_iframe(self, match_extractor):
+        """_find_next_button returns None when no iframe content."""
+        match_extractor.iframe_content = None
+        result = await match_extractor._find_next_button()
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_find_next_button_text_fallback(self, match_extractor):
+        """_find_next_button falls back to get_by_text when CSS selectors fail."""
+        css_locator = AsyncMock()
+        css_locator.count = AsyncMock(return_value=0)
+
+        text_locator = AsyncMock()
+        text_locator.count = AsyncMock(return_value=1)
+        text_locator.first = AsyncMock()
+
+        mock_frame = AsyncMock()
+        mock_frame.locator = lambda _sel: css_locator
+        mock_frame.get_by_text = lambda *a, **kw: text_locator
+        match_extractor.iframe_content = mock_frame
+
+        result = await match_extractor._find_next_button()
+        assert result is text_locator.first
+
+    @pytest.mark.asyncio
+    async def test_has_next_page_disabled_element(self, match_extractor):
+        """_has_next_page returns False when button itself is disabled."""
+        mock_button = AsyncMock()
+        mock_button.evaluate = AsyncMock(return_value=True)
+
+        with patch.object(
+            match_extractor, "_find_next_button", return_value=mock_button
+        ):
+            assert await match_extractor._has_next_page() is False
+
+    @pytest.mark.asyncio
+    async def test_has_next_page_parent_li_disabled(self, match_extractor):
+        """_has_next_page returns False when parent <li> has disabled class."""
+        mock_button = AsyncMock()
+        # First evaluate: element itself is NOT disabled
+        # Second evaluate: parent <li> IS disabled
+        mock_button.evaluate = AsyncMock(side_effect=[False, True])
+
+        with patch.object(
+            match_extractor, "_find_next_button", return_value=mock_button
+        ):
+            assert await match_extractor._has_next_page() is False
+
+    @pytest.mark.asyncio
+    async def test_has_next_page_enabled(self, match_extractor):
+        """_has_next_page returns True when button exists and is enabled."""
+        mock_button = AsyncMock()
+        mock_button.evaluate = AsyncMock(side_effect=[False, False])
+
+        with patch.object(
+            match_extractor, "_find_next_button", return_value=mock_button
+        ):
+            assert await match_extractor._has_next_page() is True
+
+    @pytest.mark.asyncio
+    async def test_navigate_to_next_page_success(self, match_extractor):
+        """_navigate_to_next_page clicks the button and returns True."""
+        mock_button = AsyncMock()
+
+        with patch.object(
+            match_extractor, "_find_next_button", return_value=mock_button
+        ):
+            result = await match_extractor._navigate_to_next_page()
+            assert result is True
+            mock_button.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_navigate_to_next_page_no_button(self, match_extractor):
+        """_navigate_to_next_page returns False when no button found."""
+        with patch.object(match_extractor, "_find_next_button", return_value=None):
+            result = await match_extractor._navigate_to_next_page()
+            assert result is False
