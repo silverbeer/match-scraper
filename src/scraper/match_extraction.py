@@ -301,17 +301,22 @@ class MLSMatchExtractor:
             )
             raise MatchExtractionError(f"Failed to extract matches: {e}") from e
 
-    # Selectors tried (in order) when looking for the "Next" pagination control
+    # Selectors tried (in order) when looking for the "Next" pagination control.
+    # Scoped to .pagination context to avoid matching Bootstrap Select dropdown
+    # options that also contain the text "Next".
     NEXT_BUTTON_SELECTORS = [
-        'a:has-text("Next")',
-        'button:has-text("Next")',
-        "[aria-label*='next' i]",
-        ".next a",
-        ".pagination .next",
+        '.pagination a:has-text("Next")',
+        ".pagination .next a",
+        ".pagination li:last-child a",
+        'ul.pagination a:has-text("Next")',
+        'nav[aria-label*="pagination" i] a:has-text("Next")',
     ]
 
     async def _find_next_button(self):
         """Locate the Next pagination element using multiple selector strategies.
+
+        Only returns visible elements to avoid matching hidden dropdown options
+        inside Bootstrap Select components.
 
         Returns:
             The first matching Playwright locator/element, or None.
@@ -319,24 +324,22 @@ class MLSMatchExtractor:
         if not self.iframe_content:
             return None
 
-        # Try CSS selectors first
+        # Try scoped pagination selectors first
         for selector in self.NEXT_BUTTON_SELECTORS:
             try:
                 locator = self.iframe_content.locator(selector)
-                if await locator.count() > 0:
-                    logger.debug(f"Found Next button via selector: {selector}")
-                    return locator.first
+                count = await locator.count()
+                if count > 0:
+                    # Only return if the element is actually visible
+                    for i in range(count):
+                        el = locator.nth(i)
+                        if await el.is_visible():
+                            logger.debug(
+                                f"Found visible Next button via selector: {selector}"
+                            )
+                            return el
             except Exception:
                 continue
-
-        # Fallback: Playwright text locator (exact match)
-        try:
-            locator = self.iframe_content.get_by_text("Next", exact=True)
-            if await locator.count() > 0:
-                logger.debug("Found Next button via get_by_text('Next')")
-                return locator.first
-        except Exception:
-            pass
 
         return None
 
