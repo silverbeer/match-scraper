@@ -390,6 +390,11 @@ class MLSFilterApplicator:
         """
         Apply club filter using iframe Bootstrap Select dropdown.
 
+        The club select element (``select[name="academy"][js-academy]``) only
+        exists on certain pages (e.g. Academy).  On pages where it is absent
+        (e.g. Homegrown) we skip silently instead of retrying and logging
+        errors.
+
         Args:
             club: Club name to filter by
 
@@ -403,16 +408,20 @@ class MLSFilterApplicator:
                 logger.debug("Empty club provided, skipping filter")
                 return True
 
-            # Validate club option
-            if not await self._validate_filter_option("club", club):
-                logger.warning("Invalid club", extra={"club": club})
-                return False
-
             # Get iframe content
             iframe_content = await self._get_iframe_content()
             if not iframe_content:
                 logger.error("Could not access iframe content for club filter")
                 return False
+
+            # Quick check: does the club select element exist on this page at all?
+            club_select = iframe_content.locator(self.CLUB_SELECTOR)
+            if await club_select.count() == 0:
+                logger.info(
+                    "Club select element not present on this page, skipping club filter",
+                    extra={"club": club, "selector": self.CLUB_SELECTOR},
+                )
+                return True
 
             # Strategy 1: Try direct select option with retries
             for attempt in range(3):

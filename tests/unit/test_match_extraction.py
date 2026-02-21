@@ -818,17 +818,20 @@ class TestPagination:
 
     @pytest.mark.asyncio
     async def test_find_next_button_css_selector(self, match_extractor):
-        """_find_next_button returns locator from CSS selector match."""
+        """_find_next_button returns a visible element from CSS selector match."""
+        mock_element = AsyncMock()
+        mock_element.is_visible = AsyncMock(return_value=True)
+
         mock_locator = AsyncMock()
         mock_locator.count = AsyncMock(return_value=1)
-        mock_locator.first = AsyncMock()
+        mock_locator.nth = lambda _i: mock_element
 
         mock_frame = AsyncMock()
         mock_frame.locator = lambda _sel: mock_locator
         match_extractor.iframe_content = mock_frame
 
         result = await match_extractor._find_next_button()
-        assert result is not None
+        assert result is mock_element
 
     @pytest.mark.asyncio
     async def test_find_next_button_no_iframe(self, match_extractor):
@@ -838,22 +841,21 @@ class TestPagination:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_find_next_button_text_fallback(self, match_extractor):
-        """_find_next_button falls back to get_by_text when CSS selectors fail."""
-        css_locator = AsyncMock()
-        css_locator.count = AsyncMock(return_value=0)
+    async def test_find_next_button_skips_hidden_elements(self, match_extractor):
+        """_find_next_button skips hidden elements (e.g. dropdown options)."""
+        hidden_element = AsyncMock()
+        hidden_element.is_visible = AsyncMock(return_value=False)
 
-        text_locator = AsyncMock()
-        text_locator.count = AsyncMock(return_value=1)
-        text_locator.first = AsyncMock()
+        mock_locator = AsyncMock()
+        mock_locator.count = AsyncMock(return_value=1)
+        mock_locator.nth = lambda _i: hidden_element
 
         mock_frame = AsyncMock()
-        mock_frame.locator = lambda _sel: css_locator
-        mock_frame.get_by_text = lambda *a, **kw: text_locator
+        mock_frame.locator = lambda _sel: mock_locator
         match_extractor.iframe_content = mock_frame
 
         result = await match_extractor._find_next_button()
-        assert result is text_locator.first
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_has_next_page_disabled_element(self, match_extractor):
