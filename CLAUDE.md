@@ -66,7 +66,7 @@ docs/
 ├── README.md              # Documentation hub and navigation
 ├── guides/                # How-to guides and tutorials
 ├── development/           # Development, testing, coverage guides
-├── deployment/            # GKE deployment and CI/CD guides
+├── deployment/            # K3s deployment guides
 ├── observability/         # Monitoring, logging, metrics guides
 └── architecture/          # Architecture decisions and summaries
 ```
@@ -91,8 +91,7 @@ docs/
    - Coverage changes → Update `docs/development/coverage.md`
 
 4. **Deployment Changes**: Update infrastructure docs
-   - K8s manifest changes → Update `docs/deployment/gke-deployment.md`
-   - CI/CD changes → Update `docs/deployment/gke-github-actions.md`
+   - K8s manifest changes → Update `docs/deployment/k3s-deployment.md`
    - Observability changes → Update `docs/observability/grafana-cloud-setup.md`
 
 5. **Architecture Decisions**: Document in `docs/architecture/`
@@ -142,7 +141,6 @@ find docs/ -name "*.md" -exec markdown-link-check {} \;
 - **CLAUDE.md** (this file) - Guidelines for AI assistants, project conventions
 - **README.md** - Main project overview, stays in root
 - **docs/README.md** - Documentation hub and navigation
-- **terraform/README.md** - Terraform-specific documentation (stays with code)
 - **scripts/README.md** - Scripts documentation (stays with code)
 - **grafana/dashboards/README.md** - Dashboard documentation (stays with dashboards)
 

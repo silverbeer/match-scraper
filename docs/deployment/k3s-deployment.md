@@ -12,7 +12,7 @@ match-scraper (CronJob) → RabbitMQ → missing-table workers → Supabase (pro
 ```
 
 **Benefits:**
-- ✅ No GKE/cloud costs
+- ✅ No cloud costs
 - ✅ Same queue-based architecture as production
 - ✅ Full local control
 - ✅ Easy dev/prod environment switching (via missing-table workers)

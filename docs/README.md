@@ -21,7 +21,6 @@ Welcome to the comprehensive documentation for the MLS Match Scraper project. Th
 
 ### 📊 Observability
 - [Grafana Cloud Setup](observability/grafana-cloud-setup.md) - Metrics and logs with Grafana Cloud
-- [Logging Architecture](observability/logging-architecture.md) - Structured logging design
 - [Fix Loki Auth](observability/fix-loki-auth.md) - Troubleshooting Loki authentication
 - [Observability Review](observability/observability-review.md) - Observability implementation review
 - [Observability Success](observability/observability-success.md) - Successful observability setup
@@ -56,7 +55,6 @@ docs/
 │   └── supabase-credentials.md # Getting Supabase credentials
 ├── observability/               # Monitoring and logging
 │   ├── grafana-cloud-setup.md  # Grafana Cloud integration
-│   ├── logging-architecture.md # Logging design
 │   ├── fix-loki-auth.md        # Loki troubleshooting
 │   ├── observability-review.md # Implementation review
 │   └── observability-success.md # Success metrics
@@ -77,7 +75,6 @@ docs/
 ### I'm a DevOps Engineer
 1. For deployment: [K3s Deployment Guide](deployment/k3s-deployment.md)
 2. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
-3. Review [Logging Architecture](observability/logging-architecture.md)
 
 ### I'm New to the Project
 1. Start with the [Main README](../README.md)
@@ -89,8 +86,7 @@ docs/
 ### I'm Troubleshooting Issues
 1. Check [Database Fix Guide](guides/database-fix.md)
 2. Review [Fix Loki Auth](observability/fix-loki-auth.md)
-3. Check [Logging Architecture](observability/logging-architecture.md) for log analysis
-5. [RabbitMQ Password Change](guides/rabbitmq-password-change.md) for security warnings or password updates
+3. [RabbitMQ Password Change](guides/rabbitmq-password-change.md) for security warnings or password updates
 
 ## 🔍 Finding Documentation
 

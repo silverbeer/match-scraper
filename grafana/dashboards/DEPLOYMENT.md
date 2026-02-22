@@ -146,7 +146,7 @@ go install github.com/grafana/grizzly/cmd/grr@latest
 
 ### Prerequisites
 
-- GKE cluster with Grafana Operator installed
+- Kubernetes cluster with Grafana Operator installed
 - Grafana instance accessible from cluster
 
 ### Setup
@@ -223,7 +223,7 @@ Or use the helper script:
 ### For This Project
 
 Since you're already using:
-- ✅ GKE with Kubernetes manifests
+- ✅ K3s with Kubernetes manifests
 - ✅ GitHub for version control
 - ✅ Automated deployments
 

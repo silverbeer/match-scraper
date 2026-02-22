@@ -314,7 +314,6 @@ kubectl rollout restart deployment -l app=missing-table-worker -n match-scraper
 
 ## Notes
 
-- **GKE Deployments**: The file `scripts/update-gke-secret.sh` references a different RabbitMQ instance in GKE, not your local k3s cluster
 - **Persistence**: If you delete the RabbitMQ StatefulSet's PVC, you'll need to recreate exchanges/queues defined in the ConfigMap
 - **Username**: This guide assumes you're keeping the username as `admin`. To change the username, update `rabbitmq-username` in the secret and `default_user` in the configmap
 

@@ -7,7 +7,7 @@ This guide covers the observability setup for the MLS Match Scraper using Grafan
 The match-scraper implements comprehensive observability using:
 - **Metrics**: OpenTelemetry (OTLP) → Grafana Cloud Prometheus/Mimir
 - **Logs**: Promtail sidecar → Grafana Loki
-- **Infrastructure**: GKE (Google Kubernetes Engine)
+- **Infrastructure**: K3s (local Kubernetes)
 
 ## Architecture
 
