@@ -24,7 +24,7 @@ IMAGE_NAME="match-scraper"
 IMAGE_TAG="latest"
 IMAGE_FULL="${IMAGE_NAME}:${IMAGE_TAG}"
 NAMESPACE="match-scraper"
-DOCKERFILE="Dockerfile.gke"
+DOCKERFILE="Dockerfile"
 
 # Parse arguments
 SKIP_BUILD=false

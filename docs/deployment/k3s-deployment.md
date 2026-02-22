@@ -285,7 +285,7 @@ kubectl edit configmap match-scraper-config -n match-scraper
 ./scripts/deploy-k3s.sh
 
 # Or rebuild only
-docker build -f Dockerfile.gke -t match-scraper:latest .
+docker build -t match-scraper:latest .
 docker save match-scraper:latest -o /tmp/match-scraper.tar
 sudo k3s ctr images import /tmp/match-scraper.tar
 ```
