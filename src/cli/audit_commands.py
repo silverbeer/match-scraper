@@ -5,7 +5,7 @@ Audit CLI commands for viewing and validating match processing activity.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import typer
 from rich.console import Console
@@ -84,7 +84,7 @@ def view(
         str,
         typer.Option("--format", "-f", help="Output format (text/json)"),
     ] = "text",
-):
+) -> None:
     """View audit log entries."""
     # Default to today's date
     if not date:
@@ -146,12 +146,12 @@ def view(
         _display_audit_entries_text(filtered_entries, date)
 
 
-def _display_audit_entries_text(entries: list[dict], date_str: str):
+def _display_audit_entries_text(entries: list[dict[str, Any]], date_str: str) -> None:
     """Display audit entries in human-readable text format."""
     console.print(f"\n[bold cyan]=== Match Audit Log: {date_str} ===[/bold cyan]\n")
 
     # Group by run_id
-    runs = {}
+    runs: dict[str | None, list[dict[str, Any]]] = {}
     for entry in entries:
         run_id = entry.get("run_id")
         if run_id not in runs:
@@ -296,7 +296,7 @@ def validate(
         Optional[str],
         typer.Option("--backend-url", help="MT backend API URL (default: from env)"),
     ] = None,
-):
+) -> None:
     """
     Validate audit log against Missing Table backend.
 
@@ -368,7 +368,7 @@ def stats(
             "--date", "-d", help="Date to analyze (YYYY-MM-DD, default: today)"
         ),
     ] = None,
-):
+) -> None:
     """Show statistics for audit logs."""
     if not date:
         date = datetime.now().strftime("%Y-%m-%d")
@@ -388,40 +388,38 @@ def stats(
         raise typer.Exit(0)
 
     # Calculate statistics
-    stats = {
-        "total_entries": len(entries),
-        "runs": set(),
-        "discovered": 0,
-        "updated": 0,
-        "unchanged": 0,
-        "queue_submitted": 0,
-        "queue_failed": 0,
-        "leagues": {},
-    }
+    total_entries = len(entries)
+    run_ids: set[str] = set()
+    discovered = 0
+    updated = 0
+    unchanged = 0
+    queue_submitted = 0
+    queue_failed = 0
+    leagues: dict[str, int] = {}
 
     for entry in entries:
         run_id = entry.get("run_id")
         if run_id:
-            stats["runs"].add(run_id)
+            run_ids.add(run_id)
 
         event_type = entry.get("event_type")
         if event_type == EventType.MATCH_DISCOVERED.value:
-            stats["discovered"] += 1
+            discovered += 1
         elif event_type == EventType.MATCH_UPDATED.value:
-            stats["updated"] += 1
+            updated += 1
         elif event_type == EventType.MATCH_UNCHANGED.value:
-            stats["unchanged"] += 1
+            unchanged += 1
         elif event_type == EventType.QUEUE_SUBMITTED.value:
-            stats["queue_submitted"] += 1
+            queue_submitted += 1
         elif event_type == EventType.QUEUE_FAILED.value:
-            stats["queue_failed"] += 1
+            queue_failed += 1
 
         # Track by league
         league = entry.get("run_metadata", {}).get("league")
         if league:
-            if league not in stats["leagues"]:
-                stats["leagues"][league] = 0
-            stats["leagues"][league] += 1
+            if league not in leagues:
+                leagues[league] = 0
+            leagues[league] += 1
 
     # Display statistics
     console.print(f"\n[bold cyan]=== Audit Statistics: {date} ===[/bold cyan]\n")
@@ -430,20 +428,20 @@ def stats(
     table.add_column("Metric", style="cyan")
     table.add_column("Count", justify="right", style="green")
 
-    table.add_row("Total Entries", str(stats["total_entries"]))
-    table.add_row("Scraping Runs", str(len(stats["runs"])))
-    table.add_row("Matches Discovered", str(stats["discovered"]))
-    table.add_row("Matches Updated", str(stats["updated"]))
-    table.add_row("Matches Unchanged", str(stats["unchanged"]))
-    table.add_row("Queue Submitted", str(stats["queue_submitted"]))
-    table.add_row("Queue Failed", str(stats["queue_failed"]))
+    table.add_row("Total Entries", str(total_entries))
+    table.add_row("Scraping Runs", str(len(run_ids)))
+    table.add_row("Matches Discovered", str(discovered))
+    table.add_row("Matches Updated", str(updated))
+    table.add_row("Matches Unchanged", str(unchanged))
+    table.add_row("Queue Submitted", str(queue_submitted))
+    table.add_row("Queue Failed", str(queue_failed))
 
     console.print(table)
 
-    if stats["leagues"]:
+    if leagues:
         console.print("\n[bold]By League:[/bold]")
-        for league, count in sorted(stats["leagues"].items()):
-            console.print(f"  {league}: {count} entries")
+        for league_name, count in sorted(leagues.items()):
+            console.print(f"  {league_name}: {count} entries")
 
 
 if __name__ == "__main__":

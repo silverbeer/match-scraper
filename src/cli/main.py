@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 import typer
 from rich.console import Console
@@ -595,7 +595,7 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
         # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
         "home_score": match.home_score if isinstance(match.home_score, int) else None,
         "away_score": match.away_score if isinstance(match.away_score, int) else None,
-        "match_status": match.match_status or "scheduled",
+        "match_status": match.match_status,
         "external_match_id": match.match_id,
         "location": match.location,
         "source": "match-scraper",
@@ -927,6 +927,7 @@ def scrape(
                     audit_logger.log_match_discovered(match.match_id, match_dict)
                     discovered_count += 1
                 elif status == "updated":
+                    assert changes is not None
                     audit_logger.log_match_updated(match.match_id, match_dict, changes)
                     updated_count += 1
                 else:  # unchanged
@@ -1108,10 +1109,17 @@ def upcoming(
     console.print("[bold cyan]⚽ Upcoming MLS Games[/bold cyan]\n")
 
     # Create configuration for future games
-    config = create_config(age_group, division, 0, days, verbose=verbose)
+    config = create_config(
+        age_group,
+        league="Homegrown",
+        division=division,
+        start_offset=0,
+        end_offset=days,
+        verbose=verbose,
+    )
 
     try:
-        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose))
+        matches = asyncio.run(run_scraper(config, verbose))
         upcoming_matches = [m for m in matches if m.match_status == "scheduled"]
 
         if not upcoming_matches:
@@ -1208,7 +1216,14 @@ def interactive(
 
     # Create and display configuration
     config = create_config(
-        age_group, division, start_offset, end_offset, club, competition, verbose=False
+        age_group,
+        league="Homegrown",
+        division=division,
+        start_offset=start_offset,
+        end_offset=end_offset,
+        club=club,
+        competition=competition,
+        verbose=False,
     )
     display_config_summary(config)
 
@@ -1217,7 +1232,7 @@ def interactive(
         return
 
     try:
-        matches, api_healthy, api_results = asyncio.run(run_scraper(config, verbose))
+        matches = asyncio.run(run_scraper(config, verbose))
 
         console.print()
         display_matches_table(matches)
@@ -1521,7 +1536,9 @@ async def test_navigation(headless: bool, timeout: int) -> None:
             navigator = PageNavigator(page, max_retries=1)
 
             # Try different wait strategies
-            wait_strategies = ["load", "domcontentloaded", "networkidle"]
+            wait_strategies: list[
+                Literal["load", "domcontentloaded", "networkidle"]
+            ] = ["load", "domcontentloaded", "networkidle"]
 
             for strategy in wait_strategies:
                 console.print(f"   🔄 Trying wait strategy: {strategy}")

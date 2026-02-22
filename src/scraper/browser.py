@@ -7,7 +7,7 @@ and resource cleanup functionality optimized for containerized execution.
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from playwright.async_api import (
     Browser,
@@ -95,7 +95,7 @@ class BrowserManager:
                 ]
 
             # Try to use system Chrome when not headless for better visibility
-            launch_options = {
+            launch_options: dict[str, Any] = {
                 "headless": self.config.headless,
                 "args": browser_args,
             }
@@ -203,7 +203,13 @@ class PageNavigator:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    async def navigate_to(self, url: str, wait_until: str = "networkidle") -> bool:
+    async def navigate_to(
+        self,
+        url: str,
+        wait_until: Literal[
+            "commit", "domcontentloaded", "load", "networkidle"
+        ] = "networkidle",
+    ) -> bool:
         """
         Navigate to URL with retry logic.
 
@@ -286,7 +292,10 @@ class ElementInteractor:
         self.default_timeout = default_timeout
 
     async def wait_for_element(
-        self, selector: str, timeout: Optional[int] = None, state: str = "visible"
+        self,
+        selector: str,
+        timeout: Optional[int] = None,
+        state: Literal["attached", "detached", "hidden", "visible"] = "visible",
     ) -> bool:
         """
         Wait for element to be in specified state.

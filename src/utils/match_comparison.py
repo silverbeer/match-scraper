@@ -160,7 +160,11 @@ class MatchComparison:
             Dictionary with keys: "discovered", "updated", "unchanged"
             Each value is a list of match data with added "changes" field for updates
         """
-        categorized = {"discovered": [], "updated": [], "unchanged": []}
+        categorized: dict[str, list[dict[str, Any]]] = {
+            "discovered": [],
+            "updated": [],
+            "unchanged": [],
+        }
 
         for match in current_matches:
             match_id = match.get("external_match_id")

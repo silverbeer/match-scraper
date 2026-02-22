@@ -125,6 +125,7 @@ class MatchQueueClient:
 
     def _safe_broker_url(self) -> str:
         """Return broker URL with password masked for logging."""
+        assert self.broker_url is not None
         return self.broker_url.replace(
             self.broker_url.split("@")[0].split(":")[-1], "***"
         )
@@ -189,6 +190,7 @@ class MatchQueueClient:
 
             # Parse broker URL for pika connection
             # Format: amqp://user:pass@host:port//
+            assert self.broker_url is not None
             broker_parts = self.broker_url.replace("amqp://", "").split("@")
             credentials_part = broker_parts[0]
             host_part = broker_parts[1].rstrip("/")
@@ -234,6 +236,7 @@ class MatchQueueClient:
             return task_id
         else:
             # Direct queue pattern: message goes to specific queue
+            assert self.queue_name is not None
             task_kwargs["queue"] = self.queue_name
             task_kwargs["routing_key"] = f"{self.queue_name}.process"
             routing_target = f"queue '{self.queue_name}'"
@@ -241,7 +244,7 @@ class MatchQueueClient:
             # Step 4: Send to RabbitMQ
             result = self.app.send_task(**task_kwargs)
             print(f"✓ Match submitted to {routing_target}: {result.id}")
-            return result.id
+            return str(result.id)
 
     def submit_matches_batch(self, matches: list[dict]) -> list[str]:
         """

@@ -312,7 +312,7 @@ class MLSMatchExtractor:
         'nav[aria-label*="pagination" i] a:has-text("Next")',
     ]
 
-    async def _find_next_button(self):
+    async def _find_next_button(self) -> Any:
         """Locate the Next pagination element using multiple selector strategies.
 
         Only returns visible elements to avoid matching hidden dropdown options
@@ -1397,7 +1397,7 @@ class MLSMatchExtractor:
 
     def _parse_score_and_status(
         self, score_text: str, status_text: str, match_date: Optional[datetime] = None
-    ) -> tuple[Optional[int], Optional[int], str]:
+    ) -> tuple[int | str | None, int | str | None, str]:
         """
         Parse score and status information.
 

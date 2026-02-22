@@ -26,11 +26,15 @@ class EventType(str, Enum):
 class RunMetadata(BaseModel):
     """Metadata about a scraping run."""
 
-    league: str | None = Field(None, description="League being scraped")
-    age_group: str | None = Field(None, description="Age group filter")
-    division: str | None = Field(None, description="Division or conference filter")
-    date_range: str | None = Field(None, description="Date range being scraped")
-    total_matches: int | None = Field(None, description="Total matches in this run")
+    league: str | None = Field(default=None, description="League being scraped")
+    age_group: str | None = Field(default=None, description="Age group filter")
+    division: str | None = Field(
+        default=None, description="Division or conference filter"
+    )
+    date_range: str | None = Field(default=None, description="Date range being scraped")
+    total_matches: int | None = Field(
+        default=None, description="Total matches in this run"
+    )
 
 
 class AuditEvent(BaseModel):
@@ -42,10 +46,10 @@ class AuditEvent(BaseModel):
     run_id: str = Field(..., description="Unique identifier for the scraping run")
     event_type: EventType = Field(..., description="Type of audit event")
     correlation_id: str | None = Field(
-        None, description="Match ID for correlating related events"
+        default=None, description="Match ID for correlating related events"
     )
     run_metadata: RunMetadata | None = Field(
-        None, description="Metadata about the scraping run"
+        default=None, description="Metadata about the scraping run"
     )
 
     class Config:
@@ -73,10 +77,10 @@ class MatchAuditEvent(AuditEvent):
     """Audit event for match discovery or update."""
 
     match_data: dict[str, Any] | None = Field(
-        None, description="Complete match data payload"
+        default=None, description="Complete match data payload"
     )
     changes: dict[str, dict[str, Any]] | None = Field(
-        None,
+        default=None,
         description="Field-level changes (only for match_updated events)",
     )
 
@@ -121,10 +125,10 @@ class MatchAuditEvent(AuditEvent):
 class QueueAuditEvent(AuditEvent):
     """Audit event for queue submission."""
 
-    queue_task_id: str | None = Field(None, description="Celery task ID")
+    queue_task_id: str | None = Field(default=None, description="Celery task ID")
     queue_success: bool = Field(..., description="Whether queue submission succeeded")
     error_message: str | None = Field(
-        None, description="Error message if submission failed"
+        default=None, description="Error message if submission failed"
     )
 
     class Config:
@@ -165,7 +169,7 @@ class RunAuditEvent(AuditEvent):
     """Audit event for run start or completion."""
 
     summary: RunSummary | None = Field(
-        None, description="Run summary (only for run_completed events)"
+        default=None, description="Run summary (only for run_completed events)"
     )
 
     class Config:
