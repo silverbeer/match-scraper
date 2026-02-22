@@ -141,6 +141,10 @@ warn_unreachable = true
 strict_equality = true
 
 [[tool.mypy.overrides]]
+module = ["grafana_otel", "celery.*", "pika", "pika.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
 

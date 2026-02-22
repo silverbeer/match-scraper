@@ -41,7 +41,7 @@ class Match(BaseModel):
         None, description="Away team score or 'TBD'"
     )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def match_status(self) -> Literal["scheduled", "completed", "tbd"]:
         """Calculate match status based on datetime and scores.

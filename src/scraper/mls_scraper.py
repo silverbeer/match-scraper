@@ -552,6 +552,8 @@ class MLSScraper:
                         f"Match extraction failed after {self.MAX_RETRIES + 1} attempts: {e}"
                     ) from e
 
+        return []  # unreachable, but satisfies mypy
+
     async def _emit_final_metrics(self, matches: list[Match]) -> None:
         """
         Emit final metrics for the scraping operation.
@@ -631,11 +633,9 @@ class MLSScraper:
 
             # Group matches by status for better organization
             scheduled_matches = [m for m in matches if m.match_status == "scheduled"]
-            played_matches = [m for m in matches if m.match_status == "played"]
-            tbd_matches = [m for m in matches if m.match_status == "TBD"]
-            in_progress_matches = [
-                m for m in matches if m.match_status == "in_progress"
-            ]
+            played_matches = [m for m in matches if m.match_status == "completed"]
+            tbd_matches = [m for m in matches if m.match_status == "tbd"]
+            in_progress_matches: list[Match] = []
 
             # Log scheduled matches
             if scheduled_matches:
