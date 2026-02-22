@@ -2,11 +2,17 @@
 """
 Smoke test for StderrExtraFormatter.
 
-Verifies that the stderr log handler (used by kubectl logs in K8s) correctly
-appends user-supplied extra fields as [key=value ...] after the log message.
+The Problem:
+    In K8s, the stderr handler (kubectl logs) used to drop all extra= fields.
+    You'd see "Element not found within timeout" with zero context.
 
-This simulates exactly what the K8s stderr handler does — same formatter class,
-same format string — but writes to stderr locally so you can eyeball the output.
+The Fix:
+    StderrExtraFormatter appends extra fields as [key=value ...] after the message.
+
+What This Script Does:
+    Wires up the exact same formatter + format string used by the K8s stderr handler,
+    then fires log messages through it so you can eyeball the output. Each test
+    explains what it's verifying and shows a BEFORE (old behavior) vs AFTER (new).
 
 Run:
     cd /path/to/match-scraper
@@ -43,73 +49,73 @@ def main() -> None:
 
     print(SEPARATOR)
     print("SMOKE TEST: StderrExtraFormatter")
-    print(f"  Formatter class: {StderrExtraFormatter.__name__}")
-    print("  Format string:   %(levelname)s - %(message)s")
-    print(f"  Truncation:      {_EXTRA_VALUE_MAX_LEN} chars per value")
-    print("  Output target:   stderr (same as kubectl logs handler)")
+    print()
+    print("  This is the formatter used by the K8s stderr handler (kubectl logs).")
+    print("  Previously it used logging.Formatter which dropped all extra= fields.")
+    print("  StderrExtraFormatter appends them as [key=value ...] after the message.")
+    print(f"  Values longer than {_EXTRA_VALUE_MAX_LEN} chars are truncated with '...'")
     print(SEPARATOR)
 
-    # --- Test 1: Multiple extra fields ---
-    print("\n[TEST 1] Multiple extra fields")
-    print("  Calling: logger.warning('Element not found within timeout',")
-    print(
-        "             extra={'selector': '.container-fluid', 'state': 'visible', 'timeout': 5000})"
-    )
-    print(
-        "  Expect:  WARNING - Element not found within timeout [selector=... state=... timeout=...]"
-    )
-    print("  Output:  ", end="", flush=True)
+    # --- Test 1 ---
+    print()
+    print("[TEST 1] Do extra fields show up at all?")
+    print("  The whole point of this change. Pass selector, state, and timeout")
+    print("  as extra= fields — they should appear in brackets after the message.")
+    print()
+    print("  BEFORE:  WARNING - Element not found within timeout")
+    print("  AFTER:   ", end="", flush=True)
     logger.warning(
         "Element not found within timeout",
         extra={"selector": ".container-fluid", "state": "visible", "timeout": 5000},
     )
 
-    # --- Test 2: Single extra field ---
-    print("\n[TEST 2] Single extra field")
-    print("  Calling: logger.warning('Invalid age group', extra={'age_group': 'U14'})")
-    print("  Expect:  WARNING - Invalid age group [age_group=U14]")
-    print("  Output:  ", end="", flush=True)
-    logger.warning("Invalid age group", extra={"age_group": "U14"})
-
-    # --- Test 3: Long value gets truncated ---
-    long_url = "https://www.mlssoccer.com/mlsnext/schedule/" + "a" * 200
-    print(f"\n[TEST 3] Long value truncation (>{_EXTRA_VALUE_MAX_LEN} chars)")
-    print(
-        f"  Calling: logger.warning('Navigation timeout', extra={{'url': '<{len(long_url)} char URL>', 'attempt': 2}})"
-    )
-    print(f"  Expect:  URL truncated to {_EXTRA_VALUE_MAX_LEN} chars ending with '...'")
-    print("  Output:  ", end="", flush=True)
-    logger.warning("Navigation timeout", extra={"url": long_url, "attempt": 2})
-
-    # --- Test 4: No extra fields ---
-    print("\n[TEST 4] No extra fields (no brackets)")
-    print("  Calling: logger.warning('Something happened')")
-    print("  Expect:  WARNING - Something happened")
-    print("  Output:  ", end="", flush=True)
+    # --- Test 2 ---
+    print()
+    print("[TEST 2] No extra fields — does it stay clean?")
+    print("  A log call with no extra= should produce no brackets, no trailing junk.")
+    print()
+    print("  BEFORE:  WARNING - Something happened")
+    print("  AFTER:   ", end="", flush=True)
     logger.warning("Something happened")
 
-    # --- Test 5: Different log levels ---
-    print("\n[TEST 5] Different log levels with extras")
+    # --- Test 3 ---
+    long_url = "https://www.mlssoccer.com/mlsnext/schedule/" + "a" * 200
+    print()
+    print(f"[TEST 3] Long values get truncated (>{_EXTRA_VALUE_MAX_LEN} chars)")
+    print(f"  Passing a {len(long_url)}-char URL. It should be cut to")
     print(
-        "  Calling: ERROR, WARNING, INFO, DEBUG — each with extra={'component': '...'}"
+        f"  {_EXTRA_VALUE_MAX_LEN} chars and end with '...' so stderr stays readable."
     )
+    print()
+    print("  AFTER:   ", end="", flush=True)
+    logger.warning("Navigation timeout", extra={"url": long_url, "attempt": 2})
+
+    # --- Test 4 ---
+    print()
+    print("[TEST 4] Works across all log levels")
+    print(
+        "  Extras should appear regardless of whether it's ERROR, WARNING, INFO, or DEBUG."
+    )
+    print()
     for level, component in [
         (logging.ERROR, "browser"),
         (logging.WARNING, "parser"),
         (logging.INFO, "scheduler"),
         (logging.DEBUG, "cache"),
     ]:
-        print("  Output:  ", end="", flush=True)
+        print("  AFTER:   ", end="", flush=True)
         logger.log(
             level,
             f"{logging.getLevelName(level)} from {component}",
             extra={"component": component},
         )
 
-    # --- Test 6: Realistic scraper log lines ---
-    print(
-        "\n[TEST 6] Realistic scraper messages (what kubectl logs will actually show)"
-    )
+    # --- Test 5 ---
+    print()
+    print("[TEST 5] Realistic scraper messages")
+    print("  These are actual log patterns from the scraper codebase.")
+    print("  This is what kubectl logs will look like after deploying.")
+    print()
     realistic = [
         (
             "Retry after transient error",
@@ -132,11 +138,12 @@ def main() -> None:
         ),
     ]
     for msg, extras in realistic:
-        print("  Output:  ", end="", flush=True)
+        print("  AFTER:   ", end="", flush=True)
         logger.warning(msg, extra=extras)
 
-    print(f"\n{SEPARATOR}")
-    print("SMOKE TEST COMPLETE — review output above")
+    print()
+    print(SEPARATOR)
+    print("DONE — if AFTER lines have [key=value ...] context, the formatter works.")
     print(SEPARATOR)
 
 
