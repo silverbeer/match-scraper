@@ -17,11 +17,7 @@ Welcome to the comprehensive documentation for the MLS Match Scraper project. Th
 
 ### 🚢 Deployment
 - [K3s Deployment Guide](deployment/k3s-deployment.md) - Local/cost-effective deployment with k3s and RabbitMQ
-- [Supabase Credentials Guide](deployment/supabase-credentials.md) - **NEW** How to get Supabase credentials for production
-- [GKE Deployment Guide](deployment/gke-deployment.md) - Complete Google Kubernetes Engine deployment
-- [GKE Testing Guide](deployment/gke-testing.md) - Testing and monitoring GKE deployments
-- [GKE GitHub Actions](deployment/gke-github-actions.md) - CI/CD setup for GKE
-- [Migration to GKE](deployment/migration-to-gke.md) - Migration guide from AWS Lambda
+- [Supabase Credentials Guide](deployment/supabase-credentials.md) - How to get Supabase credentials for production
 
 ### 📊 Observability
 - [Grafana Cloud Setup](observability/grafana-cloud-setup.md) - Metrics and logs with Grafana Cloud
@@ -57,11 +53,7 @@ docs/
 │   └── fast-commits.md         # Development workflow tips
 ├── deployment/                  # Deployment guides
 │   ├── k3s-deployment.md       # K3s local deployment
-│   ├── supabase-credentials.md # Getting Supabase credentials
-│   ├── gke-deployment.md       # GKE deployment
-│   ├── gke-testing.md          # GKE testing
-│   ├── gke-github-actions.md   # CI/CD setup
-│   └── migration-to-gke.md     # Migration guide
+│   └── supabase-credentials.md # Getting Supabase credentials
 ├── observability/               # Monitoring and logging
 │   ├── grafana-cloud-setup.md  # Grafana Cloud integration
 │   ├── logging-architecture.md # Logging design
@@ -83,11 +75,9 @@ docs/
 4. Use [CLI Usage Guide](guides/cli-usage.md) for local testing
 
 ### I'm a DevOps Engineer
-1. For local deployment: [K3s Deployment Guide](deployment/k3s-deployment.md)
-2. For cloud deployment: [GKE Deployment Guide](deployment/gke-deployment.md)
-3. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
-4. Configure [GKE GitHub Actions](deployment/gke-github-actions.md)
-5. Review [GKE Testing Guide](deployment/gke-testing.md)
+1. For deployment: [K3s Deployment Guide](deployment/k3s-deployment.md)
+2. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
+3. Review [Logging Architecture](observability/logging-architecture.md)
 
 ### I'm New to the Project
 1. Start with the [Main README](../README.md)
@@ -99,8 +89,7 @@ docs/
 ### I'm Troubleshooting Issues
 1. Check [Database Fix Guide](guides/database-fix.md)
 2. Review [Fix Loki Auth](observability/fix-loki-auth.md)
-3. See [GKE Testing Guide](deployment/gke-testing.md) for deployment issues
-4. Check [Logging Architecture](observability/logging-architecture.md) for log analysis
+3. Check [Logging Architecture](observability/logging-architecture.md) for log analysis
 5. [RabbitMQ Password Change](guides/rabbitmq-password-change.md) for security warnings or password updates
 
 ## 🔍 Finding Documentation
@@ -111,14 +100,13 @@ docs/
   - [`architecture/rabbitmq-fanout-dev-prod.md`](architecture/rabbitmq-fanout-dev-prod.md) - Dev/prod environment setup
 - **CLI & Tools**: [`guides/cli-usage.md`](guides/cli-usage.md)
 - **Testing**: [`development/testing.md`](development/testing.md), [`development/e2e-testing.md`](development/e2e-testing.md)
-- **Deployment**: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md), [`deployment/gke-deployment.md`](deployment/gke-deployment.md)
+- **Deployment**: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md)
 - **Monitoring**: [`observability/grafana-cloud-setup.md`](observability/grafana-cloud-setup.md)
 
 ### By Task
 - **Understanding the Pipeline**: [`architecture/async-message-queue-architecture.md`](architecture/async-message-queue-architecture.md) ⭐
 - **Running Tests**: [`development/testing.md`](development/testing.md)
 - **Deploying Locally (k3s)**: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md)
-- **Deploying to GKE**: [`deployment/gke-deployment.md`](deployment/gke-deployment.md)
 - **Setting up Monitoring**: [`observability/grafana-cloud-setup.md`](observability/grafana-cloud-setup.md)
 - **Using the CLI**: [`guides/cli-usage.md`](guides/cli-usage.md)
 - **Changing RabbitMQ Password**: [`guides/rabbitmq-password-change.md`](guides/rabbitmq-password-change.md)
@@ -141,8 +129,6 @@ See [CLAUDE.md](../CLAUDE.md) for AI assistant guidelines on maintaining documen
 - [Project Repository](https://github.com/silverbeer/match-scraper)
 - [Test Reports & Coverage](https://silverbeer.github.io/match-scraper/)
 - [Grafana Cloud](https://grafana.com/)
-- [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine)
-
 ## 📧 Getting Help
 
 - Check documentation in this folder first
