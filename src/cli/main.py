@@ -541,6 +541,67 @@ def display_upcoming_games(matches: list[Match], limit: int = 5) -> None:
             console.print()
 
 
+def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
+    """Build a queue-ready match dict from a Match object and config.
+
+    Transforms a scraped Match object into the dictionary format expected
+    by the RabbitMQ queue and MatchData validation model.
+
+    Args:
+        match: Scraped Match object from MLSScraper
+        config: Scraping configuration with league/division/conference info
+
+    Returns:
+        Dictionary ready for queue submission
+    """
+    # Determine division/conference name based on league type
+    division_name = (
+        config.conference
+        if config.league == "Academy" and config.conference
+        else config.division
+        if config.division
+        else None
+    )
+
+    # Look up division_id using the appropriate league type
+    division_id = get_division_id_for_league(
+        league=config.league,
+        division=config.division,
+        conference=config.conference,
+    )
+
+    # Normalize team names and apply league-specific suffixes
+    home_team_normalized = normalize_team_name_for_display(match.home_team)
+    away_team_normalized = normalize_team_name_for_display(match.away_team)
+    home_team_final = apply_league_specific_team_name(
+        home_team_normalized, config.league
+    )
+    away_team_final = apply_league_specific_team_name(
+        away_team_normalized, config.league
+    )
+
+    return {
+        "home_team": home_team_final,
+        "away_team": away_team_final,
+        "match_date": match.match_datetime.date().isoformat()
+        if match.match_datetime
+        else date.today().isoformat(),
+        "season": "2024-25",  # TODO: derive from match date
+        "age_group": config.age_group,
+        "match_type": "League",
+        "division": division_name,
+        "division_id": division_id,
+        "league": config.league,
+        # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
+        "home_score": match.home_score if isinstance(match.home_score, int) else None,
+        "away_score": match.away_score if isinstance(match.away_score, int) else None,
+        "match_status": match.match_status or "scheduled",
+        "external_match_id": match.match_id,
+        "location": match.location,
+        "source": "match-scraper",
+    }
+
+
 def save_matches_to_file(
     matches: list[Match], file_path: str, age_group: str, division: str
 ) -> bool:
@@ -858,57 +919,7 @@ def scrape(
         match_dicts = []
         if matches:
             for match in matches:
-                # Determine division/conference name based on league type
-                # Academy league uses conference, Homegrown uses division
-                division_name = (
-                    config.conference
-                    if config.league == "Academy" and config.conference
-                    else config.division
-                    if config.division
-                    else None
-                )
-
-                # Look up division_id using the appropriate league type
-                division_id = get_division_id_for_league(
-                    league=config.league,
-                    division=config.division,
-                    conference=config.conference,
-                )
-
-                # Normalize team names and apply league-specific suffixes
-                home_team_normalized = normalize_team_name_for_display(match.home_team)
-                away_team_normalized = normalize_team_name_for_display(match.away_team)
-                home_team_final = apply_league_specific_team_name(
-                    home_team_normalized, config.league
-                )
-                away_team_final = apply_league_specific_team_name(
-                    away_team_normalized, config.league
-                )
-
-                match_dict = {
-                    "home_team": home_team_final,
-                    "away_team": away_team_final,
-                    "match_date": match.match_datetime.date().isoformat()
-                    if match.match_datetime
-                    else date.today().isoformat(),
-                    "season": "2024-25",  # TODO: derive from match date
-                    "age_group": config.age_group,
-                    "match_type": "League",
-                    "division": division_name,
-                    "division_id": division_id,
-                    "league": config.league,  # Add league field
-                    # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
-                    "home_score": match.home_score
-                    if isinstance(match.home_score, int)
-                    else None,
-                    "away_score": match.away_score
-                    if isinstance(match.away_score, int)
-                    else None,
-                    "match_status": match.match_status or "scheduled",
-                    "external_match_id": match.match_id,
-                    "location": match.location,
-                    "source": "match-scraper",  # Data source identifier
-                }
+                match_dict = build_match_dict(match, config)
 
                 # Compare match and log audit event
                 status, changes = comparison.compare_match(match.match_id, match_dict)
