@@ -16,6 +16,35 @@ from typing import Any, Optional
 
 from pythonjsonlogger import jsonlogger
 
+# Standard LogRecord attributes to exclude when extracting user-supplied extras
+_STANDARD_RECORD_ATTRS = frozenset(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__
+)
+
+# Max character length for extra field values in stderr output
+_EXTRA_VALUE_MAX_LEN = 80
+
+
+class StderrExtraFormatter(logging.Formatter):
+    """Formatter that appends user-supplied extra fields as [key=value ...] after the message."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        base = super().format(record)
+        extras = {
+            k: v
+            for k, v in record.__dict__.items()
+            if k not in _STANDARD_RECORD_ATTRS and k != "message"
+        }
+        if not extras:
+            return base
+        parts = []
+        for k, v in extras.items():
+            s = str(v)
+            if len(s) > _EXTRA_VALUE_MAX_LEN:
+                s = s[: _EXTRA_VALUE_MAX_LEN - 3] + "..."
+            parts.append(f"{k}={s}")
+        return f"{base} [{' '.join(parts)}]"
+
 
 class MLSScraperLogger:
     """
@@ -87,7 +116,7 @@ class MLSScraperLogger:
                 stderr_handler.setLevel(
                     logging.WARNING
                 )  # Only warnings and errors to stderr
-                stderr_formatter = logging.Formatter("%(levelname)s - %(message)s")
+                stderr_formatter = StderrExtraFormatter("%(levelname)s - %(message)s")
                 stderr_handler.setFormatter(stderr_formatter)
                 self._logger.addHandler(stderr_handler)
 
