@@ -206,7 +206,7 @@ If you see `ErrImageNeverPull` or `ImagePullBackOff`:
 
 ```bash
 # Rebuild and import image
-docker build -f Dockerfile.gke -t match-scraper:latest .
+docker build -t match-scraper:latest .
 docker save match-scraper:latest -o /tmp/match-scraper.tar
 
 # Import to Rancher Desktop (varies by Rancher version)

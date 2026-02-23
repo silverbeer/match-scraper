@@ -32,6 +32,11 @@ class MatchData(BaseModel):
     match_type: str = Field(..., min_length=1, description="Match type")
 
     # Optional fields
+    match_time: str | None = Field(
+        None,
+        pattern=r"^\d{2}:\d{2}$",
+        description="Match kick-off time HH:MM (24h)",
+    )
     division: str | None = Field(None, description="Division name")
     division_id: int | None = Field(None, ge=1, description="Division ID")
     league: str | None = Field(None, description="League name (Homegrown or Academy)")

@@ -8,7 +8,13 @@ import logging
 import os
 from unittest.mock import patch
 
-from src.utils.logger import MLSScraperLogger, get_logger, scraper_logger
+from src.utils.logger import (
+    _EXTRA_VALUE_MAX_LEN,
+    MLSScraperLogger,
+    StderrExtraFormatter,
+    get_logger,
+    scraper_logger,
+)
 
 
 class TestMLSScraperLogger:
@@ -202,3 +208,64 @@ class TestLoggerIntegration:
         with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
             logger_k8s = MLSScraperLogger(service_name="test-k8s-logger")
             assert logger_k8s.is_kubernetes is True
+
+
+class TestStderrExtraFormatter:
+    """Test cases for StderrExtraFormatter."""
+
+    def _make_record(
+        self, msg: str = "test message", **extras: object
+    ) -> logging.LogRecord:
+        record = logging.LogRecord(
+            name="test",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=(),
+            exc_info=None,
+        )
+        for k, v in extras.items():
+            setattr(record, k, v)
+        return record
+
+    def test_extra_fields_appear_in_output(self):
+        """Extra fields should be appended as [key=value ...] after the message."""
+        fmt = StderrExtraFormatter("%(levelname)s - %(message)s")
+        record = self._make_record(
+            selector=".container-fluid", state="visible", timeout=5000
+        )
+        result = fmt.format(record)
+        assert result.startswith("WARNING - test message [")
+        assert "selector=.container-fluid" in result
+        assert "state=visible" in result
+        assert "timeout=5000" in result
+
+    def test_standard_fields_excluded(self):
+        """Standard LogRecord attributes should not appear in the extras bracket."""
+        fmt = StderrExtraFormatter("%(levelname)s - %(message)s")
+        record = self._make_record()
+        result = fmt.format(record)
+        # No extras → no brackets at all
+        assert "[" not in result
+        assert result == "WARNING - test message"
+
+    def test_empty_extras_no_brackets(self):
+        """When no user-supplied extras exist, output should have no brackets."""
+        fmt = StderrExtraFormatter("%(levelname)s - %(message)s")
+        record = self._make_record()
+        result = fmt.format(record)
+        assert result == "WARNING - test message"
+
+    def test_long_values_truncated(self):
+        """Extra values exceeding the max length should be truncated with '...'."""
+        fmt = StderrExtraFormatter("%(levelname)s - %(message)s")
+        long_url = "https://example.com/" + "a" * 200
+        record = self._make_record(url=long_url)
+        result = fmt.format(record)
+        # Find the url= portion and verify it's truncated
+        assert "url=" in result
+        assert "..." in result
+        # The truncated value should be exactly _EXTRA_VALUE_MAX_LEN chars
+        url_part = result.split("url=")[1].rstrip("]")
+        assert len(url_part) == _EXTRA_VALUE_MAX_LEN

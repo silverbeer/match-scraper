@@ -12,7 +12,7 @@ Automated soccer match data scraper with RabbitMQ queue integration.
 
 ## Overview
 
-This application scrapes match data from youth soccer websites and sends it to a RabbitMQ queue for processing by backend workers. Deployed on Google Kubernetes Engine (GKE) as a scheduled CronJob, built with Playwright and comprehensive monitoring.
+This application scrapes match data from youth soccer websites and sends it to a RabbitMQ queue for processing by backend workers. Deployed on K3s as a scheduled CronJob, built with Playwright and comprehensive monitoring.
 
 ## 📚 Documentation
 
@@ -21,7 +21,7 @@ This application scrapes match data from youth soccer websites and sends it to a
 Quick links:
 - **[CLI Usage Guide](docs/guides/cli-usage.md)** - Complete CLI reference and examples
 - **[Audit System Guide](docs/guides/audit-system.md)** - Match processing audit trail and validation
-- **[GKE Deployment](docs/deployment/gke-deployment.md)** - Kubernetes deployment guide
+- **[K3s Deployment](docs/deployment/k3s-deployment.md)** - Kubernetes deployment guide
 - **[Testing Guide](docs/development/testing.md)** - Unit, integration, and E2E tests
 - **[Observability Setup](docs/observability/grafana-cloud-setup.md)** - Metrics and logging with Grafana Cloud
 
@@ -33,7 +33,7 @@ Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
 - **Queue Integration**: RabbitMQ fanout to local + dev environments (prod deprecated as of 2025-11-14)
 - **Audit Trail**: JSONL audit logs with change tracking and validation (see [Audit Guide](docs/guides/audit-system.md))
 - **Scheduled Execution**: Kubernetes CronJob runs daily at 6 AM UTC
-- **Containerized Deployment**: GKE deployment with optimized Docker container
+- **Containerized Deployment**: K3s deployment with optimized Docker container
 - **Data Validation**: Pydantic models for robust data validation and serialization
 - **Quality Testing**: Comprehensive test suite with unit, integration, and e2e tests
 
@@ -236,12 +236,7 @@ tests/
 ├── unit/                  # Fast unit tests (CI)
 ├── integration/           # Multi-component tests
 ├── e2e/                  # End-to-end browser tests
-k8s/                      # Kubernetes manifests (GKE)
-├── namespace.yaml         # Kubernetes namespace
-├── configmap.yaml         # Configuration
-├── secret.yaml           # Credentials
-└── cronjob.yaml          # Scheduled job
-k3s/                      # K3s/local manifests
+k3s/                      # K3s manifests
 ├── rabbitmq/             # RabbitMQ deployment
 │   ├── namespace.yaml    # Shared namespace
 │   ├── statefulset.yaml  # RabbitMQ StatefulSet
@@ -253,82 +248,17 @@ k3s/                      # K3s/local manifests
     ├── secret.yaml       # API tokens (optional)
     └── cronjob.yaml      # Scheduled job
 scripts/
-├── deploy-gke-complete.sh # Complete GKE deployment
-├── deploy-gke-env.sh     # Environment-based deployment
-├── build-and-push-gke.sh # Container build and push
-├── deploy-to-gke.sh      # Kubernetes deployment
-├── test-gke.sh           # GKE testing and monitoring
-├── deploy-k3s.sh         # K3s local deployment
+├── deploy-k3s.sh         # K3s deployment
 ├── test-k3s.sh           # K3s testing and monitoring
+├── trigger-scrape.sh     # Manual scrape trigger
 └── test-review.py        # Test analysis helper script
 ```
 
 ## Deployment
 
-### Google Kubernetes Engine (GKE)
+### K3s Deployment
 
-The scraper is deployed as a Kubernetes CronJob on GKE, running daily at 6 AM UTC.
-
-#### Quick Start
-
-Deploy with a single command:
-
-```bash
-# Automated deployment (recommended)
-./scripts/deploy-gke-complete.sh
-```
-
-This script will:
-1. ✅ Check prerequisites (gcloud, kubectl, docker)
-2. ✅ Load configuration from terraform/dev.tfvars
-3. ✅ Build and push Docker image to GCP Container Registry
-4. ✅ Deploy Kubernetes manifests (CronJob, ConfigMap, Secret)
-5. ✅ Test the deployment with a manual job
-6. ✅ Display deployment summary and management commands
-
-#### Alternative: Using .env.dev file
-
-```bash
-# Create environment file
-cp env.dev.template .env.dev
-# Edit .env.dev with your values
-
-# Deploy using environment file
-./scripts/deploy-gke-env.sh .env.dev
-```
-
-#### Manual Deployment
-
-For manual deployments:
-
-```bash
-# Build and push container
-./scripts/build-and-push-gke.sh YOUR_PROJECT_ID
-
-# Deploy to GKE
-./scripts/deploy-to-gke.sh YOUR_PROJECT_ID YOUR_API_TOKEN
-
-# Test the deployment
-./scripts/test-gke.sh trigger
-./scripts/test-gke.sh logs
-```
-
-**Documentation:**
-- 📖 [GKE Deployment Guide](docs/deployment/gke-deployment.md) - Complete GKE deployment guide
-- 🧪 [Testing Guide](docs/deployment/gke-testing.md) - Testing and monitoring guide
-- 🚀 [Migration Guide](docs/deployment/migration-to-gke.md) - Migration from AWS Lambda
-
-**Infrastructure Features:**
-- Kubernetes CronJob with configurable schedule
-- GCP Container Registry for container images
-- ConfigMap for non-sensitive configuration
-- Kubernetes Secret for API tokens
-- Resource requests and limits for GKE Autopilot
-- Comprehensive testing and monitoring scripts
-
-### K3s/Rancher Local Deployment
-
-For local/cost-effective deployments, run match-scraper with RabbitMQ in k3s:
+The scraper runs as a Kubernetes CronJob on K3s with RabbitMQ:
 
 #### Quick Start
 

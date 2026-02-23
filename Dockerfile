@@ -1,5 +1,5 @@
-# GKE-optimized Dockerfile for MLS Match Scraper
-# Much simpler than Lambda version - no Lambda-specific requirements
+# Dockerfile for MLS Match Scraper
+# Runs as a K3s CronJob with Playwright for browser-based scraping
 
 FROM python:3.12-slim
 

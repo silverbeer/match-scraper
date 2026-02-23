@@ -1,72 +1,26 @@
 # Scripts Directory
 
-This directory contains utility scripts for the MLS Match Scraper project.
+Utility scripts for the MLS Match Scraper project.
 
-## Deployment Scripts
+## Deployment
 
-### GitHub Actions GCP Setup
-**`setup-github-actions-gcp.sh`** - Automated setup for GitHub Actions deployment to GKE
-
-Sets up Workload Identity Federation, service accounts, and IAM permissions.
+**`deploy-k3s.sh`** - Deploy match-scraper and RabbitMQ to local K3s cluster
 
 ```bash
-./scripts/setup-github-actions-gcp.sh
+./scripts/deploy-k3s.sh                    # Full deployment (scraper + RabbitMQ)
+./scripts/deploy-k3s.sh --deploy-workers   # Full deployment + Celery workers
+./scripts/deploy-k3s.sh --skip-build       # Skip Docker build
+./scripts/deploy-k3s.sh --rabbitmq-only    # Deploy only RabbitMQ
+./scripts/deploy-k3s.sh --scraper-only     # Deploy only match-scraper
 ```
 
-**Prerequisites:**
-- `gcloud` CLI installed and authenticated
-- GCP project with billing enabled
-- Permissions to create service accounts and configure IAM
-
-**What it does:**
-1. Enables required GCP APIs
-2. Creates service account `github-actions-gke@PROJECT_ID.iam.gserviceaccount.com`
-3. Grants necessary IAM roles
-4. Creates Workload Identity Pool and Provider
-5. Configures repository access
-6. Generates GitHub Secrets configuration
-
-**Output:**
-- Creates `github-actions-secrets.txt` with values to add to GitHub
-- Displays all secrets in terminal for easy copying
-
----
-
-### GKE Deployment Scripts
-
-**`build-and-push-gke.sh`** - Build and push Docker image to GCR
+**`deploy-grafana-dashboards.sh`** - Deploy Grafana dashboards
 
 ```bash
-./scripts/build-and-push-gke.sh PROJECT_ID [TAG]
+./scripts/deploy-grafana-dashboards.sh
 ```
 
-**`deploy-to-gke.sh`** - Deploy to GKE cluster
-
-```bash
-./scripts/deploy-to-gke.sh PROJECT_ID [API_TOKEN]
-```
-
-**`deploy-gke-complete.sh`** - Complete end-to-end deployment
-
-```bash
-./scripts/deploy-gke-complete.sh
-```
-
-**`deploy-gke-env.sh`** - Deploy with environment configuration
-
-```bash
-./scripts/deploy-gke-env.sh
-```
-
----
-
-## Testing Scripts
-
-**`test-gke.sh`** - Test GKE deployment
-
-```bash
-./scripts/test-gke.sh
-```
+## Testing
 
 **`trigger-scrape.sh`** - Manually trigger a scrape job
 
@@ -74,40 +28,26 @@ Sets up Workload Identity Federation, service accounts, and IAM permissions.
 ./scripts/trigger-scrape.sh
 ```
 
-**`trigger-gke-job.sh`** - Trigger manual scraper job on GKE
+**`test-k3s.sh`** - Test K3s deployment
 
 ```bash
-./scripts/trigger-gke-job.sh --from 2025-09-01 --to 2025-09-30 --age-group U14 --division Northeast
-./scripts/trigger-gke-job.sh --club "IFA" --from 2025-10-01 --to 2025-10-31
-./scripts/trigger-gke-job.sh --help  # See all options
+./scripts/test-k3s.sh
 ```
 
-**Options:**
-- `--from DATE` / `--to DATE` - Absolute date range (YYYY-MM-DD)
-- `--start N` / `--end N` - Relative date offsets (default: 0 to 13)
-- `--club NAME` - Filter by specific club
-- `--competition NAME` - Filter by competition
-- `--age-group GROUP` - Age group (default: U14)
-- `--division DIV` - Division (default: Northeast)
-- `--limit N` - Maximum matches to scrape
-- `--no-follow` - Don't follow logs after creation
+**`smoke_test_stderr_formatter.py`** - Verify stderr log formatter includes extra fields
 
----
+```bash
+uv run python scripts/smoke_test_stderr_formatter.py
+```
 
-## Utility Scripts
+## Utility
 
 **`cleanup-manual-jobs.sh`** - Clean up old manual scraper jobs
 
 ```bash
 ./scripts/cleanup-manual-jobs.sh --dry-run          # Preview what would be deleted
 ./scripts/cleanup-manual-jobs.sh --age 24           # Delete jobs older than 24 hours
-./scripts/cleanup-manual-jobs.sh --age 12           # Delete jobs older than 12 hours
 ```
-
-**Options:**
-- `--age HOURS` - Delete jobs older than N hours (default: 24)
-- `--namespace NS` - Kubernetes namespace (default: match-scraper)
-- `--dry-run` - Preview without actually deleting
 
 **`check_coverage.sh`** - Check code coverage
 
@@ -115,25 +55,27 @@ Sets up Workload Identity Federation, service accounts, and IAM permissions.
 ./scripts/check_coverage.sh
 ```
 
-**`fix-database.sh`** - Fix database issues
+**`view-audit.sh`** - View audit logs
 
 ```bash
-./scripts/fix-database.sh
+./scripts/view-audit.sh
 ```
 
----
+**`setup-mac-wake.sh`** - Set up Mac wake automation for scheduled scrapes
+
+```bash
+./scripts/setup-mac-wake.sh
+```
 
 ## Quick Reference
 
 | Task | Command |
 |------|---------|
-| Set up GitHub Actions | `./scripts/setup-github-actions-gcp.sh` |
-| Build & push image | `./scripts/build-and-push-gke.sh PROJECT_ID` |
-| Deploy to GKE | `./scripts/deploy-to-gke.sh PROJECT_ID` |
-| Test deployment | `./scripts/test-gke.sh` |
-| Manual scrape (GKE) | `./scripts/trigger-gke-job.sh --from 2025-09-01 --to 2025-09-30` |
+| Deploy to K3s | `./scripts/deploy-k3s.sh` |
+| Test K3s deployment | `./scripts/test-k3s.sh` |
+| Manual scrape | `./scripts/trigger-scrape.sh` |
 | Clean up old jobs | `./scripts/cleanup-manual-jobs.sh --age 24` |
-| Manual scrape (local) | `./scripts/trigger-scrape.sh` |
+| Smoke test stderr fmt | `uv run python scripts/smoke_test_stderr_formatter.py` |
 
 ---
 

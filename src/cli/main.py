@@ -586,6 +586,10 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
         "match_date": match.match_datetime.date().isoformat()
         if match.match_datetime
         else date.today().isoformat(),
+        "match_time": match.match_datetime.strftime("%H:%M")
+        if match.match_datetime
+        and (match.match_datetime.hour or match.match_datetime.minute)
+        else None,
         "season": "2024-25",  # TODO: derive from match date
         "age_group": config.age_group,
         "match_type": "League",
