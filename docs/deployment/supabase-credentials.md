@@ -262,9 +262,9 @@ echo -n "my-secret" | base64
    - Change JWT secret periodically
    - Regenerate service_role key if compromised
 
-3. **Use different credentials for dev and prod**
-   - Dev workers should use dev Supabase project
-   - Prod workers should use prod Supabase project
+3. **Use different credentials per environment**
+   - Prod workers use prod Supabase (missingtable.com)
+   - Local workers use local Supabase (localhost:54321)
    - Never mix them!
 
 4. **Limit access**

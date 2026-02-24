@@ -1,7 +1,3 @@
-# ⚠️ DEPRECATED - This configmap is no longer used
-# As of 2025-11-14, missingtable.com points to dev environment only
-# This file is kept for reference only
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,7 +6,6 @@ metadata:
   labels:
     app: missing-table-worker
     environment: prod
-    deprecated: "true"
 data:
   # Celery Configuration
   CELERY_BROKER_URL: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
@@ -19,11 +14,11 @@ data:
   # RabbitMQ Configuration
   RABBITMQ_URL: "amqp://admin:admin123@messaging-rabbitmq.match-scraper:5672//"
 
-  # Queue Configuration - PROD queue only
+  # Queue Configuration - prod queue (writes to prod Supabase serving missingtable.com)
   QUEUE_NAME: "matches.prod"
 
-  # Supabase Configuration (PROD)
-  SUPABASE_URL: "https://iueycteoamjbygwhnovz.supabase.co"
+  # Supabase Configuration (prod — serves missingtable.com)
+  SUPABASE_URL: "https://ppgxasqgqbnauvxozmjw.supabase.co"
 
   # Application Configuration
   ENVIRONMENT: "production"

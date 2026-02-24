@@ -1,28 +1,31 @@
-# K3s Local Deployment Guide
+# K3s Deployment Guide
 
-This guide covers deploying match-scraper and RabbitMQ to your local k3s/Rancher cluster for cost-effective production data collection.
+This guide covers deploying the match-scraper pipeline to the M4 Mac rancher-desktop K3s cluster.
 
 ## Overview
 
 **Architecture:**
 ```
-match-scraper (CronJob) → RabbitMQ → missing-table workers → Supabase (prod/dev)
-       ↓                      ↓                ↓
-   k3s cluster         k3s cluster       k3s cluster
+match-scraper-agent (CronJob) → RabbitMQ → Celery workers → prod Supabase
+       ↓                            ↓              ↓
+   rancher-desktop K3s       rancher-desktop   rancher-desktop
+   (M4 Mac)                  K3s (M4 Mac)     K3s (M4 Mac)
 ```
 
+All scraper pipeline components run locally on the M4 Mac. This IS the production scraper — it writes to **prod Supabase** (missingtable.com).
+
+**Environments:** Prod and local only. There is no dev environment.
+
 **Benefits:**
-- ✅ No cloud costs
-- ✅ Same queue-based architecture as production
-- ✅ Full local control
-- ✅ Easy dev/prod environment switching (via missing-table workers)
+- No cloud costs for the scraper pipeline
+- Full local control
+- Queue-based architecture for reliability
 
 ## Prerequisites
 
-1. **K3s or Rancher Desktop** installed and running
-2. **kubectl** configured to connect to your k3s cluster
+1. **Rancher Desktop** installed and running on M4 Mac
+2. **kubectl** configured with `rancher-desktop` context
 3. **Docker** for building images
-4. **missing-table backend** with Celery workers ready to deploy
 
 ## Quick Start
 
@@ -35,7 +38,7 @@ match-scraper (CronJob) → RabbitMQ → missing-table workers → Supabase (pro
 
 This script will:
 1. Build the Docker image
-2. Import it into k3s
+2. Import it into K3s
 3. Deploy RabbitMQ
 4. Deploy match-scraper CronJob
 5. Verify everything is running
@@ -58,41 +61,9 @@ This script will:
 1. Check RabbitMQ management UI: http://localhost:30672
    - Username: `admin`
    - Password: `admin123`
-2. Confirm messages are queued in the `matches` queue
-3. Ensure missing-table workers process the messages
-4. Verify data appears in Supabase
-
-## Detailed Deployment
-
-### Step-by-Step Deployment
-
-#### 1. Deploy RabbitMQ Only
-
-```bash
-./scripts/deploy-k3s.sh --rabbitmq-only
-```
-
-This creates:
-- RabbitMQ StatefulSet with persistent storage
-- Internal service at `rabbitmq.match-scraper:5672`
-- Management UI at `http://localhost:30672`
-
-#### 2. Deploy Match-Scraper Only
-
-```bash
-./scripts/deploy-k3s.sh --scraper-only
-```
-
-This creates:
-- CronJob scheduled for daily 6 AM UTC
-- ConfigMap with scraping configuration
-- Uses local Docker image (no registry pull)
-
-#### 3. Skip Docker Build (Use Existing Image)
-
-```bash
-./scripts/deploy-k3s.sh --skip-build
-```
+2. Confirm messages are queued in the `matches.prod` queue
+3. Ensure Celery workers process the messages
+4. Verify data appears in prod Supabase
 
 ## Configuration
 
@@ -128,7 +99,7 @@ Edit `k3s/match-scraper/cronjob.yaml`:
 
 ```yaml
 spec:
-  schedule: "0 6 * * *"  # Daily at 6 AM UTC
+  schedule: "0 14 * * *"  # Daily at 14:00 UTC
   timeZone: "UTC"
 ```
 
@@ -153,27 +124,16 @@ kubectl apply -f k3s/rabbitmq/secret.yaml
 kubectl rollout restart statefulset rabbitmq -n match-scraper
 ```
 
-## Environment Switching (Dev/Prod)
+## Queue Architecture
 
-The match-scraper always queues messages to RabbitMQ. Environment switching happens in the **missing-table Celery workers**.
+The scraper publishes to the `matches-fanout` exchange. Messages are routed to bound queues:
 
-### For Missing-Table Workers
+| Queue | Workers | Supabase | Purpose |
+|-------|---------|----------|---------|
+| `matches.prod` | Prod Celery workers | `ppgxasqgqbnauvxozmjw.supabase.co` | Production (missingtable.com) |
+| `matches.local` | Local Celery workers | `localhost:54321` | Local development |
 
-Configure workers to point to different Supabase instances:
-
-**Production:**
-```yaml
-# missing-table ConfigMap
-SUPABASE_URL: "https://your-prod-project.supabase.co"
-SUPABASE_KEY: "your-prod-key"
-```
-
-**Development:**
-```yaml
-# missing-table ConfigMap
-SUPABASE_URL: "https://your-dev-project.supabase.co"
-SUPABASE_KEY: "your-dev-key"
-```
+See [workers/README.md](../../k3s/workers/README.md) for worker deployment details.
 
 ## Monitoring and Troubleshooting
 
@@ -206,12 +166,8 @@ Access at: http://localhost:30672
 
 **Check queues:**
 - Navigate to "Queues" tab
-- Look for `matches` queue
+- Look for `matches.prod` and `matches.local` queues
 - Check message count and consumer status
-
-**View messages:**
-- Click on `matches` queue
-- Use "Get messages" to peek at queued data
 
 ### Common Issues
 
@@ -249,34 +205,17 @@ kubectl delete statefulset rabbitmq -n match-scraper
 2. Job succeeded: `./scripts/test-k3s.sh logs`
 3. RabbitMQ connection in logs: Look for "Celery client initialized"
 
-**Debug:**
-```bash
-# Trigger manual job with verbose logging
-kubectl create job --from=cronjob/match-scraper-cronjob debug-$(date +%s) -n match-scraper
-
-# Check logs
-./scripts/test-k3s.sh logs
-```
-
 #### 4. Workers Not Processing Messages
 
-**This is a missing-table issue, not match-scraper.**
+```bash
+# Check worker status
+kubectl get pods -n match-scraper -l app=missing-table-worker
 
-**Check:**
-1. Workers are running
-2. Workers are connected to same RabbitMQ (`rabbitmq.match-scraper:5672`)
-3. Workers are consuming from `matches` queue
+# Check worker logs
+kubectl logs -n match-scraper -l environment=prod --tail=100
+```
 
 ## Maintenance
-
-### Update Configuration
-
-```bash
-# Edit ConfigMap
-kubectl edit configmap match-scraper-config -n match-scraper
-
-# Changes apply to next job run (no restart needed for CronJob)
-```
 
 ### Update Docker Image
 
@@ -297,68 +236,6 @@ sudo k3s ctr images import /tmp/match-scraper.tar
 ./scripts/test-k3s.sh cleanup
 ```
 
-### View Job History
-
-```bash
-# See recent jobs
-kubectl get jobs -n match-scraper --sort-by=.metadata.creationTimestamp
-
-# Check specific job
-kubectl describe job <job-name> -n match-scraper
-```
-
-## Backup and Recovery
-
-### Backup RabbitMQ Data
-
-```bash
-# Get persistent volume
-kubectl get pvc -n match-scraper
-
-# Backup data (adjust path as needed)
-kubectl exec -n match-scraper rabbitmq-0 -- tar czf - /var/lib/rabbitmq/mnesia > rabbitmq-backup.tar.gz
-```
-
-### Restore RabbitMQ Data
-
-```bash
-# Copy backup to pod
-kubectl cp rabbitmq-backup.tar.gz match-scraper/rabbitmq-0:/tmp/
-
-# Restore (adjust paths)
-kubectl exec -n match-scraper rabbitmq-0 -- tar xzf /tmp/rabbitmq-backup.tar.gz -C /
-```
-
-## Uninstall
-
-### Remove Everything
-
-```bash
-# Delete match-scraper
-kubectl delete -f k3s/match-scraper/cronjob.yaml
-kubectl delete -f k3s/match-scraper/configmap.yaml
-kubectl delete -f k3s/match-scraper/secret.yaml
-
-# Delete RabbitMQ (WARNING: This deletes data)
-kubectl delete -f k3s/rabbitmq/statefulset.yaml
-kubectl delete -f k3s/rabbitmq/service.yaml
-kubectl delete -f k3s/rabbitmq/configmap.yaml
-kubectl delete -f k3s/rabbitmq/secret.yaml
-
-# Delete namespace
-kubectl delete namespace match-scraper
-```
-
-### Remove Docker Image
-
-```bash
-# From k3s
-sudo k3s ctr images rm docker.io/library/match-scraper:latest
-
-# From Docker
-docker rmi match-scraper:latest
-```
-
 ## Resource Usage
 
 **RabbitMQ:**
@@ -371,35 +248,4 @@ docker rmi match-scraper:latest
 - Memory: 1Gi request, 2Gi limit
 - Runs for ~2-5 minutes per job
 
-**Total k3s footprint:** ~3-4Gi RAM, 5Gi storage
-
-## Production Considerations
-
-### Security
-
-1. **Change RabbitMQ credentials** in `k3s/rabbitmq/secret.yaml`
-2. **Restrict NodePort** access to RabbitMQ management UI
-3. **Enable TLS** for RabbitMQ connections (optional)
-
-### Monitoring
-
-Consider adding:
-- Prometheus metrics from RabbitMQ (port 15692)
-- Alerting for failed jobs
-- Queue depth monitoring
-
-### Scaling
-
-For higher frequency scraping:
-1. Adjust CronJob schedule (e.g., every 6 hours)
-2. Increase RabbitMQ resources if queue builds up
-3. Scale missing-table workers to process faster
-
-## Next Steps
-
-1. ✅ Deploy RabbitMQ and match-scraper
-2. ✅ Trigger test job and verify pipeline
-3. ✅ Configure missing-table workers to consume from queue
-4. ✅ Validate data in Supabase
-5. 📋 Set up monitoring/alerts (optional)
-6. 📋 Schedule regular backups (optional)
+**Total K3s footprint:** ~3-4Gi RAM, 5Gi storage
