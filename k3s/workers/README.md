@@ -1,70 +1,39 @@
 # Missing Table Celery Workers for K3s
 
-This directory contains manifests for Celery workers that process match data from RabbitMQ and write to Supabase.
+This directory contains manifests for Celery workers that process match data from RabbitMQ and write to Supabase. All workers run on the M4 Mac in rancher-desktop K3s alongside the rest of the scraper pipeline.
 
 ## Architecture
 
 ```
-Match Scraper → matches-fanout exchange
-                 ├→ matches.prod queue → Prod Workers → Prod Supabase
-                 └→ matches.dev queue  → Dev Workers  → Dev Supabase
+Match Scraper Agent → matches-fanout exchange
+                       ├→ matches.prod queue  → Prod Workers  → Prod Supabase (missingtable.com)
+                       └→ matches.local queue → Local Workers → Local Supabase (localhost:54321)
 ```
+
+**Environments**: Prod and local only. There is no dev environment.
 
 ## Worker Types
 
-### Development Workers (`dev-*`)
-- **Queue**: `matches.dev`
-- **Supabase**: Development instance (ppgxasqgqbnauvxozmjw)
-- **Replicas**: 2
-- **Purpose**: Testing and development
-
 ### Production Workers (`prod-*`)
 - **Queue**: `matches.prod`
-- **Supabase**: Production instance (requires configuration)
+- **Supabase**: Prod instance (`ppgxasqgqbnauvxozmjw`) — serves missingtable.com
 - **Replicas**: 2
 - **Purpose**: Production data storage
 
+### Local Workers (`local-*`)
+- **Queue**: `matches.local`
+- **Supabase**: Local instance (`localhost:54321`)
+- **Replicas**: 1
+- **Purpose**: Local development and testing
+
 ## Setup Instructions
 
-### 1. Deploy Development Workers
+### 1. Deploy Production Workers
 
-Development workers use existing secrets (`missing-table-worker-secrets`).
-
-```bash
-# Apply dev worker configuration
-kubectl apply -f k3s/workers/dev-configmap.yaml
-kubectl apply -f k3s/workers/dev-deployment.yaml
-
-# Verify deployment
-kubectl get pods -n match-scraper -l environment=dev
-kubectl logs -n match-scraper -l environment=dev --tail=50
-```
-
-### 2. Deploy Production Workers
-
-**Prerequisites**: Production Supabase credentials
-
-**📖 See detailed credential guide: [docs/deployment/supabase-credentials.md](../../docs/deployment/supabase-credentials.md)**
+Production workers use existing secrets (`missing-table-worker-secrets`).
 
 ```bash
-# Step 1: Create prod secrets
-cp k3s/workers/prod-secret.yaml.template k3s/workers/prod-secret.yaml
-
-# Step 2: Edit prod-secret.yaml with your production credentials
-# Follow the detailed guide: docs/deployment/supabase-credentials.md
-# Quick reference:
-#   - SUPABASE_KEY: Supabase Dashboard → Settings → API → service_role key
-#   - SUPABASE_JWT_SECRET: Supabase Dashboard → Settings → API → JWT Secret
-#   - SERVICE_ACCOUNT_SECRET: From your backend .env or existing dev secret
-#
-# Encode values: echo -n "your-value" | base64
-
-# Step 3: Update Supabase URL in prod ConfigMap
-# Edit k3s/workers/prod-configmap.yaml
-# Replace: YOUR_PROD_SUPABASE_URL with actual prod URL
-
-# Step 4: Apply prod worker configuration
-kubectl apply -f k3s/workers/prod-secret.yaml
+# Apply prod worker configuration
 kubectl apply -f k3s/workers/prod-configmap.yaml
 kubectl apply -f k3s/workers/prod-deployment.yaml
 
@@ -73,17 +42,16 @@ kubectl get pods -n match-scraper -l environment=prod
 kubectl logs -n match-scraper -l environment=prod --tail=50
 ```
 
-### 3. Remove Old Workers (Optional)
-
-If you have the old unified worker deployment:
+### 2. Deploy Local Workers (Optional)
 
 ```bash
-# Scale down old workers
-kubectl scale deployment missing-table-celery-worker -n match-scraper --replicas=0
+# Apply local worker configuration
+kubectl apply -f k3s/workers/local-configmap.yaml
+kubectl apply -f k3s/workers/local-deployment.yaml
 
-# Or delete entirely
-kubectl delete deployment missing-table-celery-worker -n match-scraper
-kubectl delete configmap missing-table-worker-config -n match-scraper
+# Verify deployment
+kubectl get pods -n match-scraper -l environment=local
+kubectl logs -n match-scraper -l environment=local --tail=50
 ```
 
 ## Monitoring Workers
@@ -92,11 +60,11 @@ kubectl delete configmap missing-table-worker-config -n match-scraper
 # Check worker status
 kubectl get deployments -n match-scraper -l app=missing-table-worker
 
-# View dev worker logs
-kubectl logs -n match-scraper -l environment=dev -f
-
 # View prod worker logs
 kubectl logs -n match-scraper -l environment=prod -f
+
+# View local worker logs
+kubectl logs -n match-scraper -l environment=local -f
 
 # Check queue status in RabbitMQ
 kubectl exec -n match-scraper rabbitmq-0 -- rabbitmqctl list_queues name messages consumers
@@ -108,11 +76,11 @@ kubectl exec -n match-scraper rabbitmq-0 -- rabbitmqctl list_queues name message
 ## Scaling Workers
 
 ```bash
-# Scale dev workers
-kubectl scale deployment missing-table-celery-worker-dev -n match-scraper --replicas=4
-
 # Scale prod workers
 kubectl scale deployment missing-table-celery-worker-prod -n match-scraper --replicas=4
+
+# Scale local workers
+kubectl scale deployment missing-table-celery-worker-local -n match-scraper --replicas=2
 ```
 
 ## Troubleshooting
@@ -121,7 +89,7 @@ kubectl scale deployment missing-table-celery-worker-prod -n match-scraper --rep
 
 ```bash
 # Check worker logs for errors
-kubectl logs -n match-scraper -l environment=dev --tail=100
+kubectl logs -n match-scraper -l environment=prod --tail=100
 
 # Verify queue bindings in RabbitMQ
 kubectl exec -n match-scraper rabbitmq-0 -- rabbitmqctl list_bindings
@@ -134,30 +102,19 @@ kubectl exec -n match-scraper rabbitmq-0 -- rabbitmqctl list_exchanges
 
 ```bash
 # Test RabbitMQ connectivity from worker pod
-kubectl exec -n match-scraper deployment/missing-table-celery-worker-dev -- \
+kubectl exec -n match-scraper deployment/missing-table-celery-worker-prod -- \
   curl -u admin:admin123 http://rabbitmq.match-scraper:15672/api/overview
 
 # Check ConfigMap values
-kubectl get configmap missing-table-worker-dev-config -n match-scraper -o yaml
-```
-
-### Supabase connection issues
-
-```bash
-# Check secret values (base64 encoded)
-kubectl get secret missing-table-worker-prod-secrets -n match-scraper -o yaml
-
-# Decode a secret value
-kubectl get secret missing-table-worker-prod-secrets -n match-scraper \
-  -o jsonpath='{.data.SUPABASE_KEY}' | base64 --decode
+kubectl get configmap missing-table-worker-prod-config -n match-scraper -o yaml
 ```
 
 ## Configuration Files
 
-- `dev-configmap.yaml` - Dev worker environment variables
-- `dev-deployment.yaml` - Dev worker deployment spec
 - `prod-configmap.yaml` - Prod worker environment variables
 - `prod-deployment.yaml` - Prod worker deployment spec
+- `local-configmap.yaml` - Local worker environment variables
+- `local-deployment.yaml` - Local worker deployment spec
 - `prod-secret.yaml.template` - Prod secrets template (copy and fill in)
 
 ## Security Notes

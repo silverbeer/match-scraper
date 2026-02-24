@@ -6,7 +6,7 @@
 
 ## What We Built
 
-Complete local k3s deployment solution for match-scraper with RabbitMQ to populate Supabase (dev for testing, prod when ready).
+Complete local K3s deployment solution for match-scraper with RabbitMQ to populate prod Supabase (missingtable.com).
 
 ### New Files Created
 
@@ -127,36 +127,16 @@ Check the `matches` queue to see messages being queued.
 - Matches are queued to the `matches` queue
 - No direct API calls from scraper
 
-### Testing with Dev Supabase
+### Supabase Target
 
-The match-scraper just queues messages. To test with dev Supabase:
+The match-scraper just queues messages. Celery workers consume from the queue and write to Supabase.
 
-1. **Ensure missing-table Celery workers are deployed** in k3s
-2. **Configure workers to point at dev Supabase:**
-   ```yaml
-   # In missing-table worker ConfigMap
-   SUPABASE_URL: "https://your-dev-project.supabase.co"
-   SUPABASE_KEY: "your-dev-anon-key"
-   RABBITMQ_URL: "amqp://admin:admin123@rabbitmq.match-scraper:5672//"
-   ```
-3. **Workers consume from `matches` queue**
-4. **Data flows to dev Supabase**
+**Environments**: Prod and local only. There is no dev environment.
 
-### Switching to Prod Supabase
+- **Prod workers** consume from `matches.prod` → write to prod Supabase (missingtable.com)
+- **Local workers** consume from `matches.local` → write to local Supabase (localhost:54321)
 
-When ready for production:
-
-1. **Update missing-table worker ConfigMap:**
-   ```yaml
-   SUPABASE_URL: "https://your-prod-project.supabase.co"
-   SUPABASE_KEY: "your-prod-anon-key"
-   ```
-2. **Restart workers:**
-   ```bash
-   kubectl rollout restart deployment missing-table-worker -n match-scraper
-   ```
-
-No changes needed to match-scraper - it just queues!
+See [workers/README.md](../../k3s/workers/README.md) for worker deployment details.
 
 ## Monitoring
 
@@ -251,7 +231,7 @@ kubectl get pvc -n match-scraper
 2. ✅ Trigger test job: `./scripts/test-k3s.sh trigger`
 3. ✅ Verify messages in RabbitMQ: http://localhost:30672
 4. ✅ Ensure missing-table workers are running and connected
-5. ✅ Check data appears in dev Supabase
+5. ✅ Check data appears in prod Supabase
 6. 🎯 Once validated, switch workers to prod Supabase
 
 ## Important Notes

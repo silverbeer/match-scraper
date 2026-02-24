@@ -30,7 +30,7 @@ Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
 ## Features
 
 - **Automated Scraping**: Playwright-based web scraping of youth soccer match data
-- **Queue Integration**: RabbitMQ fanout to local + dev environments (prod deprecated as of 2025-11-14)
+- **Queue Integration**: RabbitMQ fanout to prod + local environments
 - **Audit Trail**: JSONL audit logs with change tracking and validation (see [Audit Guide](docs/guides/audit-system.md))
 - **Scheduled Execution**: Kubernetes CronJob runs daily at 6 AM UTC
 - **Containerized Deployment**: K3s deployment with optimized Docker container
