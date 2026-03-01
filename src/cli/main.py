@@ -94,6 +94,7 @@ VALID_DIVISIONS = [
     "Great Lakes",
     "Texas",
     "California",
+    "Florida",
 ]
 VALID_CONFERENCES = [
     "New England",
@@ -2172,6 +2173,173 @@ def options() -> None:
     Displays available age groups, divisions, and usage examples.
     """
     config_options()
+
+
+@app.command()
+def discover(
+    division: Annotated[
+        str,
+        typer.Option(
+            "--division",
+            "-d",
+            help="Division to discover teams for",
+        ),
+    ],
+    output: Annotated[
+        str,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output JSON file path (default: <division>-clubs.json)",
+        ),
+    ] = "",
+    league: Annotated[
+        str,
+        typer.Option("--league", "-lg", help="League type"),
+    ] = DEFAULT_LEAGUE,
+    headless: Annotated[
+        bool,
+        typer.Option("--headless/--no-headless", help="Run browser in headless mode"),
+    ] = True,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Verbose output with debug info"),
+    ] = False,
+    age_groups: Annotated[
+        Optional[str],
+        typer.Option(
+            "--age-groups",
+            help="Comma-separated age groups to scan (default: U13,U14,U15,U16,U17,U19)",
+        ),
+    ] = None,
+) -> None:
+    """
+    Discover clubs/teams in a division by scraping match data across age groups.
+
+    Outputs a clubs.json-compatible JSON file listing every team found,
+    along with the age groups each team appears in.
+
+    Example:
+        mls-scraper discover --division Florida
+        mls-scraper discover --division Florida --output florida-clubs.json
+        mls-scraper discover --division Florida --age-groups U14,U15
+    """
+    from src.scraper.division_discovery import DivisionDiscoverer
+
+    setup_environment(verbose)
+
+    # Validate division
+    if division not in VALID_DIVISIONS:
+        console.print(
+            f"[red]Invalid division: {division}[/red]\n"
+            f"[dim]Valid divisions: {', '.join(VALID_DIVISIONS)}[/dim]"
+        )
+        raise typer.Exit(code=1)
+
+    # Validate league
+    if league not in VALID_LEAGUES:
+        console.print(
+            f"[red]Invalid league: {league}[/red]\n"
+            f"[dim]Valid leagues: {', '.join(VALID_LEAGUES)}[/dim]"
+        )
+        raise typer.Exit(code=1)
+
+    # Parse age groups
+    parsed_age_groups = None
+    if age_groups:
+        parsed_age_groups = [ag.strip() for ag in age_groups.split(",")]
+        for ag in parsed_age_groups:
+            if ag not in VALID_AGE_GROUPS:
+                console.print(
+                    f"[red]Invalid age group: {ag}[/red]\n"
+                    f"[dim]Valid age groups: {', '.join(VALID_AGE_GROUPS)}[/dim]"
+                )
+                raise typer.Exit(code=1)
+
+    # Default output filename
+    output_path = output or f"{division.lower()}-clubs.json"
+
+    display_header()
+
+    console.print(
+        Panel(
+            f"Division: [bold]{division}[/bold]\n"
+            f"League: [bold]{league}[/bold]\n"
+            f"Age Groups: [bold]{', '.join(parsed_age_groups or ['U13', 'U14', 'U15', 'U16', 'U17', 'U19'])}[/bold]\n"
+            f"Output: [bold]{output_path}[/bold]",
+            title="Division Discovery",
+            border_style="cyan",
+        )
+    )
+
+    discoverer = DivisionDiscoverer(
+        division=division,
+        league=league,
+        headless=headless,
+        age_groups=parsed_age_groups,
+    )
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task(f"Discovering teams in {division}...", total=None)
+            clubs = asyncio.run(discoverer.discover())
+
+        if not clubs:
+            console.print(f"[yellow]No teams found in {division} division.[/yellow]")
+            raise typer.Exit(code=0)
+
+        # Serialize to JSON
+        clubs_data = [club.model_dump() for club in clubs]
+
+        with open(output_path, "w") as f:
+            json.dump(clubs_data, f, indent=2)
+
+        # Display summary
+        total_teams = len(clubs)
+        all_age_groups: set[str] = set()
+        for club in clubs:
+            for team in club.teams:
+                all_age_groups.update(team.age_groups)
+
+        summary_table = Table(show_header=True, header_style="bold magenta", box=None)
+        summary_table.add_column("Club", style="green", min_width=30)
+        summary_table.add_column("Age Groups", style="cyan")
+
+        for club in clubs:
+            for team in club.teams:
+                summary_table.add_row(
+                    club.club_name,
+                    ", ".join(team.age_groups),
+                )
+
+        console.print(
+            Panel(
+                summary_table,
+                title=f"Discovered {total_teams} Clubs in {division}",
+                border_style="green",
+            )
+        )
+        console.print(f"\n[green]Saved to {output_path}[/green]")
+        console.print(
+            f"[dim]Age groups covered: {', '.join(sorted(all_age_groups, key=lambda ag: int(ag[1:])))}[/dim]"
+        )
+        console.print(
+            "\n[dim]Next steps:[/dim]\n"
+            f"  1. Review and edit {output_path} (add location, website, is_pro_academy)\n"
+            "  2. Merge entries into clubs.json\n"
+            "  3. Run setup_leagues_divisions.py to create the division\n"
+            "  4. Run manage_clubs.py sync to create clubs/teams in DB\n"
+        )
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        handle_cli_error(e, verbose)
+        raise typer.Exit(code=1) from None
 
 
 if __name__ == "__main__":
