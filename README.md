@@ -8,11 +8,11 @@
 
 🏆 **[View Test Reports & Coverage](https://silverbeer.github.io/match-scraper/)**
 
-Automated soccer match data scraper with RabbitMQ queue integration.
+Scraping library for youth soccer match data, used by [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent).
 
 ## Overview
 
-This application scrapes match data from youth soccer websites and sends it to a RabbitMQ queue for processing by backend workers. Deployed on K3s as a scheduled CronJob, built with Playwright and comprehensive monitoring.
+This library provides the core scraping engine for extracting match data from youth soccer websites. It handles Playwright browser automation, website filter application, match extraction, and data models. **Deployment and scheduling are managed by the [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) repo**, which imports this library and runs it as K3s CronJobs with RabbitMQ queue integration.
 
 ## 📚 Documentation
 
@@ -30,12 +30,14 @@ Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
 ## Features
 
 - **Automated Scraping**: Playwright-based web scraping of youth soccer match data
+- **Division Discovery**: Discover clubs and teams across any supported division
 - **Queue Integration**: RabbitMQ fanout to prod + local environments
 - **Audit Trail**: JSONL audit logs with change tracking and validation (see [Audit Guide](docs/guides/audit-system.md))
-- **Scheduled Execution**: Kubernetes CronJob runs daily at 6 AM UTC
-- **Containerized Deployment**: K3s deployment with optimized Docker container
 - **Data Validation**: Pydantic models for robust data validation and serialization
+- **Rich CLI**: Beautiful terminal interface for local scraping and debugging
 - **Quality Testing**: Comprehensive test suite with unit, integration, and e2e tests
+
+> **Note:** Deployment (K3s CronJobs, scheduling, Docker image builds) is handled by [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent).
 
 ## Development Setup
 
@@ -236,66 +238,27 @@ tests/
 ├── unit/                  # Fast unit tests (CI)
 ├── integration/           # Multi-component tests
 ├── e2e/                  # End-to-end browser tests
-k3s/                      # K3s manifests
-├── rabbitmq/             # RabbitMQ deployment
-│   ├── namespace.yaml    # Shared namespace
-│   ├── statefulset.yaml  # RabbitMQ StatefulSet
-│   ├── service.yaml      # Internal and NodePort services
-│   ├── configmap.yaml    # RabbitMQ configuration
-│   └── secret.yaml       # RabbitMQ credentials
-└── match-scraper/        # Match-scraper deployment
-    ├── configmap.yaml    # Scraper configuration
-    ├── secret.yaml       # API tokens (optional)
-    └── cronjob.yaml      # Scheduled job
+k3s/                      # Legacy K3s manifests (deployment now in match-scraper-agent)
 scripts/
-├── deploy-k3s.sh         # K3s deployment
-├── test-k3s.sh           # K3s testing and monitoring
-├── trigger-scrape.sh     # Manual scrape trigger
-└── test-review.py        # Test analysis helper script
+├── test-review.py        # Test analysis helper script
+└── ...                   # Legacy deployment scripts
 ```
 
 ## Deployment
 
-### K3s Deployment
-
-The scraper runs as a Kubernetes CronJob on K3s with RabbitMQ:
-
-#### Quick Start
-
-```bash
-# One-command deployment (RabbitMQ + match-scraper)
-./scripts/deploy-k3s.sh
-
-# Test the pipeline
-./scripts/test-k3s.sh trigger
-./scripts/test-k3s.sh logs
-
-# Check RabbitMQ status
-./scripts/test-k3s.sh rabbitmq
-```
+**Production deployment is managed by [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent)**, which imports this library and runs it as K3s CronJobs.
 
 **Architecture:**
 ```
-match-scraper (CronJob) → RabbitMQ → backend workers → database
+match-scraper-agent (CronJobs) → uses match-scraper (this repo) → RabbitMQ → Celery workers → Supabase
 ```
 
-**Benefits:**
-- ✅ No cloud costs
-- ✅ Same queue-based architecture
-- ✅ Full local control
-- ✅ Easy dev/prod environment switching
+See the [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) repo for:
+- CronJob scheduling and division configuration
+- Docker image builds
+- K3s deployment manifests
 
-**Documentation:**
-- 📖 [K3s Deployment Guide](docs/deployment/k3s-deployment.md) - Complete local deployment guide
-- 🔧 [Configuration](k3s/match-scraper/configmap.yaml) - Scraper configuration
-- 🐰 [RabbitMQ Setup](k3s/rabbitmq/) - RabbitMQ manifests
-
-**Key Features:**
-- RabbitMQ StatefulSet with persistent storage
-- Management UI at http://localhost:30672
-- Automated build and image import to k3s
-- Manual job triggering for testing
-- Real-time log monitoring
+> **Note:** The `k3s/` directory and `scripts/deploy-k3s.sh` in this repo are legacy from when match-scraper was deployed standalone. They are kept for historical reference but are not used in production.
 
 ## CLI Tool
 

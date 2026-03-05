@@ -798,7 +798,8 @@ class TestPagination:
     async def test_extract_all_pages_max_pages_limit(self, match_extractor):
         """Stop at MAX_PAGES even if _has_next_page would return True."""
         match_extractor.MAX_PAGES = 2
-        page = [self._make_match(1)]
+        page1 = [self._make_match(1)]
+        page2 = [self._make_match(2)]
 
         with (
             patch.object(match_extractor, "_access_iframe_content", return_value=True),
@@ -806,7 +807,7 @@ class TestPagination:
             patch.object(
                 match_extractor,
                 "_extract_from_current_page",
-                return_value=page,
+                side_effect=[page1, page2],
             ),
             patch.object(match_extractor, "_has_next_page", return_value=True),
             patch.object(match_extractor, "_navigate_to_next_page", return_value=True),
@@ -815,6 +816,29 @@ class TestPagination:
             result = await match_extractor._extract_all_pages("U14", "NE")
             # Should stop after 2 pages (MAX_PAGES)
             assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_extract_all_pages_stops_on_duplicate_page(self, match_extractor):
+        """Stop pagination when a page returns only already-seen matches."""
+        match_extractor.MAX_PAGES = 10
+        page1 = [self._make_match(1)]
+        page1_dup = [self._make_match(1)]  # Same match ID as page 1
+
+        with (
+            patch.object(match_extractor, "_access_iframe_content", return_value=True),
+            patch.object(match_extractor, "_wait_for_results", return_value=True),
+            patch.object(
+                match_extractor,
+                "_extract_from_current_page",
+                side_effect=[page1, page1_dup],
+            ),
+            patch.object(match_extractor, "_has_next_page", return_value=True),
+            patch.object(match_extractor, "_navigate_to_next_page", return_value=True),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await match_extractor._extract_all_pages("U14", "NE")
+            # Should stop after page 2 returns only duplicates
+            assert len(result) == 1
 
     @pytest.mark.asyncio
     async def test_find_next_button_css_selector(self, match_extractor):

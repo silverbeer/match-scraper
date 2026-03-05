@@ -176,6 +176,7 @@ class MLSMatchExtractor:
         import asyncio
 
         all_matches = []
+        seen_match_ids: set[str] = set()
 
         # CRITICAL: Access iframe content first
         logger.info("Initializing iframe access for pagination...")
@@ -201,10 +202,25 @@ class MLSMatchExtractor:
             )
 
             if page_matches:
-                all_matches.extend(page_matches)
+                # Deduplicate: only add matches with IDs not yet seen
+                new_matches = [
+                    m for m in page_matches if m.match_id not in seen_match_ids
+                ]
+
+                if not new_matches:
+                    logger.info(
+                        f"Page {current_page}: All {len(page_matches)} matches "
+                        f"already seen - pagination is not advancing, stopping"
+                    )
+                    break
+
+                for m in new_matches:
+                    seen_match_ids.add(m.match_id)
+                all_matches.extend(new_matches)
                 logger.info(
-                    f"Page {current_page}: Found {len(page_matches)} matches "
-                    f"(total so far: {len(all_matches)})"
+                    f"Page {current_page}: Found {len(new_matches)} new matches "
+                    f"({len(page_matches) - len(new_matches)} duplicates skipped, "
+                    f"total so far: {len(all_matches)})"
                 )
             else:
                 logger.info(f"Page {current_page}: No matches found")
@@ -229,7 +245,7 @@ class MLSMatchExtractor:
             await asyncio.sleep(2)
 
         logger.info(
-            f"Pagination complete: Extracted {len(all_matches)} total matches "
+            f"Pagination complete: Extracted {len(all_matches)} unique matches "
             f"from {current_page} page(s)"
         )
         return all_matches

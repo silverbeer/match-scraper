@@ -1,6 +1,8 @@
 # 📚 MLS Match Scraper Documentation
 
-Welcome to the comprehensive documentation for the MLS Match Scraper project. This documentation is organized by topic to help you find what you need quickly.
+Welcome to the documentation for the MLS Match Scraper library. This library provides the core scraping engine used by [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) for production deployment.
+
+> **Deployment Note:** CronJob scheduling, Docker builds, and K3s manifests are managed in the [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) repo. Deployment docs here are kept for historical reference.
 
 ## 📖 Quick Navigation
 
@@ -16,7 +18,7 @@ Welcome to the comprehensive documentation for the MLS Match Scraper project. Th
 - [Fast Commits](development/fast-commits.md) - Tips for faster development workflow
 
 ### 🚢 Deployment
-- [K3s Deployment Guide](deployment/k3s-deployment.md) - Local/cost-effective deployment with k3s and RabbitMQ
+- [K3s Deployment Guide](deployment/k3s-deployment.md) - Historical reference (deployment now in [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent))
 - [Supabase Credentials Guide](deployment/supabase-credentials.md) - How to get Supabase credentials for production
 
 ### 📊 Observability
@@ -73,8 +75,9 @@ docs/
 4. Use [CLI Usage Guide](guides/cli-usage.md) for local testing
 
 ### I'm a DevOps Engineer
-1. For deployment: [K3s Deployment Guide](deployment/k3s-deployment.md)
-2. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
+1. For deployment: See [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) (owns CronJobs and K3s manifests)
+2. Historical reference: [K3s Deployment Guide](deployment/k3s-deployment.md)
+3. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
 
 ### I'm New to the Project
 1. Start with the [Main README](../README.md)
@@ -102,7 +105,7 @@ docs/
 ### By Task
 - **Understanding the Pipeline**: [`architecture/async-message-queue-architecture.md`](architecture/async-message-queue-architecture.md) ⭐
 - **Running Tests**: [`development/testing.md`](development/testing.md)
-- **Deploying Locally (k3s)**: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md)
+- **Deploying Locally (k3s)**: See [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) (historical ref: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md))
 - **Setting up Monitoring**: [`observability/grafana-cloud-setup.md`](observability/grafana-cloud-setup.md)
 - **Using the CLI**: [`guides/cli-usage.md`](guides/cli-usage.md)
 - **Changing RabbitMQ Password**: [`guides/rabbitmq-password-change.md`](guides/rabbitmq-password-change.md)
@@ -133,6 +136,6 @@ See [CLAUDE.md](../CLAUDE.md) for AI assistant guidelines on maintaining documen
 
 ---
 
-**Last Updated**: 2025-10-19
+**Last Updated**: 2026-03-05
 
 This documentation is maintained alongside the codebase. If you find outdated information, please update it and include the changes in your pull request.
