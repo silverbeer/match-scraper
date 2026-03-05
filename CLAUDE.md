@@ -2,6 +2,26 @@
 
 This file contains project-specific preferences and conventions for Claude Code to follow when working on this codebase.
 
+## Architecture: Library consumed by match-scraper-agent
+
+**match-scraper is a scraping library, not a standalone deployed application.**
+
+- This repo provides the scraping engine: Playwright browser automation, filter application, match extraction, data models, and CLI tools
+- **match-scraper-agent** (separate repo) is the deployment layer that imports and orchestrates match-scraper
+  - CronJob scheduling, division/age-group configuration, and K3s manifests live in match-scraper-agent
+  - All deployment changes (adding new divisions, changing schedules) happen in match-scraper-agent
+- The `k3s/` directory and `scripts/deploy-k3s.sh` in this repo are **legacy/historical** from when match-scraper was deployed standalone — they are not used in production
+- When making changes here, consider the downstream impact on match-scraper-agent
+
+### Pipeline Architecture
+```
+match-scraper (this repo, library)
+    └── used by: match-scraper-agent (CronJobs on K3s)
+                     └── publishes to: RabbitMQ (matches-fanout exchange)
+                                          ├── matches.prod → Celery workers → Supabase (missingtable.com)
+                                          └── matches.local → Celery workers → Local Supabase
+```
+
 ## Code Style Preferences
 
 ### Data Models

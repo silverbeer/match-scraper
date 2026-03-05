@@ -95,6 +95,7 @@ class MLSFilterApplicator:
         "Great Lakes",
         "Texas",
         "California",
+        "Florida",
     }
 
     # Loading indicator selectors for result waiting
