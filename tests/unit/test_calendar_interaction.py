@@ -1,7 +1,7 @@
 """Unit tests for calendar interaction module."""
 
 from datetime import date
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -258,16 +258,15 @@ class TestMLSCalendarInteractor:
     async def test_set_date_range_direct_input_no_input_field(
         self, calendar_interactor
     ):
-        """Test direct date input when input field is not found."""
-        mock_iframe_content = AsyncMock()
-        mock_iframe_content.query_selector.return_value = None
+        """Test date range setting when input field is not found."""
+        mock_iframe_content = MagicMock()
+        mock_locator = MagicMock()
+        mock_locator.count = AsyncMock(return_value=0)
+        mock_iframe_content.locator.return_value = mock_locator
         calendar_interactor.iframe_content = mock_iframe_content
 
-        start_date = date(2024, 1, 15)
-        end_date = date(2024, 1, 20)
-
         result = await calendar_interactor._set_date_range_direct_input(
-            start_date, end_date
+            date(2024, 1, 15), date(2024, 1, 20)
         )
 
         assert result is False
@@ -276,19 +275,475 @@ class TestMLSCalendarInteractor:
     async def test_set_date_range_direct_input_with_exception(
         self, calendar_interactor
     ):
-        """Test direct date input with exception handling."""
-        mock_iframe_content = AsyncMock()
-        mock_input = AsyncMock()
-        mock_input.fill.side_effect = Exception("Fill error")
-        mock_iframe_content.query_selector.return_value = mock_input
+        """Test date range setting with exception handling."""
+        mock_iframe_content = MagicMock()
+        mock_iframe_content.locator.side_effect = Exception("Locator error")
         calendar_interactor.iframe_content = mock_iframe_content
 
-        start_date = date(2024, 1, 15)
-        end_date = date(2024, 1, 20)
+        result = await calendar_interactor._set_date_range_direct_input(
+            date(2024, 1, 15), date(2024, 1, 20)
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_calendar_picker_not_opened(self, calendar_interactor):
+        """Test date range when calendar picker doesn't open after clicking."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=0)
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if "daterangepicker" in selector:
+                return mock_picker
+            return MagicMock(count=AsyncMock(return_value=0))
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
 
         result = await calendar_interactor._set_date_range_direct_input(
-            start_date, end_date
+            date(2025, 8, 28), date(2025, 9, 4)
         )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_navigation_fails(self, calendar_interactor):
+        """Test date range when month navigation fails."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if "daterangepicker" in selector and "td" not in selector:
+                return mock_picker
+            return MagicMock(count=AsyncMock(return_value=0))
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=False,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 8, 28), date(2025, 9, 4)
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_start_date_click_fails(self, calendar_interactor):
+        """Test date range when clicking start date fails."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=0)
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if "daterangepicker" in selector and "td" not in selector:
+                return mock_picker
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 10, 1), date(2025, 10, 8)
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_wide_range_success(self, calendar_interactor):
+        """Test date range for month_diff >= 2 (wide range requiring end navigation)."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+        mock_date_field.input_value = AsyncMock(
+            return_value="08/01/2025 12:00 AM – 11/01/2025 11:59 PM"
+        )
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=1)
+        mock_cell.first = MagicMock()
+        mock_cell.first.click = AsyncMock()
+
+        mock_apply = MagicMock()
+        mock_apply.count = AsyncMock(return_value=1)
+        mock_apply.first = MagicMock()
+        mock_apply.first.click = AsyncMock()
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "applyBtn" in selector:
+                return mock_apply
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 8, 1), date(2025, 11, 1)
+            )
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_end_date_not_found(self, calendar_interactor):
+        """Test when end date cell is not found on calendar."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        # Start date cell found (count=1), end date cell not found (count=0)
+        start_cell = MagicMock()
+        start_cell.count = AsyncMock(return_value=1)
+        start_cell.first = MagicMock()
+        start_cell.first.click = AsyncMock()
+
+        end_cell = MagicMock()
+        end_cell.count = AsyncMock(return_value=0)
+
+        call_count = 0
+
+        def locator_side_effect(selector):
+            nonlocal call_count
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "td" in selector:
+                # First two calls are start date selectors, next are end date
+                call_count += 1
+                if call_count <= 1:
+                    return start_cell
+                return end_cell
+            return end_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 10, 1), date(2025, 10, 8)
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_apply_button_not_found(self, calendar_interactor):
+        """Test when Apply button is not found."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=1)
+        mock_cell.first = MagicMock()
+        mock_cell.first.click = AsyncMock()
+
+        # Apply button not found
+        mock_apply = MagicMock()
+        mock_apply.count = AsyncMock(return_value=0)
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "applyBtn" in selector:
+                return mock_apply
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 10, 1), date(2025, 10, 8)
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_verify_exception(self, calendar_interactor):
+        """Test when verification throws an exception."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+        mock_date_field.input_value = AsyncMock(
+            side_effect=Exception("Connection lost")
+        )
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=1)
+        mock_cell.first = MagicMock()
+        mock_cell.first.click = AsyncMock()
+
+        mock_apply = MagicMock()
+        mock_apply.count = AsyncMock(return_value=1)
+        mock_apply.first = MagicMock()
+        mock_apply.first.click = AsyncMock()
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "applyBtn" in selector:
+                return mock_apply
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 10, 1), date(2025, 10, 8)
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_same_month_success(self, calendar_interactor):
+        """Test successful date range setting for same-month dates."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+        mock_date_field.input_value = AsyncMock(
+            return_value="10/01/2025 12:00 AM – 10/08/2025 11:59 PM"
+        )
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=1)
+        mock_cell.first = MagicMock()
+        mock_cell.first.click = AsyncMock()
+
+        mock_apply = MagicMock()
+        mock_apply.count = AsyncMock(return_value=1)
+        mock_apply.first = MagicMock()
+        mock_apply.first.click = AsyncMock()
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "applyBtn" in selector:
+                return mock_apply
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 10, 1), date(2025, 10, 8)
+            )
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_adjacent_months_success(self, calendar_interactor):
+        """Test successful date range setting for adjacent months (month_diff=1)."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+        mock_date_field.input_value = AsyncMock(
+            return_value="08/28/2025 12:00 AM – 09/04/2025 11:59 PM"
+        )
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=1)
+        mock_cell.first = MagicMock()
+        mock_cell.first.click = AsyncMock()
+
+        mock_apply = MagicMock()
+        mock_apply.count = AsyncMock(return_value=1)
+        mock_apply.first = MagicMock()
+        mock_apply.first.click = AsyncMock()
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "applyBtn" in selector:
+                return mock_apply
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 8, 28), date(2025, 9, 4)
+            )
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_set_date_range_verification_fails(self, calendar_interactor):
+        """Test date range when verification shows wrong dates."""
+        mock_iframe_content = MagicMock()
+
+        mock_date_field = MagicMock()
+        mock_date_field.count = AsyncMock(return_value=1)
+        mock_date_field.click = AsyncMock()
+        # Return wrong dates - verification should fail
+        mock_date_field.input_value = AsyncMock(
+            return_value="03/28/2026 12:00 AM – 04/04/2026 11:59 PM"
+        )
+
+        mock_picker = MagicMock()
+        mock_picker.count = AsyncMock(return_value=1)
+
+        mock_cell = MagicMock()
+        mock_cell.count = AsyncMock(return_value=1)
+        mock_cell.first = MagicMock()
+        mock_cell.first.click = AsyncMock()
+
+        mock_apply = MagicMock()
+        mock_apply.count = AsyncMock(return_value=1)
+        mock_apply.first = MagicMock()
+        mock_apply.first.click = AsyncMock()
+
+        def locator_side_effect(selector):
+            if "datefilter" in selector:
+                return mock_date_field
+            if (
+                "daterangepicker" in selector
+                and "td" not in selector
+                and "apply" not in selector.lower()
+            ):
+                return mock_picker
+            if "applyBtn" in selector:
+                return mock_apply
+            return mock_cell
+
+        mock_iframe_content.locator.side_effect = locator_side_effect
+        calendar_interactor.iframe_content = mock_iframe_content
+
+        with patch.object(
+            calendar_interactor,
+            "_navigate_daterangepicker_to_month",
+            return_value=True,
+        ):
+            result = await calendar_interactor._set_date_range_direct_input(
+                date(2025, 8, 28), date(2025, 9, 4)
+            )
 
         assert result is False
 

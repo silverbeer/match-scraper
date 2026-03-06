@@ -352,36 +352,35 @@ class TestMLSCalendarInteractor:
         end_date = date(2024, 3, 20)
 
         with (
-            patch.object(calendar_interactor, "open_calendar_widget") as mock_open,
-            patch.object(calendar_interactor, "select_date_range") as mock_select_range,
-            patch.object(calendar_interactor, "apply_date_filter") as mock_apply,
+            patch.object(calendar_interactor, "_access_iframe_content") as mock_access,
+            patch.object(
+                calendar_interactor, "_set_date_range_direct_input"
+            ) as mock_set_range,
         ):
-            mock_open.return_value = True
-            mock_select_range.return_value = True
-            mock_apply.return_value = True
+            mock_access.return_value = True
+            mock_set_range.return_value = True
 
             result = await calendar_interactor.set_date_range_filter(
                 start_date, end_date
             )
 
             assert result is True
-            mock_open.assert_called_once()
-            mock_select_range.assert_called_once_with(start_date, end_date)
-            mock_apply.assert_called_once()
+            mock_access.assert_called_once()
+            mock_set_range.assert_called_once_with(start_date, end_date)
 
     @pytest.mark.asyncio
     async def test_set_date_range_filter_open_fails(
         self, calendar_interactor, mock_page
     ):
-        """Test workflow when calendar opening fails."""
+        """Test workflow when iframe access fails."""
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
-        with patch.object(calendar_interactor, "open_calendar_widget") as mock_open:
-            mock_open.return_value = False
+        with patch.object(calendar_interactor, "_access_iframe_content") as mock_access:
+            mock_access.return_value = False
 
             with pytest.raises(
-                CalendarInteractionError, match="Failed to open calendar widget"
+                CalendarInteractionError, match="Failed to access iframe content"
             ):
                 await calendar_interactor.set_date_range_filter(start_date, end_date)
 
@@ -389,19 +388,21 @@ class TestMLSCalendarInteractor:
     async def test_set_date_range_filter_select_fails(
         self, calendar_interactor, mock_page
     ):
-        """Test workflow when date selection fails."""
+        """Test workflow when date range setting fails."""
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
         with (
-            patch.object(calendar_interactor, "open_calendar_widget") as mock_open,
-            patch.object(calendar_interactor, "select_date_range") as mock_select_range,
+            patch.object(calendar_interactor, "_access_iframe_content") as mock_access,
+            patch.object(
+                calendar_interactor, "_set_date_range_direct_input"
+            ) as mock_set_range,
         ):
-            mock_open.return_value = True
-            mock_select_range.return_value = False
+            mock_access.return_value = True
+            mock_set_range.return_value = False
 
             with pytest.raises(
-                CalendarInteractionError, match="Failed to select date range"
+                CalendarInteractionError, match="Failed to set date range"
             ):
                 await calendar_interactor.set_date_range_filter(start_date, end_date)
 
@@ -409,21 +410,22 @@ class TestMLSCalendarInteractor:
     async def test_set_date_range_filter_apply_fails(
         self, calendar_interactor, mock_page
     ):
-        """Test workflow when filter application fails."""
+        """Test workflow when direct input raises an exception."""
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
         with (
-            patch.object(calendar_interactor, "open_calendar_widget") as mock_open,
-            patch.object(calendar_interactor, "select_date_range") as mock_select_range,
-            patch.object(calendar_interactor, "apply_date_filter") as mock_apply,
+            patch.object(calendar_interactor, "_access_iframe_content") as mock_access,
+            patch.object(
+                calendar_interactor, "_set_date_range_direct_input"
+            ) as mock_set_range,
         ):
-            mock_open.return_value = True
-            mock_select_range.return_value = True
-            mock_apply.return_value = False
+            mock_access.return_value = True
+            mock_set_range.side_effect = Exception("Calendar click failed")
 
             with pytest.raises(
-                CalendarInteractionError, match="Failed to apply date filter"
+                CalendarInteractionError,
+                match="Date range filter workflow failed",
             ):
                 await calendar_interactor.set_date_range_filter(start_date, end_date)
 
@@ -698,8 +700,8 @@ class TestCalendarInteractionErrorHandling:
         start_date = date(2024, 3, 10)
         end_date = date(2024, 3, 20)
 
-        with patch.object(calendar_interactor, "open_calendar_widget") as mock_open:
-            mock_open.side_effect = Exception("Unexpected error")
+        with patch.object(calendar_interactor, "_access_iframe_content") as mock_access:
+            mock_access.side_effect = Exception("Unexpected error")
 
             with pytest.raises(
                 CalendarInteractionError, match="Date range filter workflow failed"
