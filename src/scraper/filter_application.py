@@ -64,8 +64,8 @@ class MLSFilterApplicator:
     # Conference value mappings (for Academy Division and Homegrown Division pages)
     # On these pages, regional filtering uses "Conference" instead of "Division"
     CONFERENCE_VALUES = {
-        "New England": "41",  # Maps to same value as Northeast
-        "Northeast": "41",  # Allow both names
+        "New England": "63",  # Academy Division conference
+        "Northeast": "41",  # Homegrown Division group
         "Mid-Atlantic": "68",
         "Southeast": "37",
         "Florida": "46",
@@ -741,18 +741,15 @@ class MLSFilterApplicator:
                 await asyncio.sleep(1)
 
                 # Use JavaScript to find and select the conference option
-                # The conference select is the 4th select element (index 3)
+                # Target the select by its js-groups attribute
                 js_result = await iframe_content.evaluate(
                     """
                     (conference) => {
-                        // Get all select elements
-                        const selects = document.querySelectorAll('select');
-                        if (selects.length < 4) {
-                            return { success: false, error: 'Not enough select elements', count: selects.length };
+                        // Target the groups/division select directly by attribute
+                        const conferenceSelect = document.querySelector('select[js-groups]');
+                        if (!conferenceSelect) {
+                            return { success: false, error: 'select[js-groups] not found' };
                         }
-
-                        // Conference is the 4th select (index 3)
-                        const conferenceSelect = selects[3];
 
                         // Find the option with matching text
                         const options = Array.from(conferenceSelect.options);
@@ -822,19 +819,12 @@ class MLSFilterApplicator:
                     )
 
                     if conference_value:
-                        # Find all select elements - conference might be a hidden select
-                        all_selects = await iframe_content.locator("select").all()
-                        logger.info(f"Found {len(all_selects)} select elements total")
-
-                        if (
-                            len(all_selects) >= 4
-                        ):  # Make sure we have at least 4 selects
-                            conference_select = all_selects[
-                                3
-                            ]  # Index 3 is the 4th select (conference/division)
+                        # Target the groups/division select directly by attribute
+                        conference_select = iframe_content.locator("select[js-groups]")
+                        if await conference_select.count() > 0:
                             await conference_select.select_option(
                                 value=conference_value,
-                                timeout=5000,  # Reduced timeout since this is fallback
+                                timeout=5000,
                             )
                             logger.info(
                                 f"Selected conference option with value {conference_value}"
@@ -852,14 +842,14 @@ class MLSFilterApplicator:
                             )
                             return True
                         else:
-                            if attempt < 2:  # Only wait if we have more attempts
+                            if attempt < 2:
                                 logger.info(
-                                    f"Not enough select elements found ({len(all_selects)}), waiting before retry {attempt + 1}"
+                                    "select[js-groups] not found, waiting before retry"
                                 )
-                                await asyncio.sleep(2)  # Reduced wait time
+                                await asyncio.sleep(2)
                             else:
                                 logger.warning(
-                                    f"Not enough select elements found after all retries: {len(all_selects)}"
+                                    "select[js-groups] not found after all retries"
                                 )
                     else:
                         logger.warning(
@@ -872,7 +862,7 @@ class MLSFilterApplicator:
                         f"Direct select method failed on attempt {attempt + 1}: {e}"
                     )
                     if attempt < 2:
-                        await asyncio.sleep(1)  # Reduced wait before retry
+                        await asyncio.sleep(1)
 
             logger.error("All conference filter strategies failed")
             return False
@@ -927,16 +917,9 @@ class MLSFilterApplicator:
                     )
 
                     if division_value:
-                        # Find the division select (it's the 4th select element - index 3)
-                        all_selects = await iframe_content.locator("select").all()
-                        logger.info(f"Found {len(all_selects)} select elements total")
-
-                        if (
-                            len(all_selects) >= 4
-                        ):  # Make sure we have at least 4 selects
-                            division_select = all_selects[
-                                3
-                            ]  # Index 3 is the 4th select (division)
+                        # Use the js-groups attribute to target the division select directly
+                        division_select = iframe_content.locator("select[js-groups]")
+                        if await division_select.count() > 0:
                             await division_select.select_option(value=division_value)
                             logger.info(
                                 f"Selected division option with value {division_value}"
@@ -945,21 +928,20 @@ class MLSFilterApplicator:
                             # Give time for Bootstrap Select to update
                             await asyncio.sleep(2)
 
-                            # Since our manual test showed this approach works, trust it worked
                             logger.info(
-                                "Division filter applied via direct select",
+                                "Division filter applied via select[js-groups]",
                                 extra={"division": division, "value": division_value},
                             )
                             return True
                         else:
-                            if attempt < 2:  # Only wait if we have more attempts
+                            if attempt < 2:
                                 logger.info(
-                                    f"Not enough select elements found ({len(all_selects)}), waiting before retry {attempt + 1}"
+                                    "select[js-groups] not found, waiting before retry"
                                 )
-                                await asyncio.sleep(3)  # Wait for elements to load
+                                await asyncio.sleep(3)
                             else:
                                 logger.warning(
-                                    f"Not enough select elements found after all retries: {len(all_selects)}"
+                                    "select[js-groups] not found after all retries"
                                 )
                     else:
                         logger.warning(
