@@ -237,37 +237,24 @@ class TestMLSFilterApplicator:
     @pytest.mark.asyncio
     async def test_apply_division_filter_success(self, filter_applicator):
         """Test successful division filter application."""
-        # Create properly mocked iframe content and select element
         from unittest.mock import MagicMock
 
         mock_iframe_content = MagicMock()
         mock_locator = MagicMock()
 
-        # Create mock select elements for the division filter
-        mock_select_elements = []
-        for _ in range(4):  # Division filter needs at least 4 select elements
-            mock_select = MagicMock()
+        # Make select_option() async on the locator (select[js-groups])
+        async def async_select_option(value=None, label=None):
+            return None
 
-            # Make select_option() async
-            async def async_select_option(value=None, label=None):
-                return None
+        mock_locator.select_option = async_select_option
 
-            mock_select.select_option = async_select_option
-            mock_select_elements.append(mock_select)
-
-        # Make all() async and return list of select elements
-        async def async_all():
-            return mock_select_elements
-
-        mock_locator.all = async_all
-
-        # Make count() async and return 1
+        # Make count() async and return 1 (element found)
         async def async_count():
             return 1
 
         mock_locator.count = async_count
 
-        # Mock locator to return our locator mock
+        # Mock locator to return our mock for select[js-groups]
         mock_iframe_content.locator = lambda selector: mock_locator
 
         with (
