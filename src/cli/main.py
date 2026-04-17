@@ -2439,5 +2439,195 @@ def discover(
         raise typer.Exit(code=1) from None
 
 
+@app.command()
+def enrich(
+    input_file: Annotated[
+        str,
+        typer.Option(
+            "--input",
+            "-i",
+            help="Input JSON file from discover command",
+        ),
+    ],
+    output: Annotated[
+        str,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output JSON file path (default: overwrites input)",
+        ),
+    ] = "",
+    skip_existing: Annotated[
+        bool,
+        typer.Option("--skip-existing", help="Skip clubs that already have a website"),
+    ] = False,
+    delay: Annotated[
+        float,
+        typer.Option("--delay", help="Delay in seconds between clubs"),
+    ] = 3.0,
+    headless: Annotated[
+        bool,
+        typer.Option("--headless/--no-headless", help="Run browser in headless mode"),
+    ] = True,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Verbose output with debug info"),
+    ] = False,
+) -> None:
+    """
+    Enrich discovered clubs with website, location, logo, and brand colors.
+
+    Uses a Playwright browser to search Google for each club's website,
+    then extracts metadata (logo, colors, location) from the homepage.
+
+    Example:
+        mls-scraper enrich --input florida-clubs.json
+        mls-scraper enrich --input florida-clubs.json --output enriched.json
+        mls-scraper enrich --input florida-clubs.json --skip-existing
+        mls-scraper enrich --input florida-clubs.json --no-headless
+    """
+    from src.models.discovery import DiscoveredClub
+    from src.scraper.club_enrichment import (
+        ClubEnricher,
+        apply_enrichment,
+    )
+
+    setup_environment(verbose)
+
+    # Validate input file
+    input_path = Path(input_file)
+    if not input_path.exists():
+        console.print(f"[red]Input file not found: {input_file}[/red]")
+        raise typer.Exit(code=1)
+
+    output_path = output or input_file
+
+    display_header()
+
+    # Load clubs
+    try:
+        with open(input_path) as f:
+            clubs_raw = json.load(f)
+        clubs = [DiscoveredClub(**c) for c in clubs_raw]
+    except Exception as e:
+        console.print(f"[red]Failed to parse input file: {e}[/red]")
+        raise typer.Exit(code=1) from None
+
+    if not clubs:
+        console.print("[yellow]No clubs found in input file.[/yellow]")
+        raise typer.Exit(code=0)
+
+    console.print(
+        Panel(
+            f"Input: [bold]{input_file}[/bold]\n"
+            f"Output: [bold]{output_path}[/bold]\n"
+            f"Clubs: [bold]{len(clubs)}[/bold]\n"
+            f"Skip existing: [bold]{skip_existing}[/bold]\n"
+            f"Headless: [bold]{headless}[/bold]",
+            title="Club Enrichment",
+            border_style="cyan",
+        )
+    )
+
+    enricher = ClubEnricher(
+        delay=delay,
+        headless=headless,
+    )
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Enriching {len(clubs)} clubs...", total=None)
+
+            def on_progress(club_name: str, result: object) -> None:
+                progress.update(task, description=f"Enriched: {club_name}")
+
+            enricher.on_progress = on_progress  # type: ignore[assignment]
+            results = asyncio.run(
+                enricher.enrich_clubs(clubs, skip_existing=skip_existing)
+            )
+
+        # Apply results back to club objects
+        enriched_clubs = apply_enrichment(clubs, results)
+
+        # Serialize to JSON
+        clubs_data = [club.model_dump() for club in enriched_clubs]
+        with open(output_path, "w") as f:
+            json.dump(clubs_data, f, indent=2)
+
+        # Display results summary table
+        summary_table = Table(show_header=True, header_style="bold magenta", box=None)
+        summary_table.add_column("Club", style="green", min_width=25)
+        summary_table.add_column("Website", style="cyan", max_width=35)
+        summary_table.add_column("Location", style="yellow")
+        summary_table.add_column("Logo", style="blue", justify="center")
+        summary_table.add_column("Colors", style="magenta", justify="center")
+        summary_table.add_column("IG", style="white", justify="center")
+        summary_table.add_column("Pro", style="bold yellow", justify="center")
+
+        manual_count = 0
+        for result in results:
+            web_display = (
+                result.website[:33] + ".."
+                if len(result.website) > 35
+                else result.website
+            )
+            logo_mark = "Y" if result.logo_url else "-"
+            color_mark = "Y" if result.primary_color else "-"
+            ig_mark = "Y" if result.instagram else "-"
+            pro_mark = "Y" if result.is_pro_academy else "-"
+            summary_table.add_row(
+                result.club_name,
+                web_display or "[dim]-[/dim]",
+                result.location or "[dim]-[/dim]",
+                logo_mark,
+                color_mark,
+                ig_mark,
+                pro_mark,
+            )
+            if result.needs_manual:
+                manual_count += 1
+
+        console.print(
+            Panel(
+                summary_table,
+                title=f"Enrichment Results ({len(results)} clubs)",
+                border_style="green",
+            )
+        )
+
+        console.print(f"\n[green]Saved to {output_path}[/green]")
+
+        if manual_count > 0:
+            console.print(
+                f"[yellow]{manual_count} club(s) need manual enrichment "
+                f"(no website found)[/yellow]"
+            )
+
+        # Show errors if any
+        error_clubs = [r for r in results if r.errors]
+        if error_clubs:
+            console.print(f"\n[dim]Warnings for {len(error_clubs)} club(s):[/dim]")
+            for r in error_clubs:
+                for err in r.errors:
+                    console.print(f"  [dim]{r.club_name}: {err}[/dim]")
+
+        console.print(
+            "\n[dim]Next steps:[/dim]\n"
+            f"  1. Review {output_path} and manually fill any gaps\n"
+            "  2. Merge entries into clubs.json\n"
+            "  3. Run manage_clubs.py sync to update the database\n"
+        )
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        handle_cli_error(e, verbose)
+        raise typer.Exit(code=1) from None
+
+
 if __name__ == "__main__":
     app()
