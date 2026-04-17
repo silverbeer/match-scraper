@@ -24,6 +24,16 @@ class DiscoveredClub(BaseModel):
     club_name: str = Field(..., description="Club name")
     location: str = Field(default="", description="City, State")
     website: str = Field(default="", description="Club website URL")
+    logo_url: str = Field(default="", description="Club logo image URL")
+    primary_color: str = Field(default="", description="Primary brand color hex code")
+    secondary_color: str = Field(
+        default="", description="Secondary brand color hex code"
+    )
+    instagram: str = Field(default="", description="Club Instagram URL")
+    is_pro_academy: bool = Field(
+        default=False,
+        description="True if this club is a professional academy (e.g., MLS Pro Academy)",
+    )
     teams: list[DiscoveredTeam] = Field(
         default_factory=list, description="Teams belonging to this club"
     )
