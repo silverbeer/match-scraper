@@ -14,6 +14,26 @@ Scraping library for youth soccer match data, used by [match-scraper-agent](http
 
 This library provides the core scraping engine for extracting match data from youth soccer websites. It handles Playwright browser automation, website filter application, match extraction, and data models. **Deployment and scheduling are managed by the [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) repo**, which imports this library and runs it as K3s CronJobs with RabbitMQ queue integration.
 
+## Consumed by match-scraper-agent
+
+[match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) is the sole consumer of this library in production. It pins to `@main` via `uv.lock` for reproducible Docker builds.
+
+```
+match-scraper (this repo, library)
+    └── used by: match-scraper-agent (CronJobs on K3s)
+                     └── publishes to: RabbitMQ → Celery workers → Supabase (missingtable.com)
+```
+
+**When you merge to main here, match-scraper-agent does not auto-update.** A maintainer must run:
+
+```bash
+# In match-scraper-agent repo
+uv sync --upgrade-package mls-match-scraper
+git add uv.lock && git commit -m "chore: bump mls-match-scraper"
+```
+
+This opens a PR that triggers a Docker image rebuild on merge.
+
 ## 📚 Documentation
 
 **[📖 Full Documentation →](docs/README.md)**
