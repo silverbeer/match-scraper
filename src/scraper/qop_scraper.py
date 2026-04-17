@@ -1,20 +1,23 @@
 """
 MLS Next QoP (Quality of Play) standings scraper.
 
-This module provides the MLSQoPScraper class that navigates to the MLS Next
-standings page, selects the appropriate division filter, and extracts team
-rankings from the standings table.
+Fetches standings directly from the modular11 HTTP endpoint that the MLS Next
+standings iframe uses internally. No browser automation required — the endpoint
+returns an HTML fragment with rankings for every division in the given age
+group, and we parse the target division with BeautifulSoup.
 """
+
+from __future__ import annotations
 
 import asyncio
 import re
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+
+import httpx
+from bs4 import BeautifulSoup, Tag
 
 from ..models.qop_ranking import QoPRanking, QoPSnapshot
 from ..utils.logger import get_logger
-from .browser import BrowserConfig, BrowserManager, PageNavigator
-from .consent_handler import MLSConsentHandler
 
 logger = get_logger()
 
@@ -25,32 +28,49 @@ class QoPScraperError(Exception):
     pass
 
 
-# Qualification status substrings that appear inline with team names on the page
+# Age group → modular11 UID_age value
+AGE_GROUP_IDS: dict[str, str] = {
+    "U13": "21",
+    "U14": "22",
+    "U15": "33",
+    "U16": "14",
+    "U17": "15",
+    "U19": "26",
+}
+
 _QUALIFICATION_PATTERNS = re.compile(
     r"(Championship Qualification|Premier Qualification|Qualification|Qualified)",
     re.IGNORECASE,
 )
 
+_AGE_PREFIX = re.compile(r"^\s*U\d+\s+", re.IGNORECASE)
+
+# The standings page sometimes lists a "<Region> (Pro Player Pathway) Division"
+# alongside the plain "<Region> Division" heading. The QoP cronjob targets the
+# plain geographic Homegrown divisions, so we skip Pro Player Pathway rows by
+# default unless explicitly requested.
+_PRO_PLAYER_PATHWAY = "(pro player pathway)"
+
 
 def strip_qualification_text(raw: str) -> str:
-    """
-    Remove qualification status text from a raw team name string.
-
-    MLS Next standings pages render qualification labels (e.g. "Championship
-    Qualification", "Premier Qualification") as inline text adjacent to the
-    team name.  This function strips those substrings so only the club name
-    remains.
-
-    Args:
-        raw: Raw text extracted from the standings table team cell.
-
-    Returns:
-        Cleaned team name with leading/trailing whitespace removed.
-    """
+    """Remove qualification status text from a raw team name string."""
     cleaned = _QUALIFICATION_PATTERNS.sub("", raw)
-    # Collapse multiple internal spaces that may be left behind
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     return cleaned.strip()
+
+
+def _normalize_division_heading(title: str) -> str:
+    """
+    Reduce a ``data-title`` like "U15 Northeast Division" to "northeast".
+
+    Keeps "(pro player pathway)" as a suffix so callers can distinguish
+    geographic divisions from Pathway brackets.
+    """
+    t = title.strip().lower()
+    t = _AGE_PREFIX.sub("", t)
+    if t.endswith(" division"):
+        t = t[: -len(" division")]
+    return t.strip()
 
 
 class MLSQoPScraper:
@@ -63,139 +83,65 @@ class MLSQoPScraper:
         snapshot = await scraper.scrape()
     """
 
-    # URL template: age_group "U14" → "u14"
-    MLS_STANDINGS_URL_TEMPLATE = (
-        "https://www.mlssoccer.com/mlsnext/standings/{age_slug}/"
-    )
+    ENDPOINT_URL = "https://www.modular11.com/public_schedule/league/get_teams"
 
-    # Retry configuration (mirrors MLSScraper)
+    EVENT_ID = "12"  # MLS NEXT
+    LIST_TYPE = "53"  # QoP standings listing
+
+    REQUEST_TIMEOUT = 30.0
     MAX_RETRIES = 3
     RETRY_DELAY_BASE = 1.0
     RETRY_BACKOFF_MULTIPLIER = 2.0
-
-    # Selector timeout (ms)
-    DEFAULT_TIMEOUT = 10_000
 
     def __init__(
         self,
         age_group: str,
         division: str,
-        headless: bool = True,
+        headless: bool = True,  # noqa: ARG002 — kept for backwards compat with CLI
     ) -> None:
-        """
-        Initialize the QoP scraper.
-
-        Args:
-            age_group: Age group to scrape, e.g. "U14".
-            division:  Division label to select, e.g. "Northeast".
-                       Matched case-insensitively against options shown on the page.
-            headless:  Whether to run the browser in headless mode.
-        """
         self.age_group = age_group
         self.division = division
-        self.headless = headless
-        self.browser_manager: Optional[BrowserManager] = None
 
-        age_slug = age_group.lower()
-        self.standings_url = self.MLS_STANDINGS_URL_TEMPLATE.format(age_slug=age_slug)
+        if age_group not in AGE_GROUP_IDS:
+            raise QoPScraperError(
+                f"Unknown age group: {age_group!r}. Known: {sorted(AGE_GROUP_IDS)}"
+            )
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        self.age_id = AGE_GROUP_IDS[age_group]
+        self._division_target = _normalize_division_heading(division)
 
     async def scrape(self) -> QoPSnapshot:
-        """
-        Navigate to the standings page, select the division filter, and extract
-        all team rankings.
-
-        Returns:
-            QoPSnapshot populated with the current standings data.
-
-        Raises:
-            QoPScraperError: If the scrape fails after all retries.
-        """
+        """Fetch and parse standings for the configured age group and division."""
         logger.info(
             "Starting QoP standings scrape",
             extra={
                 "age_group": self.age_group,
                 "division": self.division,
-                "url": self.standings_url,
+                "age_id": self.age_id,
             },
         )
 
-        last_exc: Optional[Exception] = None
+        html = await self._fetch_html()
+        rankings = self._parse_rankings(html)
 
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                snapshot = await self._scrape_attempt()
-                logger.info(
-                    "QoP standings scrape completed",
-                    extra={
-                        "age_group": self.age_group,
-                        "division": self.division,
-                        "rankings_count": len(snapshot.rankings),
-                        "attempt": attempt + 1,
-                    },
-                )
-                return snapshot
-
-            except QoPScraperError:
-                # Non-retryable logical errors (e.g. division not found) — re-raise immediately
-                raise
-
-            except Exception as exc:
-                last_exc = exc
-                logger.warning(
-                    "QoP scrape attempt failed",
-                    extra={
-                        "attempt": attempt + 1,
-                        "max_retries": self.MAX_RETRIES,
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                    },
-                )
-
-                if attempt < self.MAX_RETRIES - 1:
-                    delay = self._retry_delay(attempt)
-                    logger.info(
-                        "Retrying QoP scrape",
-                        extra={"delay_seconds": delay, "next_attempt": attempt + 2},
-                    )
-                    await asyncio.sleep(delay)
-
-            finally:
-                # Clean up browser between retries
-                if self.browser_manager:
-                    await self.browser_manager.cleanup()
-                    self.browser_manager = None
-
-        raise QoPScraperError(
-            f"QoP scrape failed after {self.MAX_RETRIES} attempts: {last_exc}"
-        ) from last_exc
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    async def _scrape_attempt(self) -> QoPSnapshot:
-        """Execute a single scrape attempt (browser init → navigate → extract)."""
-        # Initialise browser
-        browser_config = BrowserConfig(
-            headless=self.headless,
-            timeout=30_000,
-            viewport_width=1280,
-            viewport_height=720,
-        )
-        self.browser_manager = BrowserManager(browser_config)
-        await self.browser_manager.initialize()
-
-        async with self.browser_manager.get_page() as page:
-            await self._navigate(page)
-            await self._select_division(page)
-            rankings = await self._extract_rankings(page)
+        if not rankings:
+            raise QoPScraperError(
+                f"No QoP rankings found for {self.age_group} {self.division}. "
+                "The division may not expose QoP metrics (some age groups only "
+                "publish standard league standings) or the page structure changed."
+            )
 
         today = date.today()
         week_of = today - timedelta(days=today.weekday())
+
+        logger.info(
+            "QoP standings scrape completed",
+            extra={
+                "age_group": self.age_group,
+                "division": self.division,
+                "rankings_count": len(rankings),
+            },
+        )
 
         return QoPSnapshot(
             week_of=week_of,
@@ -205,228 +151,152 @@ class MLSQoPScraper:
             rankings=rankings,
         )
 
-    async def _navigate(self, page: Any) -> None:
-        """Navigate to the standings URL and handle consent banners."""
-        logger.info("Navigating to standings page", extra={"url": self.standings_url})
+    async def _fetch_html(self) -> str:
+        """GET the modular11 get_teams endpoint with retries."""
+        params = {
+            "tournament_type": "league",
+            "UID_age": self.age_id,
+            "UID_gender": "0",
+            "UID_event": self.EVENT_ID,
+            "list_type": self.LIST_TYPE,
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; mls-match-scraper/QoP)",
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "text/html,*/*",
+        }
 
-        navigator = PageNavigator(page, max_retries=self.MAX_RETRIES)
-        success = await navigator.navigate_to(self.standings_url, wait_until="load")
-        if not success:
-            raise QoPScraperError(
-                f"Failed to navigate to standings page: {self.standings_url}"
-            )
-
-        logger.info("Navigation successful — handling consent banner")
-        consent_handler = MLSConsentHandler(page)
-        consent_handled = await consent_handler.handle_consent_banner()
-        if not consent_handled:
-            logger.warning("Consent handling failed; continuing anyway")
-
-        page_ready = await consent_handler.wait_for_page_ready()
-        if not page_ready:
-            logger.warning("Page readiness check failed; continuing anyway")
-
-    async def _select_division(self, page: Any) -> None:
-        """
-        Find the division filter control on the page and select the target division.
-
-        The MLS Next standings page may expose the division filter as:
-          - A native <select> element
-          - A button-based dropdown (div/ul with clickable items)
-
-        We try the native select first, then fall back to button-based interaction.
-        """
-        target = self.division.lower()
-        logger.info("Selecting division filter", extra={"division": self.division})
-
-        # --- Strategy 1: native <select> element ---
-        selected = await self._try_select_element(page, target)
-        if selected:
-            logger.info("Division selected via <select> element")
-            await page.wait_for_timeout(1500)
-            return
-
-        # --- Strategy 2: clickable filter buttons / links ---
-        selected = await self._try_button_filter(page, target)
-        if selected:
-            logger.info("Division selected via button/link filter")
-            await page.wait_for_timeout(1500)
-            return
+        last_exc: Exception | None = None
+        async with httpx.AsyncClient(timeout=self.REQUEST_TIMEOUT) as client:
+            for attempt in range(self.MAX_RETRIES):
+                try:
+                    resp = await client.get(
+                        self.ENDPOINT_URL, params=params, headers=headers
+                    )
+                    resp.raise_for_status()
+                    return resp.text
+                except (httpx.HTTPError, httpx.RequestError) as exc:
+                    last_exc = exc
+                    logger.warning(
+                        "QoP endpoint fetch failed",
+                        extra={
+                            "attempt": attempt + 1,
+                            "max_retries": self.MAX_RETRIES,
+                            "error": str(exc),
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                    if attempt < self.MAX_RETRIES - 1:
+                        await asyncio.sleep(
+                            self.RETRY_DELAY_BASE
+                            * (self.RETRY_BACKOFF_MULTIPLIER**attempt)
+                        )
 
         raise QoPScraperError(
-            f"Division filter not found for '{self.division}'. "
-            "The page structure may have changed or the division name is incorrect."
-        )
+            f"QoP endpoint fetch failed after {self.MAX_RETRIES} attempts: {last_exc}"
+        ) from last_exc
 
-    async def _try_select_element(self, page: Any, target_lower: str) -> bool:
+    def _parse_rankings(self, html: str) -> list[QoPRanking]:
         """
-        Attempt to select the division using a native <select> dropdown.
+        Parse the modular11 HTML fragment and extract rankings for the target division.
 
-        Returns True if the division was successfully selected.
+        The endpoint returns rows for every division in the age group. Division
+        boundaries are marked by ``<p data-title="... Division">`` headings; team
+        rows follow each heading until the next one. We walk the document in
+        order, track the current heading, and collect rows only while the heading
+        matches the target division.
         """
-        # Common selector patterns for MLS Next filter dropdowns
-        select_selectors = [
-            "select[name*='division']",
-            "select[id*='division']",
-            "select[class*='division']",
-            "select[name*='group']",
-            "select[id*='group']",
-            "select",  # broad fallback — iterate all selects
-        ]
-
-        for sel in select_selectors:
-            try:
-                select_elements = await page.query_selector_all(sel)
-                for select_el in select_elements:
-                    options = await select_el.query_selector_all("option")
-                    for option in options:
-                        text = await option.text_content() or ""
-                        if target_lower in text.lower():
-                            value = await option.get_attribute("value") or text.strip()
-                            await select_el.select_option(value=value)
-                            return True
-            except Exception as exc:
-                logger.debug(
-                    "select_element attempt failed",
-                    extra={"selector": sel, "error": str(exc)},
-                )
-
-        return False
-
-    async def _try_button_filter(self, page: Any, target_lower: str) -> bool:
-        """
-        Attempt to select the division by clicking a button or link that contains
-        the division name.
-
-        Returns True if the division was successfully selected.
-        """
-        # Selectors for MLS Next filter pill/button patterns
-        button_selectors = [
-            f"button:has-text('{self.division}')",
-            f"a:has-text('{self.division}')",
-            f"[data-value*='{self.division}']",
-            f"[data-filter*='{self.division}']",
-        ]
-
-        for sel in button_selectors:
-            try:
-                el = await page.query_selector(sel)
-                if el:
-                    await el.click()
-                    return True
-            except Exception:
-                pass
-
-        # Broader search: find any clickable element whose visible text contains
-        # the division name (case-insensitive)
-        try:
-            candidates = await page.query_selector_all(
-                "button, a, [role='option'], [role='button'], li"
-            )
-            for el in candidates:
-                text = await el.text_content() or ""
-                if target_lower in text.lower() and "division" in text.lower():
-                    await el.click()
-                    return True
-        except Exception as exc:
-            logger.debug("Broad button filter search failed", extra={"error": str(exc)})
-
-        return False
-
-    async def _extract_rankings(self, page: Any) -> list[QoPRanking]:
-        """
-        Wait for the standings table and extract all rows.
-
-        Returns:
-            List of QoPRanking objects ordered by rank.
-        """
-        logger.info("Waiting for standings table")
-
-        # Try multiple table selectors
-        table_selectors = [
-            "table tbody tr",
-            "tbody tr",
-            "[class*='standings'] tr",
-            "[class*='table'] tr",
-            "tr",
-        ]
-
-        rows = []
-        for sel in table_selectors:
-            try:
-                await page.wait_for_selector(sel, timeout=self.DEFAULT_TIMEOUT)
-                rows = await page.query_selector_all(sel)
-                if rows:
-                    logger.info(
-                        "Found standings rows",
-                        extra={"selector": sel, "row_count": len(rows)},
-                    )
-                    break
-            except Exception:
-                continue
-
-        if not rows:
-            raise QoPScraperError(
-                "Could not locate standings table rows on the page. "
-                "The page structure may have changed."
-            )
+        soup = BeautifulSoup(html, "html.parser")
+        target = self._division_target
 
         rankings: list[QoPRanking] = []
-        skipped = 0
+        current_match = False
+        found_target = False
+        skipped_rows = 0
 
-        for row in rows:
-            cells = await row.query_selector_all("td")
-            if len(cells) < 6:
-                # Skip header rows or malformed rows
-                skipped += 1
+        # Walk relevant elements in document order
+        for el in soup.find_all(
+            lambda t: (
+                t.name == "p"
+                and t.has_attr("data-title")
+                and "division" in (t.get("data-title") or "").lower()
+            )
+            or (
+                t.name == "div"
+                and "form_row" in (t.get("class") or [])
+                and "main_row" in (t.get("class") or [])
+            )
+        ):
+            if el.name == "p":
+                heading = _normalize_division_heading(el.get("data-title") or "")
+                # Skip Pro Player Pathway brackets unless explicitly requested
+                if _PRO_PLAYER_PATHWAY in heading and _PRO_PLAYER_PATHWAY not in target:
+                    current_match = False
+                    continue
+                current_match = heading == target
+                if current_match:
+                    found_target = True
                 continue
 
-            try:
-                rank_text = (await cells[0].text_content() or "").strip()
-                team_raw = (await cells[1].text_content() or "").strip()
-                mp_text = (await cells[2].text_content() or "").strip()
-                att_text = (await cells[3].text_content() or "").strip()
-                def_text = (await cells[4].text_content() or "").strip()
-                qop_text = (await cells[5].text_content() or "").strip()
+            if current_match:
+                ranking = self._parse_row(el)
+                if ranking is None:
+                    skipped_rows += 1
+                else:
+                    rankings.append(ranking)
 
-                rank = int(rank_text)
-                team_name = strip_qualification_text(team_raw)
-                matches_played = int(mp_text)
-                att_score = float(att_text)
-                def_score = float(def_text)
-                qop_score = float(qop_text)
-
-                rankings.append(
-                    QoPRanking(
-                        rank=rank,
-                        team_name=team_name,
-                        matches_played=matches_played,
-                        att_score=att_score,
-                        def_score=def_score,
-                        qop_score=qop_score,
-                    )
-                )
-
-            except (ValueError, IndexError) as exc:
-                skipped += 1
-                logger.debug(
-                    "Skipping unparseable standings row",
-                    extra={"error": str(exc)},
-                )
-
-        logger.info(
-            "Standings extraction complete",
-            extra={"parsed_rows": len(rankings), "skipped_rows": skipped},
-        )
-
-        if not rankings:
+        if not found_target:
             raise QoPScraperError(
-                "No rankings could be extracted from the standings table. "
-                "Check that the correct division is selected and the page rendered."
+                f"Division heading for {self.division!r} not found in "
+                f"{self.age_group} standings response. The division may not "
+                "exist for this age group."
             )
 
-        return rankings
+        logger.info(
+            "QoP row parsing complete",
+            extra={"parsed": len(rankings), "skipped": skipped_rows},
+        )
 
-    def _retry_delay(self, attempt: int) -> float:
-        """Calculate exponential backoff delay for a given attempt (0-based)."""
-        return self.RETRY_DELAY_BASE * (self.RETRY_BACKOFF_MULTIPLIER**attempt)
+        return sorted(rankings, key=lambda r: r.rank)
+
+    @staticmethod
+    def _parse_row(row: Tag) -> QoPRanking | None:
+        """
+        Extract a single QoPRanking from a ``.form_row.main_row`` element.
+
+        QoP rows have exactly 4 stat cells (``.col-sm-3.hidden-xs``) containing
+        matches played, attack score, defense score, and QoP score. Age groups
+        that publish traditional standings (W/L/T/GF/GA/etc.) use 9x
+        ``.col-sm-1.hidden-xs`` cells instead — those rows are skipped.
+        """
+        try:
+            rank_el = row.select_one(".container-rank")
+            team_el = row.select_one(".container-team-info p[data-title]")
+            stat_cells = row.select(".subrow.pad-left .col-sm-3.hidden-xs")
+
+            if rank_el is None or team_el is None or len(stat_cells) != 4:
+                return None
+
+            rank = int(rank_el.get_text(strip=True))
+            team_name = strip_qualification_text(
+                team_el.get("data-title") or team_el.get_text(strip=True)
+            )
+            matches_played = int(stat_cells[0].get_text(strip=True))
+            att_score = float(stat_cells[1].get_text(strip=True))
+            def_score = float(stat_cells[2].get_text(strip=True))
+            qop_score = float(stat_cells[3].get_text(strip=True))
+
+            return QoPRanking(
+                rank=rank,
+                team_name=team_name,
+                matches_played=matches_played,
+                att_score=att_score,
+                def_score=def_score,
+                qop_score=qop_score,
+            )
+        except (ValueError, AttributeError) as exc:
+            logger.debug(
+                "Skipping unparseable QoP row",
+                extra={"error": str(exc)},
+            )
+            return None
