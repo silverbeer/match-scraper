@@ -290,6 +290,73 @@ class TestRankingsSuccessfulPost:
 # ---------------------------------------------------------------------------
 
 
+class TestRankingsTeamNameNormalization:
+    """Tests that the rankings command applies the same team-name mapping
+    used by match scraping before POSTing to MT."""
+
+    def _snapshot_with_ifa(self) -> QoPSnapshot:
+        return QoPSnapshot(
+            week_of=date(2026, 4, 13),
+            division="Northeast",
+            age_group="U14",
+            scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
+            rankings=[
+                QoPRanking(
+                    rank=13,
+                    team_name="Intercontinental Football Academy of New England",
+                    matches_played=16,
+                    att_score=74.7,
+                    def_score=74.4,
+                    qop_score=74.6,
+                ),
+            ],
+        )
+
+    def test_posted_team_name_is_normalized(self):
+        """POST body must contain the short MT-friendly name, not the raw MLS Next name."""
+        snapshot = self._snapshot_with_ifa()
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+
+        with (
+            patch(
+                "src.cli.main.MLSQoPScraper",
+                return_value=_mock_scraper(snapshot),
+            ),
+            patch("src.cli.main.httpx") as mock_httpx,
+        ):
+            mock_httpx.post.return_value = mock_response
+            mock_httpx.HTTPStatusError = Exception
+
+            result = runner.invoke(
+                app,
+                [
+                    "rankings",
+                    "--api-token",
+                    "tok",
+                    "--api-url",
+                    "http://api.example.com",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        posted_json = mock_httpx.post.call_args.kwargs["json"]
+        assert posted_json["rankings"][0]["team_name"] == "IFA"
+
+    def test_dry_run_output_shows_normalized_name(self):
+        """Dry-run table should also display the normalized name."""
+        snapshot = self._snapshot_with_ifa()
+
+        with patch(
+            "src.cli.main.MLSQoPScraper",
+            return_value=_mock_scraper(snapshot),
+        ):
+            result = runner.invoke(app, ["rankings", "--dry-run"])
+
+        assert result.exit_code == 0, result.output
+        assert "IFA" in result.output
+
+
 class TestRankingsHttpError:
     """Tests for HTTP error responses from the API."""
 
