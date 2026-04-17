@@ -2212,6 +2212,12 @@ def rankings(
         console.print(f"[red]Scraping failed: {e}[/red]")
         raise typer.Exit(code=1) from e
 
+    # Normalize MLS Next names to the short forms MT uses (same mapping
+    # applied during match ingestion) so rankings resolve to existing
+    # MT teams instead of creating orphan entries.
+    for r in snapshot.rankings:
+        r.team_name = normalize_team_name_for_display(r.team_name)
+
     # Print Rich table
     table = Table(
         title=f"QoP Rankings — {snapshot.age_group} {snapshot.division} — Week of {snapshot.week_of}",
