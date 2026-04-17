@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Literal, Optional
 
+import httpx
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -37,6 +38,7 @@ from src.models.audit import RunMetadata, RunSummary  # noqa: E402
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
+from src.scraper.qop_scraper import MLSQoPScraper  # noqa: E402
 from src.utils.audit_logger import AuditLogger  # noqa: E402
 from src.utils.division_lookup import get_division_id_for_league  # noqa: E402
 from src.utils.match_comparison import MatchComparison  # noqa: E402
@@ -2173,6 +2175,101 @@ def options() -> None:
     Displays available age groups, divisions, and usage examples.
     """
     config_options()
+
+
+@app.command()
+def rankings(
+    age_group: str = typer.Option(
+        "U14", "--age-group", "-a", help="Age group (e.g. U14)"
+    ),
+    division: str = typer.Option("Northeast", "--division", "-d", help="Division name"),
+    headless: bool = typer.Option(
+        True, "--headless/--no-headless", help="Run browser headless"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Scrape but do not POST to API"
+    ),
+    api_url: Optional[str] = typer.Option(
+        None, "--api-url", envvar="MISSING_TABLE_API_BASE_URL"
+    ),
+    api_token: Optional[str] = typer.Option(
+        None, "--api-token", envvar="MISSING_TABLE_API_TOKEN"
+    ),
+) -> None:
+    """Scrape QoP rankings from MLS Next and post to the MT API."""
+    setup_environment()
+
+    console.print(
+        f"[bold cyan]Scraping QoP rankings — {age_group} {division}...[/bold cyan]"
+    )
+
+    try:
+        scraper = MLSQoPScraper(
+            age_group=age_group, division=division, headless=headless
+        )
+        snapshot = asyncio.run(scraper.scrape())
+    except Exception as e:
+        console.print(f"[red]Scraping failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+
+    # Print Rich table
+    table = Table(
+        title=f"QoP Rankings — {snapshot.age_group} {snapshot.division} — Week of {snapshot.week_of}",
+        show_header=True,
+        header_style="bold magenta",
+    )
+    table.add_column("Rank", style="dim", justify="right", width=6)
+    table.add_column("Team", min_width=24)
+    table.add_column("MP", justify="right", width=4)
+    table.add_column("Att", justify="right", width=6)
+    table.add_column("Def", justify="right", width=6)
+    table.add_column("QoP", justify="right", width=7)
+
+    for r in snapshot.rankings:
+        table.add_row(
+            str(r.rank),
+            r.team_name,
+            str(r.matches_played),
+            str(r.att_score),
+            str(r.def_score),
+            str(r.qop_score),
+        )
+
+    console.print(table)
+
+    if dry_run:
+        console.print("[yellow]Dry run — not posting to API[/yellow]")
+        return
+
+    if not api_token:
+        console.print(
+            "[red]Error: --api-token / MISSING_TABLE_API_TOKEN is required to POST rankings.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    base_url = api_url or "http://localhost:8000"
+    endpoint = f"{base_url}/api/qop-rankings"
+
+    try:
+        response = httpx.post(
+            endpoint,
+            json=snapshot.model_dump(mode="json"),
+            headers={"Authorization": f"Bearer {api_token}"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        console.print(
+            f"[green]Posted {len(snapshot.rankings)} rankings to MT API"
+            f" for week of {snapshot.week_of} ✓[/green]"
+        )
+    except httpx.HTTPStatusError as e:
+        console.print(
+            f"[red]HTTP error posting rankings: {e.response.status_code} {e.response.text}[/red]"
+        )
+        raise typer.Exit(code=1) from e
+    except Exception as e:
+        console.print(f"[red]Failed to post rankings: {e}[/red]")
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
