@@ -30,10 +30,15 @@ class QoPRanking(BaseModel):
 
 
 class QoPSnapshot(BaseModel):
-    """A full weekly snapshot for a division/age-group."""
+    """A full snapshot for a division/age-group at a point in time."""
 
-    week_of: date = Field(
-        description="ISO date of the Monday that starts the week this snapshot was taken"
+    detected_at: date = Field(
+        description=(
+            "ISO date the scraper first observed this set of rankings. "
+            "MT keys snapshot identity on this date, so a re-scrape on the "
+            "same day with the same data is a no-op; a re-scrape with "
+            "different data on a later day lands as a new snapshot."
+        )
     )
     division: str = Field(description="Division name, e.g. 'Northeast'")
     age_group: str = Field(description="Age group, e.g. 'U14'")
@@ -58,10 +63,10 @@ class QoPSnapshot(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "week_of": "2026-04-14",
+                "detected_at": "2026-04-18",
                 "division": "Northeast",
                 "age_group": "U14",
-                "scraped_at": "2026-04-16T10:00:00Z",
+                "scraped_at": "2026-04-18T10:00:00Z",
                 "rankings": [
                     {
                         "rank": 1,

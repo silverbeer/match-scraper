@@ -80,21 +80,21 @@ class TestQoPSnapshot:
 
     def test_valid_construction(self):
         snapshot = QoPSnapshot(
-            week_of=date(2026, 4, 14),
+            detected_at=date(2026, 4, 14),
             division="Northeast",
             age_group="U14",
             scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
             rankings=[self._make_ranking()],
         )
 
-        assert snapshot.week_of == date(2026, 4, 14)
+        assert snapshot.detected_at == date(2026, 4, 14)
         assert snapshot.division == "Northeast"
         assert snapshot.age_group == "U14"
         assert len(snapshot.rankings) == 1
 
     def test_division_normalized_to_title_case(self):
         snapshot = QoPSnapshot(
-            week_of=date(2026, 4, 14),
+            detected_at=date(2026, 4, 14),
             division="northeast",
             age_group="U14",
             scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
@@ -104,7 +104,7 @@ class TestQoPSnapshot:
 
     def test_age_group_normalized(self):
         snapshot = QoPSnapshot(
-            week_of=date(2026, 4, 14),
+            detected_at=date(2026, 4, 14),
             division="Northeast",
             age_group="u14",
             scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
@@ -114,7 +114,7 @@ class TestQoPSnapshot:
 
     def test_rankings_default_to_empty_list(self):
         snapshot = QoPSnapshot(
-            week_of=date(2026, 4, 14),
+            detected_at=date(2026, 4, 14),
             division="Northeast",
             age_group="U14",
             scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
@@ -124,7 +124,7 @@ class TestQoPSnapshot:
 
     def test_json_serialization_round_trip(self):
         original = QoPSnapshot(
-            week_of=date(2026, 4, 14),
+            detected_at=date(2026, 4, 14),
             division="Northeast",
             age_group="U14",
             scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),

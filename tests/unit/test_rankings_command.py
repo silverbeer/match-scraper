@@ -18,7 +18,7 @@ runner = CliRunner()
 def _make_snapshot() -> QoPSnapshot:
     """Build a minimal QoPSnapshot for use in tests."""
     return QoPSnapshot(
-        week_of=date(2026, 4, 13),
+        detected_at=date(2026, 4, 13),
         division="Northeast",
         age_group="U14",
         scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
@@ -290,13 +290,57 @@ class TestRankingsSuccessfulPost:
 # ---------------------------------------------------------------------------
 
 
+class TestRankingsUnchangedResponse:
+    """The rankings command should surface MT's `status: unchanged` reply
+    distinctly from a fresh insert."""
+
+    def test_unchanged_status_printed_when_mt_reports_no_change(self):
+        snapshot = _make_snapshot()
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.content = b'{"status":"unchanged","detected_at":"2026-04-10"}'
+        mock_response.json.return_value = {
+            "status": "unchanged",
+            "detected_at": "2026-04-10",
+        }
+
+        with (
+            patch(
+                "src.cli.main.MLSQoPScraper",
+                return_value=_mock_scraper(snapshot),
+            ),
+            patch("src.cli.main.httpx") as mock_httpx,
+        ):
+            mock_httpx.post.return_value = mock_response
+            mock_httpx.HTTPStatusError = Exception
+
+            result = runner.invoke(
+                app,
+                [
+                    "rankings",
+                    "--api-token",
+                    "tok",
+                    "--api-url",
+                    "http://api.example.com",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        # Rich injects ANSI colour codes that break substring match on dashes/digits.
+        import re as _re
+
+        plain = _re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "no change" in plain.lower() or "unchanged" in plain.lower()
+        assert "2026-04-10" in plain
+
+
 class TestRankingsTeamNameNormalization:
     """Tests that the rankings command applies the same team-name mapping
     used by match scraping before POSTing to MT."""
 
     def _snapshot_with_ifa(self) -> QoPSnapshot:
         return QoPSnapshot(
-            week_of=date(2026, 4, 13),
+            detected_at=date(2026, 4, 13),
             division="Northeast",
             age_group="U14",
             scraped_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),

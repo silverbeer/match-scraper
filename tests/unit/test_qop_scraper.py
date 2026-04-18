@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -300,16 +300,15 @@ class TestScrape:
         assert len(snapshot.rankings) == 2
         assert snapshot.rankings[0].team_name == "New York City FC"
 
-    async def test_scrape_week_of_is_monday(self):
+    async def test_scrape_detected_at_is_today(self):
+        """detected_at is set to date.today() — it represents when the scraper
+        observed the rankings, not a wall-clock week boundary."""
         scraper = MLSQoPScraper(age_group="U14", division="Northeast")
         with patch.object(scraper, "_fetch_html", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = _make_successful_html()
             snapshot = await scraper.scrape()
 
-        today = date.today()
-        expected_monday = today - timedelta(days=today.weekday())
-        assert snapshot.week_of == expected_monday
-        assert snapshot.week_of.weekday() == 0
+        assert snapshot.detected_at == date.today()
 
     async def test_scrape_raises_when_rankings_empty(self):
         scraper = MLSQoPScraper(age_group="U14", division="Northeast")
