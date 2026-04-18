@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 from bs4 import BeautifulSoup, Tag
@@ -131,9 +131,6 @@ class MLSQoPScraper:
                 "publish standard league standings) or the page structure changed."
             )
 
-        today = date.today()
-        week_of = today - timedelta(days=today.weekday())
-
         logger.info(
             "QoP standings scrape completed",
             extra={
@@ -144,7 +141,7 @@ class MLSQoPScraper:
         )
 
         return QoPSnapshot(
-            week_of=week_of,
+            detected_at=date.today(),
             division=self.division,
             age_group=self.age_group,
             scraped_at=datetime.now(tz=timezone.utc),

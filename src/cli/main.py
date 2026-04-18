@@ -2220,7 +2220,7 @@ def rankings(
 
     # Print Rich table
     table = Table(
-        title=f"QoP Rankings — {snapshot.age_group} {snapshot.division} — Week of {snapshot.week_of}",
+        title=f"QoP Rankings — {snapshot.age_group} {snapshot.division} — Detected {snapshot.detected_at}",
         show_header=True,
         header_style="bold magenta",
     )
@@ -2264,10 +2264,18 @@ def rankings(
             timeout=30,
         )
         response.raise_for_status()
-        console.print(
-            f"[green]Posted {len(snapshot.rankings)} rankings to MT API"
-            f" for week of {snapshot.week_of} ✓[/green]"
-        )
+        payload = response.json() if response.content else {}
+        status = payload.get("status", "inserted")
+        if status == "unchanged":
+            console.print(
+                f"[yellow]MT reports no change since last snapshot "
+                f"(detected_at {payload.get('detected_at')}) — nothing written.[/yellow]"
+            )
+        else:
+            console.print(
+                f"[green]Posted {len(snapshot.rankings)} rankings to MT API"
+                f" as snapshot for {snapshot.detected_at} ✓[/green]"
+            )
     except httpx.HTTPStatusError as e:
         console.print(
             f"[red]HTTP error posting rankings: {e.response.status_code} {e.response.text}[/red]"
