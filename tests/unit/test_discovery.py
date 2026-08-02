@@ -3,7 +3,7 @@
 import json
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -17,6 +17,7 @@ from src.scraper.division_discovery import (
 )
 from src.scraper.mls_scraper import MLSScraperError
 from src.scraper.models import Match
+from src.scraper.modular11 import current_season_year
 
 
 class TestDiscoveredTeam:
@@ -114,11 +115,14 @@ class TestDivisionDiscoverer:
         discoverer = DivisionDiscoverer(division="Florida", age_groups=["U14", "U15"])
         assert discoverer.age_groups == ["U14", "U15"]
 
-    def test_season_constants(self):
-        assert SEASON_START.year == 2025
-        assert SEASON_START.month == 9
-        assert SEASON_END.year == 2026
-        assert SEASON_END.month == 6
+    def test_season_constants_track_the_current_season(self):
+        """
+        Pinning these to a literal year is what silently broke discovery when
+        2025-2026 rolled over, so assert the shape instead of the value.
+        """
+        assert SEASON_START == date(current_season_year(), 8, 1)
+        assert SEASON_END == date(current_season_year() + 1, 7, 15)
+        assert SEASON_START < SEASON_END
 
     def test_build_clubs_empty(self):
         discoverer = DivisionDiscoverer(division="Florida")

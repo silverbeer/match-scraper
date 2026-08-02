@@ -322,9 +322,19 @@ class TestBuildMatchDict:
 
         assert result["match_date"] == "2025-10-18"
 
-    def test_season_hardcoded(self):
-        result = build_match_dict(_make_match(), _make_config())
-        assert result["season"] == "2024-25"
+    def test_season_derived_from_match_date(self):
+        """A fall match belongs to the season starting that August."""
+        match = _make_match(match_datetime=datetime(2026, 10, 18, 14, 0))
+        result = build_match_dict(match, _make_config())
+
+        assert result["season"] == "2026-2027"
+
+    def test_season_spring_match_belongs_to_prior_year(self):
+        """A spring match belongs to the season that started the previous August."""
+        match = _make_match(match_datetime=datetime(2027, 3, 14, 14, 0))
+        result = build_match_dict(match, _make_config())
+
+        assert result["season"] == "2026-2027"
 
     def test_age_group_from_config(self):
         config = _make_config(age_group="U16")
