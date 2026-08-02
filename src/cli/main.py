@@ -35,9 +35,15 @@ from src.cli.env_config import (  # noqa: E402
     validate_config,
 )
 from src.models.audit import RunMetadata, RunSummary  # noqa: E402
+from src.models.schedule_release import (  # noqa: E402
+    DivisionRelease,
+    ReleaseProbe,
+    ReleaseState,
+)
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
+from src.scraper.modular11 import current_season_year, season_label  # noqa: E402
 from src.scraper.qop_scraper import MLSQoPScraper  # noqa: E402
 from src.utils.audit_logger import AuditLogger  # noqa: E402
 from src.utils.division_lookup import get_division_id_for_league  # noqa: E402
@@ -593,7 +599,14 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
         if match.match_datetime
         and (match.match_datetime.hour or match.match_datetime.minute)
         else None,
-        "season": "2024-25",  # TODO: derive from match date
+        # Derived from the match date, not the wall clock: a match played in
+        # September belongs to the season starting that August even if it is
+        # re-scraped the following spring.
+        "season": season_label(
+            current_season_year(
+                match.match_datetime.date() if match.match_datetime else date.today()
+            )
+        ),
         "age_group": config.age_group,
         "match_type": "League",
         "division": division_name,
@@ -2641,6 +2654,190 @@ def enrich(
     except Exception as e:
         handle_cli_error(e, verbose)
         raise typer.Exit(code=1) from None
+
+
+@app.command("poll-release")
+def poll_release(
+    age_groups: Optional[list[str]] = typer.Option(
+        None,
+        "--age-group",
+        "-a",
+        help="Age group to check; repeat for several. Defaults to all six, U15 first.",
+    ),
+    divisions: Optional[list[str]] = typer.Option(
+        None,
+        "--division",
+        "-d",
+        help="Division to check; repeat for several. Defaults to Northeast, Florida, Mid-Atlantic.",
+    ),
+    season_year: Optional[int] = typer.Option(
+        None,
+        "--season-year",
+        help="Season start year (2026 = the 2026-2027 season). Defaults to the current season.",
+    ),
+    full_season: bool = typer.Option(
+        False,
+        "--full-season",
+        help="Search the whole season instead of just the fall segment.",
+    ),
+    state_file: Optional[Path] = typer.Option(
+        None,
+        "--state-file",
+        help="NDJSON file to append each probe to, and to read prior state from.",
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit the probe as JSON on stdout instead of a table."
+    ),
+) -> None:
+    """
+    📡 Check whether MLS Next has published its schedule yet.
+
+    Queries the modular11 fixtures endpoint directly — no browser, roughly one
+    second for the default 18 targets — so it is cheap enough to run on a poll
+    interval while waiting for a release.
+
+    Exit codes are the notification contract for an unattended caller:
+
+    \b
+      0  nothing new — either no fixtures yet, or already-known fixtures
+      10 newly published fixtures for at least one target (notify!)
+      20 every target failed to probe (notify if it persists)
+
+    Passing --state-file makes "newly" meaningful: targets already recorded as
+    live in that file do not re-trigger exit 10, so a CronJob alerts once on
+    release rather than on every run.
+    """
+    setup_environment()
+
+    from src.scraper.release_detector import (  # noqa: PLC0415
+        ReleaseDetectorError,
+        ScheduleReleaseDetector,
+    )
+
+    try:
+        detector = ScheduleReleaseDetector(
+            age_groups=age_groups or None,
+            divisions=divisions or None,
+            season_year=season_year,
+            fall_only=not full_season,
+        )
+        probe = asyncio.run(detector.probe())
+    except ReleaseDetectorError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=1) from e
+
+    previously_live = _load_live_targets(state_file)
+    newly_live = [r for r in probe.live if r.label not in previously_live]
+
+    if as_json:
+        payload = probe.model_dump(mode="json")
+        payload["newly_live"] = [r.label for r in newly_live]
+        # Plain stdout, not console.print_json: Rich would wrap this in ANSI
+        # colour codes, and the point of --json is to be piped into jq.
+        typer.echo(json.dumps(payload))
+    else:
+        _display_release_probe(probe, newly_live)
+
+    if state_file is not None:
+        _append_probe_state(state_file, probe, newly_live)
+
+    if probe.all_failed:
+        raise typer.Exit(code=20)
+    if newly_live:
+        raise typer.Exit(code=10)
+
+
+def _load_live_targets(state_file: Optional[Path]) -> set[str]:
+    """
+    Read the set of targets already seen live from a probe NDJSON file.
+
+    A missing or malformed file is treated as "nothing seen yet" — a poller
+    that alerts twice is a nuisance, but one that crashes on a bad line stops
+    alerting altogether, which is worse.
+    """
+    if state_file is None or not state_file.exists():
+        return set()
+
+    seen: set[str] = set()
+    try:
+        with state_file.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                for result in record.get("results", []):
+                    if result.get("state") == "live":
+                        seen.add(f"{result['age_group']} {result['division']}")
+    except OSError:
+        return set()
+
+    return seen
+
+
+def _append_probe_state(
+    state_file: Path, probe: ReleaseProbe, newly_live: list[DivisionRelease]
+) -> None:
+    """Append one probe to the NDJSON state file, creating parents as needed."""
+    record = probe.model_dump(mode="json")
+    record["newly_live"] = [r.label for r in newly_live]
+
+    try:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        with state_file.open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError as e:
+        console.print(f"[yellow]Warning: could not write state file: {e}[/yellow]")
+
+
+def _display_release_probe(
+    probe: ReleaseProbe, newly_live: list[DivisionRelease]
+) -> None:
+    """Render a probe as a Rich table plus a one-line verdict."""
+    table = Table(
+        title=f"MLS Next schedule — {probe.season} "
+        f"({probe.window_start} → {probe.window_end})",
+        show_header=True,
+        header_style="bold cyan",
+    )
+    table.add_column("Age", style="cyan")
+    table.add_column("Division")
+    table.add_column("State")
+    table.add_column("Fixtures", justify="right")
+
+    styles = {
+        ReleaseState.LIVE: "[bold green]live[/bold green]",
+        ReleaseState.EMPTY: "[dim]empty[/dim]",
+        ReleaseState.ERROR: "[bold red]error[/bold red]",
+    }
+    new_labels = {r.label for r in newly_live}
+
+    for r in probe.results:
+        marker = " [bold yellow]NEW[/bold yellow]" if r.label in new_labels else ""
+        table.add_row(
+            r.age_group,
+            r.division,
+            styles[r.state] + marker,
+            str(r.match_count) if r.state is not ReleaseState.ERROR else "—",
+        )
+
+    console.print(table)
+
+    if probe.all_failed:
+        console.print("[bold red]All targets failed to probe.[/bold red]")
+    elif newly_live:
+        labels = ", ".join(sorted(new_labels))
+        console.print(f"[bold green]🎉 Schedule published for: {labels}[/bold green]")
+    elif probe.is_released:
+        console.print("[green]Fixtures live (already known).[/green]")
+    else:
+        console.print("[dim]No fixtures published yet.[/dim]")
+
+    for r in probe.errors:
+        console.print(f"[red]{r.label}: {r.error}[/red]")
 
 
 if __name__ == "__main__":

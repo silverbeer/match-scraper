@@ -198,14 +198,69 @@ uv run mls-scraper inspect
 uv run mls-scraper inspect --no-headless --timeout 300
 ```
 
+### `poll-release` - Has the schedule been published yet?
+
+Checks whether MLS Next has published fixtures for a season. Queries the
+modular11 fixtures endpoint over plain HTTP — no browser, about a second for the
+default 18 targets — so it is cheap enough to run on a poll interval while
+waiting for a schedule to drop.
+
+```bash
+# Default: U15-first across Northeast, Florida and Mid-Atlantic, fall segment
+uv run mls-scraper poll-release
+
+# One target, whole season
+uv run mls-scraper poll-release -a U15 -d Northeast --full-season
+
+# Machine-readable, for a CronJob wrapper
+uv run mls-scraper poll-release --json --state-file /data/release-probe.ndjson
+```
+
+Expected output before a release:
+
+```
+MLS Next schedule — 2026-2027 (2026-08-01 → 2026-12-31)
+┏━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┓
+┃ Age ┃ Division     ┃ State ┃ Fixtures ┃
+┡━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━┩
+│ U15 │ Northeast    │ empty │        0 │
+│ ... │              │       │          │
+└─────┴──────────────┴───────┴──────────┘
+No fixtures published yet.
+```
+
+**Exit codes** are the notification contract for an unattended caller:
+
+| Code | Meaning |
+|------|---------|
+| `0`  | Nothing new — no fixtures yet, or fixtures already known |
+| `10` | Newly published fixtures for at least one target — notify! |
+| `20` | Every target failed to probe — notify if it persists |
+
+`--state-file` is what makes "newly" meaningful. Targets already recorded as
+live in that NDJSON file do not re-trigger exit `10`, so a scheduled poll alerts
+once on release rather than on every run. A missing or corrupt state file is
+treated as "nothing seen yet" — the poller keeps working rather than crashing.
+
+Note that `Fixtures` is a lower bound: the endpoint paginates at 25 rows, so the
+count answers "are there fixtures?", not "how many?".
+
 ## 🎯 Available Options
 
 ### Age Groups
-- U13, U14, U15, U16, U17, U18, U19
+- U13, U14, U15, U16, U17, U19
 
 ### Divisions
-- Northeast, Southeast, Central, Southwest, Northwest
-- Mid-Atlantic, Great Lakes, Texas, California
+As read from the live site for the 2026-2027 season:
+
+- **Scraped today:** Northeast, Florida, Mid-Atlantic
+- Also present: Central, East, Frontier, Mid-America, MLS Academy, Northwest,
+  Southeast, Southwest, West
+
+Division IDs are not stable across seasons — Southeast, Southwest and Northwest
+were all renumbered for 2026-2027, and Great Lakes, Texas and California no
+longer exist as groups. `src/scraper/modular11.py` holds the site-side IDs and
+is the file to update when they move.
 
 ## 🛠️ Shortcut Script
 

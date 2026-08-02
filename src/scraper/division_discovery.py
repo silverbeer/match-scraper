@@ -4,21 +4,21 @@ Discovers clubs and teams in a given division by scraping match data
 across all age groups and extracting unique team names.
 """
 
-from datetime import date
-
 from ..models.discovery import DiscoveredClub, DiscoveredTeam
 from ..utils.logger import get_logger
 from .config import ScrapingConfig
 from .mls_scraper import MLSScraper, MLSScraperError
+from .modular11 import current_season_year, season_window
 
 logger = get_logger()
 
 # Standard HG age groups on MLS Next
 DISCOVERY_AGE_GROUPS = ["U13", "U14", "U15", "U16", "U17", "U19"]
 
-# Full season date range for discovery (cast the widest net)
-SEASON_START = date(2025, 9, 1)
-SEASON_END = date(2026, 6, 30)
+# Full season date range for discovery (cast the widest net). Derived rather
+# than hardcoded — a pinned range silently discovers nothing once the season
+# rolls over, which is exactly how the 2025-2026 constants went stale.
+SEASON_START, SEASON_END = season_window(current_season_year())
 
 
 class DivisionDiscoverer:
