@@ -48,6 +48,10 @@ jobs:
       - name: Run tests with reports
         run: |
           BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          # Flatten "silverbeer/sb-499-foo" to "silverbeer-sb-499-foo": a slash
+          # would nest the report one level deeper than the index builder
+          # expects, feeding it a branch name where it wants a run number.
+          BRANCH="${BRANCH//\//-}"
           REPORT_DIR="site/reports/$BRANCH/${GITHUB_RUN_NUMBER}"
           mkdir -p "$REPORT_DIR"
 
@@ -66,6 +70,10 @@ jobs:
       - name: Generate diff coverage report
         run: |
           BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          # Flatten "silverbeer/sb-499-foo" to "silverbeer-sb-499-foo": a slash
+          # would nest the report one level deeper than the index builder
+          # expects, feeding it a branch name where it wants a run number.
+          BRANCH="${BRANCH//\//-}"
           REPORT_DIR="site/reports/$BRANCH/${GITHUB_RUN_NUMBER}"
 
           # Generate diff coverage report for new code
@@ -103,6 +111,10 @@ jobs:
       - name: Prune old reports (keep last 5 per branch)
         run: |
           BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
+          # Flatten "silverbeer/sb-499-foo" to "silverbeer-sb-499-foo": a slash
+          # would nest the report one level deeper than the index builder
+          # expects, feeding it a branch name where it wants a run number.
+          BRANCH="${BRANCH//\//-}"
           REPORTS_DIR="site/reports/$BRANCH"
           mkdir -p "$REPORTS_DIR"
           cd "$REPORTS_DIR"
@@ -169,7 +181,6 @@ jobs:
             echo "<h2>📂 Branch: $branch</h2>" >> site/index.html
 
             for d in $(ls -1 site/reports/$branch | sort -nr | head -10); do
-              RUN_DATE=$(date -d "@$(($(date +%s) - ($(date +%s) - $d * 60)))" 2>/dev/null || echo "Run $d")
               echo "<div class=\"run\">" >> site/index.html
               echo "<a href=\"/$(basename $GITHUB_REPOSITORY)/reports/$branch/$d/\">🔗 Run #$d</a>" >> site/index.html
 
