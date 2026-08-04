@@ -1,0 +1,130 @@
+"""Audit event processor — resubmits corrections to RabbitMQ and marks events done."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import structlog
+
+from src.orchestrator.audit.client import fetch_pending_events, mark_event_processed
+from src.orchestrator.audit.models import ExtraInMtMatch, ProcessResult
+from src.orchestrator.tools import _current_season
+
+if TYPE_CHECKING:
+    from src.orchestrator.settings import AgentSettings
+
+logger = structlog.get_logger()
+
+# Finding types that trigger re-submission to RabbitMQ (scraped_match required)
+_RESUBMIT_TYPES = frozenset(
+    {"missing_in_mt", "score_mismatch", "status_mismatch", "time_mismatch", "home_away_mismatch"}
+)
+
+
+async def process_pending_events(
+    settings: AgentSettings,
+    queue_client: Any,
+    dry_run: bool,
+) -> ProcessResult:
+    """Fetch pending audit events and process each finding.
+
+    - missing_in_mt / score_mismatch / status_mismatch / time_mismatch:
+        submit scraped_match to RabbitMQ for MT upsert.
+    - extra_in_mt: logged for human review — auto-cancel is disabled.
+
+    Returns:
+        ProcessResult with counts of actions taken.
+    """
+    season = _current_season()
+    events = await fetch_pending_events(
+        api_url=settings.missing_table_api_url,
+        api_key=settings.missing_table_api_key or "",
+        season=season,
+    )
+
+    events_processed = 0
+    matches_resubmitted = 0
+    corrections_by_type: dict[str, int] = {}
+    extra_in_mt_skipped = 0
+    extra_in_mt_findings: list[ExtraInMtMatch] = []
+    errors = 0
+
+    for event in events:
+        try:
+            for finding in event.findings:
+                if finding.finding_type in _RESUBMIT_TYPES:
+                    if finding.scraped_match:
+                        if not dry_run:
+                            queue_client.submit_match(finding.scraped_match)
+                        matches_resubmitted += 1
+                        corrections_by_type[finding.finding_type] = (
+                            corrections_by_type.get(finding.finding_type, 0) + 1
+                        )
+                        logger.info(
+                            "audit.processor.resubmit",
+                            finding_type=finding.finding_type,
+                            match=f"{finding.home_team} vs {finding.away_team}",
+                            match_date=finding.match_date,
+                            dry_run=dry_run,
+                        )
+                    else:
+                        logger.warning(
+                            "audit.processor.no_scraped_match",
+                            finding_type=finding.finding_type,
+                            match=f"{finding.home_team} vs {finding.away_team}",
+                        )
+                elif finding.finding_type == "extra_in_mt":
+                    # Auto-cancel is disabled — extra_in_mt requires human review.
+                    # A transient scraper failure (selector bug, site lag) would otherwise
+                    # silently delete legitimate matches with no recovery path.
+                    extra_in_mt_skipped += 1
+                    extra_in_mt_findings.append(
+                        ExtraInMtMatch(
+                            home_team=finding.home_team,
+                            away_team=finding.away_team,
+                            match_date=finding.match_date,
+                            team=event.team,
+                            age_group=event.age_group,
+                        )
+                    )
+                    logger.info(
+                        "audit.processor.extra_in_mt.skipped",
+                        home_team=finding.home_team,
+                        away_team=finding.away_team,
+                        match_date=finding.match_date,
+                        reason="human_review_required",
+                    )
+
+            if not dry_run:
+                await mark_event_processed(
+                    api_url=settings.missing_table_api_url,
+                    api_key=settings.missing_table_api_key or "",
+                    event_id=event.event_id,
+                )
+            events_processed += 1
+
+        except Exception as exc:
+            errors += 1
+            logger.error(
+                "audit.processor.event_error",
+                event_id=event.event_id,
+                team=event.team,
+                error=str(exc),
+            )
+
+    logger.info(
+        "audit.processor.done",
+        events_processed=events_processed,
+        matches_resubmitted=matches_resubmitted,
+        extra_in_mt_skipped=extra_in_mt_skipped,
+        errors=errors,
+    )
+
+    return ProcessResult(
+        events_processed=events_processed,
+        matches_resubmitted=matches_resubmitted,
+        corrections_by_type=corrections_by_type,
+        extra_in_mt_skipped=extra_in_mt_skipped,
+        extra_in_mt_findings=extra_in_mt_findings,
+        errors=errors,
+    )
