@@ -155,7 +155,9 @@ class TestScoreMismatch:
 
 class TestStatusMismatch:
     def test_status_differs(self):
-        scraped = _match("IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="completed")
+        scraped = _match(
+            "IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="completed"
+        )
         mt = _match("IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled")
         findings = compare_matches([scraped], [mt], "IFA")
         assert len(findings) == 1
@@ -175,10 +177,20 @@ class TestStatusMismatch:
 class TestTimeMismatch:
     def test_time_differs(self):
         scraped = _match(
-            "IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled", match_time="10:00"
+            "IFA",
+            "Arsenal",
+            "2026-03-15",
+            ext_id="abc1",
+            status="scheduled",
+            match_time="10:00",
         )
         mt = _match(
-            "IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled", match_time="11:00"
+            "IFA",
+            "Arsenal",
+            "2026-03-15",
+            ext_id="abc1",
+            status="scheduled",
+            match_time="11:00",
         )
         findings = compare_matches([scraped], [mt], "IFA")
         assert len(findings) == 1
@@ -191,10 +203,20 @@ class TestTimeMismatch:
 
     def test_no_time_mismatch_when_scraped_time_is_none(self):
         scraped = _match(
-            "IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled", match_time=None
+            "IFA",
+            "Arsenal",
+            "2026-03-15",
+            ext_id="abc1",
+            status="scheduled",
+            match_time=None,
         )
         mt = _match(
-            "IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled", match_time="10:00"
+            "IFA",
+            "Arsenal",
+            "2026-03-15",
+            ext_id="abc1",
+            status="scheduled",
+            match_time="10:00",
         )
         findings = compare_matches([scraped], [mt], "IFA")
         assert not any(f.finding_type == "time_mismatch" for f in findings)
@@ -207,7 +229,9 @@ class TestMatchKeyStrategy:
         mt = _match("IFA FC", "Arsenal FC", "2026-03-15", ext_id="abc1")
         findings = compare_matches([scraped], [mt], "IFA")
         # Status both "scheduled" + same → only possible status finding, not missing/extra
-        assert not any(f.finding_type in ("missing_in_mt", "extra_in_mt") for f in findings)
+        assert not any(
+            f.finding_type in ("missing_in_mt", "extra_in_mt") for f in findings
+        )
 
     def test_fallback_to_key_when_no_ext_id(self):
         scraped = _match("IFA", "Arsenal", "2026-03-15")  # no ext_id
@@ -224,7 +248,9 @@ class TestMatchKeyStrategy:
         # Scraped won't find "scraped1" in mt_by_id → falls back to key match
         findings = compare_matches([scraped], [mt], "IFA")
         # Matched via fallback key — no missing/extra
-        assert not any(f.finding_type in ("missing_in_mt", "extra_in_mt") for f in findings)
+        assert not any(
+            f.finding_type in ("missing_in_mt", "extra_in_mt") for f in findings
+        )
 
 
 class TestMultipleFindings:
@@ -253,7 +279,9 @@ class TestMultipleFindings:
         assert "status_mismatch" in types
 
     def test_mixed_clean_and_dirty(self):
-        clean = _match("IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled")
+        clean = _match(
+            "IFA", "Arsenal", "2026-03-15", ext_id="abc1", status="scheduled"
+        )
         dirty_scraped = _match(
             "IFA",
             "Chelsea",

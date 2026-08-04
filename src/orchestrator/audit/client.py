@@ -38,7 +38,9 @@ async def fetch_next_team(
             return None
         resp.raise_for_status()
         data = resp.json()
-    logger.info("audit.client.next_team", team=data.get("team"), age_group=data.get("age_group"))
+    logger.info(
+        "audit.client.next_team", team=data.get("team"), age_group=data.get("age_group")
+    )
     return NextTeamResponse.model_validate(data)
 
 
@@ -87,7 +89,9 @@ async def submit_audit_event(
     """Submit audit findings (or clean result) for a completed team audit."""
     url = f"{api_url}/api/agent/audit/events"
     async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(url, json=event.model_dump(), headers=_headers(api_key))
+        resp = await client.post(
+            url, json=event.model_dump(), headers=_headers(api_key)
+        )
         resp.raise_for_status()
     logger.info(
         "audit.client.submit_event",

@@ -131,7 +131,9 @@ def fetch_mt_status(
 
     sat, sun = _last_weekend(today)
     url = f"{api_url}/api/agent/match-summary"
-    logger.info("planner.fetch_mt_status", url=url, season=season, score_from=sat, score_to=sun)
+    logger.info(
+        "planner.fetch_mt_status", url=url, season=season, score_from=sat, score_to=sun
+    )
 
     try:
         resp = httpx.get(
@@ -274,5 +276,7 @@ def compute_scrape_plan(
             )
         )
 
-    mt_status = "ok" if mt_targets else ("empty" if mt_targets is not None else "failed")
+    mt_status = (
+        "ok" if mt_targets else ("empty" if mt_targets is not None else "failed")
+    )
     return RunPlan(plans=plans, mt_api_status=mt_status)

@@ -23,7 +23,9 @@ class AuditFinding(BaseModel):
     field: str | None = None  # "score" | "match_status" | "match_time"
     scraped_value: str | None = None
     mt_value: str | None = None
-    scraped_match: dict[str, Any] | None = None  # full dict for re-submission by processor
+    scraped_match: dict[str, Any] | None = (
+        None  # full dict for re-submission by processor
+    )
 
 
 class AuditEvent(BaseModel):
@@ -81,7 +83,9 @@ class ExtraInMtMatch(BaseModel):
 class ProcessResult(BaseModel):
     events_processed: int
     matches_resubmitted: int
-    corrections_by_type: dict[str, int] = {}  # finding_type -> count of resubmitted matches
+    corrections_by_type: dict[
+        str, int
+    ] = {}  # finding_type -> count of resubmitted matches
     extra_in_mt_skipped: int  # queued for human review, not auto-cancelled
     extra_in_mt_findings: list[ExtraInMtMatch] = []
     errors: int

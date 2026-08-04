@@ -155,7 +155,9 @@ async def run_one_team_audit(
 
     # Step 6: Compare scraped vs MT
     findings = compare_matches(scraped, mt_matches, team)
-    logger.info("audit.runner.findings", count=len(findings), team=team, age_group=age_group)
+    logger.info(
+        "audit.runner.findings", count=len(findings), team=team, age_group=age_group
+    )
 
     # Step 7: Submit audit event (even if clean — records last_audited_at)
     event = AuditEvent(

@@ -40,7 +40,9 @@ class TestBuildReport:
         now = datetime(2026, 3, 8, 14, 2, tzinfo=UTC)  # Saturday
         report = build_report(
             result_summary="Completed run",
-            actions=[{"action": "scrape", "detail": "Scraped U14 HG NE", "dry_run": False}],
+            actions=[
+                {"action": "scrape", "detail": "Scraped U14 HG NE", "dry_run": False}
+            ],
             matches_found=5,
             matches_submitted=5,
             scraped_matches=[_match()],
@@ -101,7 +103,9 @@ class TestBuildReport:
             now=now,
         )
         assert "Next run" in report
-        assert "1:00 PM EDT" in report  # Sun 14:02 UTC → next weekend slot 17:00 UTC = 1:00 PM EDT
+        assert (
+            "1:00 PM EDT" in report
+        )  # Sun 14:02 UTC → next weekend slot 17:00 UTC = 1:00 PM EDT
 
     def test_today_missing_scores_shown(self) -> None:
         now = datetime(2026, 3, 8, 14, 0, tzinfo=UTC)  # Saturday
@@ -133,7 +137,9 @@ class TestBuildReport:
     def test_weekend_scores_shown_on_monday(self) -> None:
         now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
         matches = [
-            _match(match_date="2026-03-07", status="completed", home_score=3, away_score=1),
+            _match(
+                match_date="2026-03-07", status="completed", home_score=3, away_score=1
+            ),
             _match(
                 home="NYCFC",
                 away="Red Bulls",
@@ -258,7 +264,9 @@ class TestNextScheduledRun:
         assert next_run.hour == 2
 
     def test_extra_slot_weekend(self) -> None:
-        now = datetime(2026, 3, 8, 21, 0, tzinfo=UTC)  # Sunday 21:00 — extra slot at 23:00
+        now = datetime(
+            2026, 3, 8, 21, 0, tzinfo=UTC
+        )  # Sunday 21:00 — extra slot at 23:00
         next_run, _ = _next_scheduled_run(now)
         assert next_run.hour == 23
         assert next_run.day == 8  # same day
@@ -280,7 +288,9 @@ class TestWeekendScores:
     def test_shows_scores_on_monday(self) -> None:
         now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
         matches = [
-            _match(match_date="2026-03-07", status="completed", home_score=3, away_score=1),
+            _match(
+                match_date="2026-03-07", status="completed", home_score=3, away_score=1
+            ),
         ]
         lines = _weekend_scores_section(now, matches)
         assert len(lines) == 2
@@ -299,7 +309,12 @@ class TestWeekendScores:
     def test_excludes_unscored(self) -> None:
         now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
         matches = [
-            _match(match_date="2026-03-07", status="scheduled", home_score=None, away_score=None),
+            _match(
+                match_date="2026-03-07",
+                status="scheduled",
+                home_score=None,
+                away_score=None,
+            ),
         ]
         lines = _weekend_scores_section(now, matches)
         assert lines == []
@@ -320,7 +335,9 @@ class TestFormatDelta:
 class TestMissingKickoff:
     def test_missing_kickoff_shown(self) -> None:
         matches = [
-            _match(status="scheduled", home_score=None, away_score=None, match_time=None),
+            _match(
+                status="scheduled", home_score=None, away_score=None, match_time=None
+            ),
             _match(
                 home="NYCFC",
                 away="Red Bulls",
@@ -337,7 +354,9 @@ class TestMissingKickoff:
 
     def test_no_kickoff_section_when_all_have_times(self) -> None:
         matches = [
-            _match(status="scheduled", home_score=None, away_score=None, match_time="15:00"),
+            _match(
+                status="scheduled", home_score=None, away_score=None, match_time="15:00"
+            ),
             _match(status="completed", match_time="17:00"),
         ]
         lines = _missing_kickoff_section(matches)
@@ -346,7 +365,9 @@ class TestMissingKickoff:
     def test_no_kickoff_count_in_summary(self) -> None:
         now = datetime(2026, 3, 8, 14, 0, tzinfo=UTC)
         matches = [
-            _match(status="scheduled", home_score=None, away_score=None, match_time=None),
+            _match(
+                status="scheduled", home_score=None, away_score=None, match_time=None
+            ),
             _match(status="tbd", home_score=None, away_score=None, match_time=None),
             _match(status="completed", match_time="15:00"),
         ]

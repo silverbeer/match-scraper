@@ -24,7 +24,9 @@ KEY = "release-watch/state.json"
 runner = CliRunner()
 
 
-def _result(age="U15", division="Northeast", state=ReleaseState.EMPTY, count=0, error=None):
+def _result(
+    age="U15", division="Northeast", state=ReleaseState.EMPTY, count=0, error=None
+):
     return DivisionRelease(
         age_group=age, division=division, state=state, match_count=count, error=error
     )
@@ -185,7 +187,9 @@ class TestLocalFileState:
         write_state("", KEY, ReleaseWatchState(seen_live=["U15 Northeast"]), str(path))
 
         with patch("pathlib.Path.replace", side_effect=OSError("disk full")):
-            write_state("", KEY, ReleaseWatchState(seen_live=["U15 Florida"]), str(path))
+            write_state(
+                "", KEY, ReleaseWatchState(seen_live=["U15 Florida"]), str(path)
+            )
 
         assert read_state("", KEY, str(path)).seen_live == ["U15 Northeast"]
 
@@ -236,7 +240,9 @@ def _run(probe, state, sent_bucket="bucket", extra_args=()):
         patch("src.orchestrator.release_watch.read_state", return_value=state),
         patch(
             "src.orchestrator.release_watch.write_state",
-            side_effect=lambda b, k, s, p="": saved.update({"state": s, "bucket": b, "path": p}),
+            side_effect=lambda b, k, s, p="": saved.update(
+                {"state": s, "bucket": b, "path": p}
+            ),
         ),
         # AgentSettings reads AGENT_-prefixed env vars; the field itself is a
         # pydantic-settings descriptor and cannot be patched as an attribute.
@@ -274,7 +280,9 @@ class TestWatchReleaseCommand:
 
     def test_does_not_re_announce_a_known_release(self, sent):
         probe = _probe([_result(state=ReleaseState.LIVE, count=25)])
-        state_in = ReleaseWatchState(seen_live=["U15 Northeast"], last_season="2026-2027")
+        state_in = ReleaseWatchState(
+            seen_live=["U15 Northeast"], last_season="2026-2027"
+        )
 
         result, _ = _run(probe, state_in)
 
@@ -288,7 +296,9 @@ class TestWatchReleaseCommand:
                 _result(division="Florida", state=ReleaseState.LIVE, count=12),
             ]
         )
-        state_in = ReleaseWatchState(seen_live=["U15 Northeast"], last_season="2026-2027")
+        state_in = ReleaseWatchState(
+            seen_live=["U15 Northeast"], last_season="2026-2027"
+        )
 
         result, state = _run(probe, state_in)
 
@@ -337,7 +347,9 @@ class TestWatchReleaseCommand:
         probe_patch = patch(
             "src.scraper.release_detector.ScheduleReleaseDetector.probe",
             new=MagicMock(
-                side_effect=lambda: _async(_probe([_result(state=ReleaseState.LIVE, count=25)]))
+                side_effect=lambda: _async(
+                    _probe([_result(state=ReleaseState.LIVE, count=25)])
+                )
             ),
         )
         env = {
@@ -359,7 +371,9 @@ class TestWatchReleaseCommand:
         probe_patch = patch(
             "src.scraper.release_detector.ScheduleReleaseDetector.probe",
             new=MagicMock(
-                return_value=_async(_probe([_result(state=ReleaseState.LIVE, count=25)]))
+                return_value=_async(
+                    _probe([_result(state=ReleaseState.LIVE, count=25)])
+                )
             ),
         )
         env = {
@@ -388,7 +402,10 @@ class TestWatchReleaseCommand:
 
     def test_partial_failure_is_not_an_outage(self, sent):
         probe = _probe(
-            [_result(), _result(division="Florida", state=ReleaseState.ERROR, error="x")]
+            [
+                _result(),
+                _result(division="Florida", state=ReleaseState.ERROR, error="x"),
+            ]
         )
         result, state = _run(probe, ReleaseWatchState())
 

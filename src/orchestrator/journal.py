@@ -70,16 +70,22 @@ def read_journal(bucket: str, key: str, local_path: str = "") -> RunJournal | No
         return RunJournal.model_validate_json(response["Body"].read())
     except ClientError as exc:
         if exc.response["Error"]["Code"] == "NoSuchKey":
-            logger.debug("journal.read_skipped", bucket=bucket, key=key, reason="not found")
+            logger.debug(
+                "journal.read_skipped", bucket=bucket, key=key, reason="not found"
+            )
         else:
-            logger.debug("journal.read_skipped", bucket=bucket, key=key, reason=str(exc))
+            logger.debug(
+                "journal.read_skipped", bucket=bucket, key=key, reason=str(exc)
+            )
         return None
     except Exception as exc:
         logger.debug("journal.read_skipped", bucket=bucket, key=key, reason=str(exc))
         return None
 
 
-def write_journal(bucket: str, key: str, journal: RunJournal, local_path: str = "") -> None:
+def write_journal(
+    bucket: str, key: str, journal: RunJournal, local_path: str = ""
+) -> None:
     """
     Write the run journal to S3, or to ``local_path`` when no bucket is set.
     Never raises.
@@ -165,7 +171,10 @@ def build_journal(
         entry.matches_found += 1
         if m.get("match_status") == "completed":
             entry.completed += 1
-        elif _is_past(m.get("match_date", ""), now) and m.get("match_status") != "completed":
+        elif (
+            _is_past(m.get("match_date", ""), now)
+            and m.get("match_status") != "completed"
+        ):
             entry.missing_scores += 1
 
     for err in submission_errors:
@@ -186,7 +195,8 @@ def build_journal(
         f"{m.get('match_date', '?')} {m.get('home_team', '?')} vs {m.get('away_team', '?')}"
         f" ({m.get('match_status', '?')})"
         for m in scraped_matches
-        if _is_past(m.get("match_date", ""), now) and m.get("match_status") != "completed"
+        if _is_past(m.get("match_date", ""), now)
+        and m.get("match_status") != "completed"
     ]
 
     return RunJournal(

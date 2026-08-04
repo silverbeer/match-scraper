@@ -172,12 +172,20 @@ def _send_telegram_report(
 
 @app.command()
 def run(
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Skip mutating operations")] = False,
-    json_logs: Annotated[bool, typer.Option("--json-logs", help="Output JSON log lines")] = False,
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Skip mutating operations")
+    ] = False,
+    json_logs: Annotated[
+        bool, typer.Option("--json-logs", help="Output JSON log lines")
+    ] = False,
     target: Annotated[
         str | None,
-        typer.Option("--target", help="Scrape only this target (u14-hg, u13-hg, u14-academy)"),
+        typer.Option(
+            "--target", help="Scrape only this target (u14-hg, u13-hg, u14-academy)"
+        ),
     ] = None,
 ) -> None:
     """Run the match-scraper pipeline engine."""
@@ -192,7 +200,9 @@ def run(
     if dry_run:
         settings.dry_run = True
 
-    configure_logging(json_output=json_logs or settings.json_logs, log_level=settings.log_level)
+    configure_logging(
+        json_output=json_logs or settings.json_logs, log_level=settings.log_level
+    )
 
     run_id = uuid.uuid4().hex[:12]
     structlog.contextvars.bind_contextvars(run_id=run_id, env=env)
@@ -246,7 +256,9 @@ def run(
                 ],
             )
             ctx._scrape_plan = plan
-            logger.info("engine.target_run", target=target, team_filter=team_filter or None)
+            logger.info(
+                "engine.target_run", target=target, team_filter=team_filter or None
+            )
             journal = None
         else:
             # Full run — compute scrape plan from MT data
@@ -383,7 +395,9 @@ def _target_label(cfg: dict[str, str]) -> str:
 
 @app.command()
 def check(
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
 ) -> None:
     """Check RabbitMQ connectivity."""
     from src.orchestrator.logger import configure_logging
@@ -413,9 +427,13 @@ def check(
 def scrape(
     target: Annotated[
         str,
-        typer.Option("--target", help="Scrape target (u14-hg, u14-hg-ifa, u13-hg, etc.)"),
+        typer.Option(
+            "--target", help="Scrape target (u14-hg, u14-hg-ifa, u13-hg, etc.)"
+        ),
     ],
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw match dicts as JSON")
     ] = False,
@@ -425,7 +443,9 @@ def scrape(
     ] = None,
     to_date: Annotated[
         str | None,
-        typer.Option("--to", help="End date (YYYY-MM-DD). Defaults to season end (2026-06-30)."),
+        typer.Option(
+            "--to", help="End date (YYYY-MM-DD). Defaults to season end (2026-06-30)."
+        ),
     ] = None,
     submit: Annotated[
         bool,
@@ -637,13 +657,20 @@ def _send_telegram_processor_report(
 
 @app.command()
 def audit(
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Skip mutating operations")] = False,
-    json_logs: Annotated[bool, typer.Option("--json-logs", help="Output JSON log lines")] = False,
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Skip mutating operations")
+    ] = False,
+    json_logs: Annotated[
+        bool, typer.Option("--json-logs", help="Output JSON log lines")
+    ] = False,
     team: Annotated[
         str | None,
         typer.Option(
-            "--team", help="Audit a specific team (skips rotation). Requires --age-group."
+            "--team",
+            help="Audit a specific team (skips rotation). Requires --age-group.",
         ),
     ] = None,
     age_group: Annotated[
@@ -652,7 +679,9 @@ def audit(
     ] = None,
     count: Annotated[
         int,
-        typer.Option("--count", help="Max teams to audit per run (rotation). Default: 1."),
+        typer.Option(
+            "--count", help="Max teams to audit per run (rotation). Default: 1."
+        ),
     ] = 1,
 ) -> None:
     """Audit teams against mlssoccer.com source of truth."""
@@ -664,7 +693,9 @@ def audit(
     from src.orchestrator.settings import AgentSettings, env_file_path
 
     settings = AgentSettings(_env_file=env_file_path(env))
-    configure_logging(json_output=json_logs or settings.json_logs, log_level=settings.log_level)
+    configure_logging(
+        json_output=json_logs or settings.json_logs, log_level=settings.log_level
+    )
 
     run_id = uuid.uuid4().hex[:12]
     structlog.contextvars.bind_contextvars(run_id=run_id, env=env)
@@ -672,7 +703,9 @@ def audit(
     try:
         season_start = date.fromisoformat(settings.audit_season_start)
     except ValueError:
-        typer.echo(f"Invalid AGENT_AUDIT_SEASON_START: {settings.audit_season_start}", err=True)
+        typer.echo(
+            f"Invalid AGENT_AUDIT_SEASON_START: {settings.audit_season_start}", err=True
+        )
         raise typer.Exit(code=1) from None
 
     from src.orchestrator.tools import SEASON_END
@@ -731,9 +764,15 @@ def audit(
 
 @app.command(name="audit-process")
 def audit_process(
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Skip mutating operations")] = False,
-    json_logs: Annotated[bool, typer.Option("--json-logs", help="Output JSON log lines")] = False,
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Skip mutating operations")
+    ] = False,
+    json_logs: Annotated[
+        bool, typer.Option("--json-logs", help="Output JSON log lines")
+    ] = False,
 ) -> None:
     """Process pending audit findings — resubmit corrections to RabbitMQ."""
     import asyncio
@@ -744,7 +783,9 @@ def audit_process(
     from src.orchestrator.settings import AgentSettings, env_file_path
 
     settings = AgentSettings(_env_file=env_file_path(env))
-    configure_logging(json_output=json_logs or settings.json_logs, log_level=settings.log_level)
+    configure_logging(
+        json_output=json_logs or settings.json_logs, log_level=settings.log_level
+    )
 
     run_id = uuid.uuid4().hex[:12]
     structlog.contextvars.bind_contextvars(run_id=run_id, env=env)
@@ -779,7 +820,9 @@ def audit_process(
 
 @app.command(name="audit-report")
 def audit_report(
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
 ) -> None:
     """Show audit coverage for all HG Northeast teams across all age groups."""
     import asyncio
@@ -867,7 +910,9 @@ def audit_report(
     )
 
 
-def _send_telegram_message(settings: AgentSettings, message: str, *, subject: str) -> None:
+def _send_telegram_message(
+    settings: AgentSettings, message: str, *, subject: str
+) -> None:
     """
     Send one MarkdownV2 message, falling back to email if Telegram fails.
 
@@ -898,17 +943,24 @@ def _send_telegram_message(settings: AgentSettings, message: str, *, subject: st
 
 @app.command(name="watch-release")
 def watch_release(
-    env: Annotated[str, typer.Option("--env", help="Environment name (local, prod)")] = "local",
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
     age_groups: Annotated[
         list[str] | None,
-        typer.Option("--age-group", "-a", help="Age group to check; repeat for several."),
+        typer.Option(
+            "--age-group", "-a", help="Age group to check; repeat for several."
+        ),
     ] = None,
     divisions: Annotated[
         list[str] | None,
         typer.Option("--division", "-d", help="Division to check; repeat for several."),
     ] = None,
     full_season: Annotated[
-        bool, typer.Option("--full-season", help="Search the whole season, not just the fall.")
+        bool,
+        typer.Option(
+            "--full-season", help="Search the whole season, not just the fall."
+        ),
     ] = False,
     dry_run: Annotated[
         bool,

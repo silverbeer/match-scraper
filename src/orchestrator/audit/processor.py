@@ -17,7 +17,13 @@ logger = structlog.get_logger()
 
 # Finding types that trigger re-submission to RabbitMQ (scraped_match required)
 _RESUBMIT_TYPES = frozenset(
-    {"missing_in_mt", "score_mismatch", "status_mismatch", "time_mismatch", "home_away_mismatch"}
+    {
+        "missing_in_mt",
+        "score_mismatch",
+        "status_mismatch",
+        "time_mismatch",
+        "home_away_mismatch",
+    }
 )
 
 

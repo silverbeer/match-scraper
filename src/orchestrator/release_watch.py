@@ -48,7 +48,9 @@ class ReleaseWatchState(BaseModel):
     last_probe_at: str = Field(
         default="", description="ISO 8601 UTC timestamp of the last completed probe"
     )
-    last_season: str = Field(default="", description="Season the remembered targets belong to")
+    last_season: str = Field(
+        default="", description="Season the remembered targets belong to"
+    )
 
     def newly_live(self, live_labels: list[str]) -> list[str]:
         """Return the labels that are live now and were not live before."""
@@ -102,14 +104,20 @@ def read_state(bucket: str, key: str, local_path: str = "") -> ReleaseWatchState
     except ClientError as exc:
         code = exc.response["Error"]["Code"]
         reason = "not found" if code == "NoSuchKey" else str(exc)
-        logger.debug("release_watch.read_skipped", bucket=bucket, key=key, reason=reason)
+        logger.debug(
+            "release_watch.read_skipped", bucket=bucket, key=key, reason=reason
+        )
         return ReleaseWatchState()
     except Exception as exc:
-        logger.debug("release_watch.read_skipped", bucket=bucket, key=key, reason=str(exc))
+        logger.debug(
+            "release_watch.read_skipped", bucket=bucket, key=key, reason=str(exc)
+        )
         return ReleaseWatchState()
 
 
-def write_state(bucket: str, key: str, state: ReleaseWatchState, local_path: str = "") -> None:
+def write_state(
+    bucket: str, key: str, state: ReleaseWatchState, local_path: str = ""
+) -> None:
     """Write watch state to S3, or to ``local_path`` when no bucket is set. Never raises."""
     if not bucket:
         _write_local(local_path, state)
@@ -127,7 +135,9 @@ def write_state(bucket: str, key: str, state: ReleaseWatchState, local_path: str
         )
         logger.info("release_watch.written", bucket=bucket, key=key)
     except Exception as exc:
-        logger.warning("release_watch.write_failed", bucket=bucket, key=key, error=str(exc))
+        logger.warning(
+            "release_watch.write_failed", bucket=bucket, key=key, error=str(exc)
+        )
 
 
 def _read_local(path: str) -> ReleaseWatchState:

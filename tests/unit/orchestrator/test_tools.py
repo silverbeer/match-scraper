@@ -99,7 +99,9 @@ class TestScrapeMatches:
             patch("src.scraper.mls_scraper.MLSScraper", return_value=mock_scraper),
             patch("src.scraper.config.ScrapingConfig"),
         ):
-            asyncio.run(scrape_matches(ctx, start_date="2026-02-18", end_date="2026-02-25"))
+            asyncio.run(
+                scrape_matches(ctx, start_date="2026-02-18", end_date="2026-02-25")
+            )
 
         assert len(ctx._scraped_matches) == 1
         assert ctx._scraped_matches[0]["home_team"] == "Team A"

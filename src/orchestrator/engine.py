@@ -191,7 +191,9 @@ async def execute_plan(plan: RunPlan, ctx: RunContext) -> AgentResult:
 
         if found > 0:
             submit_result = await submit_matches(ctx)
-            submitted = found - len([e for e in ctx._submission_errors if not ctx.dry_run])
+            submitted = found - len(
+                [e for e in ctx._submission_errors if not ctx.dry_run]
+            )
             if ctx.dry_run:
                 submitted = 0
             total_submitted += submitted

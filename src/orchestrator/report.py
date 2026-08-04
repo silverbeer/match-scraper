@@ -74,9 +74,12 @@ def build_report(
     if scrape_plan and hasattr(scrape_plan, "plans"):
         plan_parts = []
         for p in scrape_plan.plans:
-            icon = {"full_sync": "🔄", "score_sync": "🎯", "kickoff_sync": "⏰", "skip": "⏭️"}.get(
-                p.action.value, "•"
-            )
+            icon = {
+                "full_sync": "🔄",
+                "score_sync": "🎯",
+                "kickoff_sync": "⏰",
+                "skip": "⏭️",
+            }.get(p.action.value, "•")
             plan_parts.append(f"  {icon} {escape(p.target_label)}: {escape(p.reason)}")
         if mt_status.startswith("failed:"):
             lines.append(escape("⚠️ MT status FAILED — full-season fallback"))
@@ -153,10 +156,14 @@ def build_report(
         n = len(protected)
         lines.append(f"*Live Score Protected \\({escape(str(n))}\\):*")
         lines.append(
-            escape("  ⚠️ mlssoccer.com not yet updated — withheld to protect MT live scores")
+            escape(
+                "  ⚠️ mlssoccer.com not yet updated — withheld to protect MT live scores"
+            )
         )
         lines.append(
-            escape("  Run 'audit' after mlssoccer.com posts scores to detect any discrepancies")
+            escape(
+                "  Run 'audit' after mlssoccer.com posts scores to detect any discrepancies"
+            )
         )
         for m in sorted(protected, key=lambda x: x.get("match_date", "")):
             md = escape(m.get("match_date", "?"))
@@ -214,7 +221,9 @@ def _agent_awareness(now: datetime, matches: list[dict[str, Any]]) -> str:
             n = len(weekend_unscored)
             return escape(f"🧠 Mid-week — {n} weekend match(es) still awaiting scores")
         # Check if there were any weekend matches at all
-        weekend_all = [m for m in matches if _is_last_weekend(m.get("match_date", ""), now)]
+        weekend_all = [
+            m for m in matches if _is_last_weekend(m.get("match_date", ""), now)
+        ]
         if weekend_all:
             return escape("🧠 Mid-week — all weekend scores are posted ✓")
         return escape("🧠 Mid-week — no recent weekend matches found")
@@ -250,7 +259,8 @@ def _weekend_scores_section(now: datetime, matches: list[dict[str, Any]]) -> lis
     scored = [
         m
         for m in matches
-        if _is_last_weekend(m.get("match_date", ""), now) and m.get("match_status") == "completed"
+        if _is_last_weekend(m.get("match_date", ""), now)
+        and m.get("match_status") == "completed"
     ]
     if not scored:
         return []
@@ -347,7 +357,9 @@ def _next_scheduled_run(now: datetime) -> tuple[datetime, timedelta]:
     tomorrow = now + timedelta(days=1)
     tomorrow_is_weekend = tomorrow.weekday() in (5, 6)
     tomorrow_hours = _CRON_HOURS_WEEKEND if tomorrow_is_weekend else _CRON_HOURS_WEEKDAY
-    candidate = tomorrow.replace(hour=tomorrow_hours[0], minute=0, second=0, microsecond=0)
+    candidate = tomorrow.replace(
+        hour=tomorrow_hours[0], minute=0, second=0, microsecond=0
+    )
     return candidate, candidate - now
 
 

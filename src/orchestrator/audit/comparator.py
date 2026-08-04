@@ -158,16 +158,23 @@ def compare_matches(
 
     # Build a set of scraped keys for extra_in_mt detection
     scraped_keys: set[tuple[str, str, str]] = {
-        (m.get("home_team", ""), m.get("away_team", ""), m.get("match_date", "")) for m in scraped
+        (m.get("home_team", ""), m.get("away_team", ""), m.get("match_date", ""))
+        for m in scraped
     }
-    scraped_ids: set[str] = {m["external_match_id"] for m in scraped if m.get("external_match_id")}
+    scraped_ids: set[str] = {
+        m["external_match_id"] for m in scraped if m.get("external_match_id")
+    }
 
     # Extra in MT: MT matches with no corresponding scraped match
     for i, mt_m in enumerate(mt_matches):
         if i in matched_mt_indices:
             continue
         mt_ext_id = mt_m.get("external_match_id")
-        mt_key = (mt_m.get("home_team", ""), mt_m.get("away_team", ""), mt_m.get("match_date", ""))
+        mt_key = (
+            mt_m.get("home_team", ""),
+            mt_m.get("away_team", ""),
+            mt_m.get("match_date", ""),
+        )
 
         # Double-check via both id and key to avoid false positives
         if mt_ext_id and mt_ext_id in scraped_ids:

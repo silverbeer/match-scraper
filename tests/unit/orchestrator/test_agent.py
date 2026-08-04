@@ -149,7 +149,9 @@ class TestApplyModifiers:
 class TestExecutePlan:
     def test_skip_action_produces_skip_entry(self) -> None:
         ctx = _make_ctx()
-        plan = RunPlan(plans=[_make_plan(action=ScrapeAction.SKIP, reason="Up to date")])
+        plan = RunPlan(
+            plans=[_make_plan(action=ScrapeAction.SKIP, reason="Up to date")]
+        )
         result = asyncio.run(execute_plan(plan, ctx))
         assert isinstance(result, AgentResult)
         assert len(result.actions) == 1
@@ -170,7 +172,9 @@ class TestExecutePlan:
             return mock_scrape(ctx_arg, **kwargs)
 
         with (
-            patch("src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect),
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
             patch("src.orchestrator.engine.submit_matches", mock_submit),
         ):
             result = asyncio.run(execute_plan(plan, ctx))
@@ -185,14 +189,18 @@ class TestExecutePlan:
         plan = RunPlan(plans=[_make_plan(action=ScrapeAction.FULL_SYNC)])
 
         mock_scrape = AsyncMock(return_value="Found 1 match")
-        mock_submit = AsyncMock(return_value="[DRY RUN] Would submit 1 matches to queue.")
+        mock_submit = AsyncMock(
+            return_value="[DRY RUN] Would submit 1 matches to queue."
+        )
 
         def scrape_side_effect(ctx_arg, **kwargs):
             ctx_arg._scraped_matches = [{"home_team": "A", "away_team": "B"}]
             return mock_scrape(ctx_arg, **kwargs)
 
         with (
-            patch("src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect),
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
             patch("src.orchestrator.engine.submit_matches", mock_submit),
         ):
             result = asyncio.run(execute_plan(plan, ctx))
@@ -310,7 +318,9 @@ class TestScoreSyncProtection:
             return mock_scrape(ctx_arg, **kwargs)
 
         with (
-            patch("src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect),
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
             patch("src.orchestrator.engine.submit_matches", mock_submit),
         ):
             result = asyncio.run(execute_plan(plan, ctx))
@@ -343,7 +353,9 @@ class TestScoreSyncProtection:
             return mock_scrape(ctx_arg, **kwargs)
 
         with (
-            patch("src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect),
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
             patch("src.orchestrator.engine.submit_matches", mock_submit) as mock_sub,
         ):
             asyncio.run(execute_plan(plan, ctx))
@@ -372,7 +384,9 @@ class TestScoreSyncProtection:
             return mock_scrape(ctx_arg, **kwargs)
 
         with (
-            patch("src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect),
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
             patch("src.orchestrator.engine.submit_matches", mock_submit),
         ):
             asyncio.run(execute_plan(plan, ctx))
@@ -421,7 +435,9 @@ class TestScoreSyncProtection:
         mock_submit = AsyncMock(return_value="Submitted 0 matches")
 
         with (
-            patch("src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect),
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
             patch("src.orchestrator.engine.submit_matches", mock_submit),
         ):
             asyncio.run(execute_plan(plan, ctx))
@@ -433,7 +449,9 @@ class TestScoreSyncProtection:
 class TestRunPipeline:
     def test_end_to_end_with_skip(self) -> None:
         ctx = _make_ctx()
-        plan = RunPlan(plans=[_make_plan(action=ScrapeAction.SKIP, reason="Up to date")])
+        plan = RunPlan(
+            plans=[_make_plan(action=ScrapeAction.SKIP, reason="Up to date")]
+        )
         result = asyncio.run(run_pipeline(plan, ctx, journal=None))
         assert isinstance(result, AgentResult)
         assert result.matches_found == 0

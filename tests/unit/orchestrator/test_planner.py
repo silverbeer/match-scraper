@@ -20,7 +20,11 @@ SEASON_START = date(2025, 8, 1)
 SAMPLE_CONFIGS = {
     "u14-hg": {"age_group": "U14", "league": "Homegrown", "division": "Northeast"},
     "u13-hg": {"age_group": "U13", "league": "Homegrown", "division": "Northeast"},
-    "u14-academy": {"age_group": "U14", "league": "Academy", "conference": "New England"},
+    "u14-academy": {
+        "age_group": "U14",
+        "league": "Academy",
+        "conference": "New England",
+    },
     # IFA targets should be filtered out by the planner
     "u14-hg-ifa": {"age_group": "U14", "league": "Homegrown", "division": "Northeast"},
 }
@@ -84,9 +88,23 @@ class TestMatchWeekendWindow:
 class TestComputeScrapePlan:
     def test_all_targets_up_to_date_skips(self):
         mt_targets = [
-            _mt_target("U14", "Homegrown", "Northeast", total=105, last_played_date="2026-03-08"),
-            _mt_target("U13", "Homegrown", "Northeast", total=100, last_played_date="2026-03-08"),
-            _mt_target("U14", "Academy", "New England", total=99, last_played_date="2026-03-07"),
+            _mt_target(
+                "U14",
+                "Homegrown",
+                "Northeast",
+                total=105,
+                last_played_date="2026-03-08",
+            ),
+            _mt_target(
+                "U13",
+                "Homegrown",
+                "Northeast",
+                total=100,
+                last_played_date="2026-03-08",
+            ),
+            _mt_target(
+                "U14", "Academy", "New England", total=99, last_played_date="2026-03-07"
+            ),
         ]
         plan = compute_scrape_plan(
             mt_targets,
@@ -111,7 +129,13 @@ class TestComputeScrapePlan:
                 needs_score=3,
                 last_played_date="2026-03-08",
             ),
-            _mt_target("U13", "Homegrown", "Northeast", total=100, last_played_date="2026-03-08"),
+            _mt_target(
+                "U13",
+                "Homegrown",
+                "Northeast",
+                total=100,
+                last_played_date="2026-03-08",
+            ),
             _mt_target("U14", "Academy", "New England", total=99),
         ]
         plan = compute_scrape_plan(
@@ -131,7 +155,13 @@ class TestComputeScrapePlan:
     def test_missing_from_mt_triggers_full_sync(self):
         # Only U14 HG exists in MT, U13 and Academy are missing
         mt_targets = [
-            _mt_target("U14", "Homegrown", "Northeast", total=105, last_played_date="2026-03-08"),
+            _mt_target(
+                "U14",
+                "Homegrown",
+                "Northeast",
+                total=105,
+                last_played_date="2026-03-08",
+            ),
         ]
         plan = compute_scrape_plan(
             mt_targets,
@@ -164,20 +194,26 @@ class TestComputeScrapePlan:
         assert u14.action == ScrapeAction.FULL_SYNC
 
     def test_empty_mt_response_full_sync_all(self):
-        plan = compute_scrape_plan([], SAMPLE_CONFIGS, date(2026, 3, 12), SEASON_END, SEASON_START)
+        plan = compute_scrape_plan(
+            [], SAMPLE_CONFIGS, date(2026, 3, 12), SEASON_END, SEASON_START
+        )
 
         for p in plan.plans:
             assert p.action == ScrapeAction.FULL_SYNC
 
     def test_ifa_targets_excluded(self):
-        plan = compute_scrape_plan([], SAMPLE_CONFIGS, date(2026, 3, 12), SEASON_END, SEASON_START)
+        plan = compute_scrape_plan(
+            [], SAMPLE_CONFIGS, date(2026, 3, 12), SEASON_END, SEASON_START
+        )
         keys = [p.target_key for p in plan.plans]
         assert "u14-hg-ifa" not in keys
 
     def test_academy_conference_mapping(self):
         """Academy targets use conference in config but division in MT response."""
         mt_targets = [
-            _mt_target("U14", "Academy", "New England", total=99, last_played_date="2026-03-07"),
+            _mt_target(
+                "U14", "Academy", "New England", total=99, last_played_date="2026-03-07"
+            ),
         ]
         plan = compute_scrape_plan(
             mt_targets,
@@ -303,7 +339,11 @@ class TestSeasonStartClamping:
         return compute_scrape_plan(
             mt_targets=mt_targets if mt_targets is not None else [],
             target_configs={
-                "u15-hg": {"age_group": "U15", "league": "Homegrown", "division": "Northeast"}
+                "u15-hg": {
+                    "age_group": "U15",
+                    "league": "Homegrown",
+                    "division": "Northeast",
+                }
             },
             today=today,
             season_end=self.SEASON_END,
@@ -369,4 +409,6 @@ class TestSeasonStartClamping:
                     plan = self._plan(today, mt)
                     for s in plan.plans:
                         assert s.start_date >= self.SEASON_START, f"{today} {s.action}"
-                        assert s.end_date >= s.start_date, f"{today} {s.action} inverted"
+                        assert s.end_date >= s.start_date, (
+                            f"{today} {s.action} inverted"
+                        )
