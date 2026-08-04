@@ -1,5 +1,10 @@
 # Fix Loki Authentication Issue
 
+> **Deprecated (SB-558, 2026-08-03).** The `k8s/` manifests this guide edits
+> were deleted — they deployed the standalone scraper CronJobs, which were
+> superseded by match-scraper-agent and removed from the cluster. The files
+> remain in git history if the Promtail configuration is ever needed again.
+
 ## Current Status ✅
 
 Your setup is **almost working**:
