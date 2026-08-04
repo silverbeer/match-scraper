@@ -2,24 +2,27 @@
 
 This file contains project-specific preferences and conventions for Claude Code to follow when working on this codebase.
 
-## Architecture: Library consumed by match-scraper-agent
+## Architecture: scraping engine plus the orchestrator that schedules it
 
-**match-scraper is a scraping library, not a standalone deployed application.**
+**This repo is both the library and the deployed application.** match-scraper-agent was folded in here (SB-559 / SB-570); it no longer exists as a separate repo.
 
-- This repo provides the scraping engine: Playwright browser automation, filter application, match extraction, data models, and CLI tools
-- **match-scraper-agent** (separate repo) is the deployment layer that imports and orchestrates match-scraper
-  - CronJob scheduling, division/age-group configuration, and K3s manifests live in match-scraper-agent
-  - All deployment changes (adding new divisions, changing schedules) happen in match-scraper-agent
-- The `k3s/` directory and `scripts/deploy-k3s.sh` in this repo are **legacy/historical** from when match-scraper was deployed standalone — they are not used in production
-- When making changes here, consider the downstream impact on match-scraper-agent
+Two layers, one package:
+
+- `src/scraper`, `src/models`, `src/celery`, `src/cli` — the scraping engine. Playwright automation, filter application, match extraction, data models, and the `mls-scraper` CLI.
+- `src/orchestrator` — decides *what* to scrape and *when*. Queries MT for current state, computes a per-target plan (FULL_SYNC / SCORE_SYNC / SKIP), applies modifier rules from the previous run's journal, executes, and reports to Telegram. Entry point `match-scraper-agent`. **No LLM** — this is a deterministic rules engine, despite the "agent" name it inherited.
+
+`k3s/` is **live**, not historical: it holds the manifests production runs from. See `k3s/README.md`. (`scripts/deploy-k3s.sh` and `k3s/rabbitmq/`, `k3s/workers/` do predate this and are still historical.)
+
+**Merging to main deploys.** CI builds `ghcr.io/silverbeer/match-scraper:latest` on every push to main, and the CronJobs pull with `imagePullPolicy: Always`, so main reaches production on the next tick.
 
 ### Pipeline Architecture
 ```
-match-scraper (this repo, library)
-    └── used by: match-scraper-agent (CronJobs on K3s)
-                     └── publishes to: RabbitMQ (matches-fanout exchange)
-                                          ├── matches.prod → Celery workers → Supabase (missingtable.com)
-                                          └── matches.local → Celery workers → Local Supabase
+K3s CronJobs on rancher-desktop (prod for match data)
+    ├── match-scraper-agent      0 2,8,14,20 * * *   → src/orchestrator → src/scraper
+    └── schedule-release-watch   */30 * * * *        → src/orchestrator (HTTP only, notify-only)
+            └── publishes to: RabbitMQ (matches-fanout exchange)
+                                 ├── matches.prod → Celery workers → Supabase (missingtable.com)
+                                 └── matches.local → Celery workers → Local Supabase
 ```
 
 ## Code Style Preferences

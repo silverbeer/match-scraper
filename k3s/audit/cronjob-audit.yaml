@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-audit
+  namespace: match-scraper
+spec:
+  schedule: "0 1,5,9,13,17,21 * * *"  # 6x/day, offset from main agent (0 2,8,14,20)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600  # 60 min — up to 10 teams × ~4 min each
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: agent
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              args: ["audit", "--env", "prod", "--count", "10"]
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              volumeMounts:
+                - name: agent-state
+                  mountPath: /data/agent-state
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 1Gi
+                limits:
+                  cpu: "1"
+                  memory: 2Gi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state
