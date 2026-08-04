@@ -25,6 +25,15 @@ spec:
                     name: match-scraper-agent-config
                 - secretRef:
                     name: match-scraper-agent-secret
+              volumeMounts:
+                # The run journal lives here — the previous run's per-target
+                # results, which the modifier rules read to retry a target
+                # that errored. PR #57 removed this mount when the journal
+                # moved to S3; the cluster kept it, and SB-555 made the code
+                # use it again. Without it the agent silently loses its
+                # cross-run memory.
+                - name: agent-state
+                  mountPath: /data/agent-state
               resources:
                 requests:
                   cpu: 200m
@@ -32,3 +41,7 @@ spec:
                 limits:
                   cpu: "1"
                   memory: 2Gi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state
