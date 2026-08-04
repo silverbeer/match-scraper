@@ -1,0 +1,1080 @@
+"""Typer CLI for match-scraper-agent."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC
+from typing import TYPE_CHECKING, Annotated, Any
+
+import structlog
+import typer
+
+if TYPE_CHECKING:
+    from src.orchestrator.settings import AgentSettings
+
+app = typer.Typer(name="match-scraper-agent", no_args_is_help=True)
+logger = structlog.get_logger()
+
+
+# Target → scraper config (age_group, league, division, conference, club)
+_TARGET_SCRAPER_CONFIG: dict[str, dict[str, str]] = {
+    "u14-hg": {
+        "age_group": "U14",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u14-hg-ifa": {
+        "age_group": "U14",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u13-hg": {
+        "age_group": "U13",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u13-hg-ifa": {
+        "age_group": "U13",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u14-academy": {
+        "age_group": "U14",
+        "league": "Academy",
+        "conference": "New England",
+    },
+    "u14-academy-ifa": {
+        "age_group": "U14",
+        "league": "Academy",
+        "conference": "New England",
+    },
+    "u14-hg-florida": {
+        "age_group": "U14",
+        "league": "Homegrown",
+        "division": "Florida",
+    },
+    "u13-hg-florida": {
+        "age_group": "U13",
+        "league": "Homegrown",
+        "division": "Florida",
+    },
+    "u15-hg": {
+        "age_group": "U15",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u15-hg-ifa": {
+        "age_group": "U15",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u16-hg": {
+        "age_group": "U16",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+    "u16-hg-ifa": {
+        "age_group": "U16",
+        "league": "Homegrown",
+        "division": "Northeast",
+    },
+}
+
+# Targets that include a team filter — value is the DB team name used for filtering
+_TARGET_TEAM_FILTER: dict[str, str] = {
+    "u14-hg-ifa": "IFA",
+    "u13-hg-ifa": "IFA",
+    "u15-hg-ifa": "IFA",
+    "u16-hg-ifa": "IFA",
+    "u14-academy-ifa": "IFA Academy",
+}
+
+
+def _queue_client_kwargs(settings: AgentSettings) -> dict[str, str]:
+    """Build kwargs for MatchQueueClient based on settings."""
+    kwargs: dict[str, str] = {"broker_url": settings.rabbitmq_url}
+    if settings.queue_name:
+        kwargs["queue_name"] = settings.queue_name
+    else:
+        kwargs["exchange_name"] = settings.exchange_name
+    return kwargs
+
+
+def _send_email_alert(settings: AgentSettings, subject: str, body: str) -> None:
+    """Send a plain-text email via Resend. No-op if not configured."""
+    if not settings.resend_api_key:
+        logger.debug("email_alert.skipped", reason="resend_api_key not configured")
+        return
+
+    import resend
+
+    resend.api_key = settings.resend_api_key
+    try:
+        resend.Emails.send(
+            {
+                "from": settings.alert_email_from,
+                "to": settings.alert_email_to,
+                "subject": subject,
+                "text": body,
+            }
+        )
+        logger.info("email_alert.sent", to=settings.alert_email_to)
+    except Exception as exc:
+        logger.error("email_alert.failed", error=str(exc))
+
+
+def _send_telegram_report(
+    settings: AgentSettings,
+    result: Any,
+    ctx: Any,
+    env: str,
+    target: str | None,
+) -> None:
+    """Build and send the run summary report to Telegram."""
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        logger.debug("telegram.skipped", reason="not configured")
+        return
+
+    from telegram_notify import TelegramClient
+
+    from src.orchestrator.report import build_report
+
+    report = build_report(
+        result_summary=result.summary,
+        actions=[a.model_dump() for a in result.actions],
+        matches_found=result.matches_found,
+        matches_submitted=result.matches_submitted,
+        scraped_matches=ctx._scraped_matches,
+        submission_errors=ctx._submission_errors,
+        protected_matches=ctx._protected_matches,
+        env=env,
+        target=target,
+        dry_run=ctx.dry_run,
+        mt_status=ctx._mt_status,
+        scrape_plan=ctx._scrape_plan,
+    )
+
+    try:
+        client = TelegramClient(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+        )
+        client.send(report)
+        logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
+    except Exception as exc:
+        logger.warning("telegram.failed", error=str(exc))
+        _send_email_alert(
+            settings,
+            subject="[match-scraper-agent] Telegram failed — run report",
+            body=f"Telegram notification failed: {exc}\n\n{report}",
+        )
+
+
+@app.command()
+def run(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Skip mutating operations")
+    ] = False,
+    json_logs: Annotated[
+        bool, typer.Option("--json-logs", help="Output JSON log lines")
+    ] = False,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target", help="Scrape only this target (u14-hg, u13-hg, u14-academy)"
+        ),
+    ] = None,
+) -> None:
+    """Run the match-scraper pipeline engine."""
+    import asyncio
+
+    from src.celery.queue_client import MatchQueueClient
+    from src.orchestrator.deps import RunContext
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    if dry_run:
+        settings.dry_run = True
+
+    configure_logging(
+        json_output=json_logs or settings.json_logs, log_level=settings.log_level
+    )
+
+    run_id = uuid.uuid4().hex[:12]
+    structlog.contextvars.bind_contextvars(run_id=run_id, env=env)
+
+    logger.info(
+        "engine.starting",
+        dry_run=settings.dry_run,
+    )
+
+    try:
+        queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
+
+        if target and target not in _TARGET_SCRAPER_CONFIG:
+            valid = ", ".join(sorted(_TARGET_SCRAPER_CONFIG))
+            typer.echo(f"Unknown target '{target}'. Valid targets: {valid}", err=True)
+            raise typer.Exit(code=1)
+
+        team_filter = _TARGET_TEAM_FILTER.get(target or "", "")
+        ctx = RunContext(
+            queue_client=queue_client,
+            missing_table_api_url=settings.missing_table_api_url,
+            missing_table_api_key=settings.missing_table_api_key or "",
+            dry_run=settings.dry_run,
+            headless=settings.headless,
+            team_filter=team_filter,
+            age_group=settings.age_group,
+            league=settings.league,
+            division=settings.division,
+        )
+
+        if target:
+            # Targeted run — build a single-entry RunPlan
+            from datetime import date
+
+            from src.orchestrator.planner import RunPlan, ScrapeAction, ScrapePlan
+            from src.orchestrator.tools import current_segment_window
+
+            target_cfg = _TARGET_SCRAPER_CONFIG[target]
+            label = _target_label(target_cfg)
+            plan = RunPlan(
+                plans=[
+                    ScrapePlan(
+                        target_key=target,
+                        target_label=label,
+                        action=ScrapeAction.FULL_SYNC,
+                        start_date=date.today(),
+                        end_date=current_segment_window()[1],
+                        reason="Targeted run",
+                        scraper_params=target_cfg,
+                    )
+                ],
+            )
+            ctx._scrape_plan = plan
+            logger.info(
+                "engine.target_run", target=target, team_filter=team_filter or None
+            )
+            journal = None
+        else:
+            # Full run — compute scrape plan from MT data
+            from datetime import UTC, datetime
+
+            from src.orchestrator.planner import compute_scrape_plan, fetch_mt_status
+            from src.orchestrator.tools import (
+                SEASON_START,
+                _current_season,
+                current_segment_window,
+            )
+
+            now_utc = datetime.now(tz=UTC)
+            mt_targets, mt_status_str = fetch_mt_status(
+                api_url=settings.missing_table_api_url,
+                api_key=settings.missing_table_api_key or "",
+                season=_current_season(),
+            )
+            ctx._mt_status = mt_status_str
+
+            if mt_status_str.startswith("failed:"):
+                logger.error(
+                    "engine.mt_api_failed",
+                    mt_status=mt_status_str,
+                    reason="Cannot plan without MT data — halting run",
+                )
+                raise typer.Exit(code=1)
+
+            # Scrape the current segment, not the whole remaining season: a
+            # range ending in the season's final month cannot be expressed in
+            # the MLS Next date picker and fails every full_sync (SB-551).
+            _, segment_end = current_segment_window(now_utc.date())
+
+            plan = compute_scrape_plan(
+                mt_targets=mt_targets,
+                target_configs=_TARGET_SCRAPER_CONFIG,
+                today=now_utc.date(),
+                season_end=segment_end,
+                season_start=SEASON_START,
+            )
+            ctx._scrape_plan = plan
+
+            logger.info(
+                "planner.computed",
+                mt_status=mt_status_str,
+                full_sync=sum(1 for p in plan.plans if p.action.value == "full_sync"),
+                score_sync=sum(1 for p in plan.plans if p.action.value == "score_sync"),
+                skip=sum(1 for p in plan.plans if p.action.value == "skip"),
+            )
+
+            # Read previous journal for modifier rules. S3 when a bucket is
+            # configured, otherwise a file on the mounted PVC — with neither,
+            # the modifier rules are dead and a failed target never retries.
+            journal = None
+            if settings.journal_s3_bucket or settings.journal_path:
+                from src.orchestrator.journal import read_journal
+
+                journal = read_journal(
+                    settings.journal_s3_bucket,
+                    settings.journal_s3_key,
+                    settings.journal_path,
+                )
+                if journal:
+                    logger.info("journal.loaded", run_id=journal.run_id)
+
+        # Run the pipeline engine
+        from src.orchestrator.engine import run_pipeline
+
+        result = asyncio.run(run_pipeline(plan, ctx, journal))
+
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        logger.error("engine.failed", error=str(exc), exc_info=exc)
+        raise typer.Exit(code=1) from None
+
+    logger.info(
+        "engine.completed",
+        summary=result.summary,
+        actions=len(result.actions),
+        matches_found=result.matches_found,
+        matches_submitted=result.matches_submitted,
+    )
+
+    if json_logs or settings.json_logs:
+        print(result.model_dump_json(indent=2))
+    else:
+        typer.echo(f"\n{result.summary}")
+        for action in result.actions:
+            prefix = "[DRY RUN] " if action.dry_run else ""
+            typer.echo(f"  {prefix}{action.action}: {action.detail}")
+
+    # Write run journal for next run's context. A dry run does not write: its
+    # journal would claim work it never did, and the next real run would skip
+    # targets on the strength of it.
+    if (settings.journal_s3_bucket or settings.journal_path) and not settings.dry_run:
+        from src.orchestrator.journal import build_journal, write_journal
+
+        journal_out = build_journal(
+            run_id=run_id,
+            result=result,
+            scraped_matches=ctx._scraped_matches,
+            submission_errors=ctx._submission_errors,
+            target=target,
+            dry_run=settings.dry_run,
+        )
+        write_journal(
+            settings.journal_s3_bucket,
+            settings.journal_s3_key,
+            journal_out,
+            settings.journal_path,
+        )
+
+    # Send Telegram summary report
+    _send_telegram_report(
+        settings=settings,
+        result=result,
+        ctx=ctx,
+        env=env,
+        target=target,
+    )
+
+    structlog.contextvars.unbind_contextvars("run_id", "env")
+
+
+def _target_label(cfg: dict[str, str]) -> str:
+    """Build a human-readable label from a scraper config dict."""
+    ag = cfg.get("age_group", "?")
+    league = cfg.get("league", "?")
+    if cfg.get("conference"):
+        return f"{ag} {league} {cfg['conference']}"
+    return f"{ag} {league} {cfg.get('division', '?')}"
+
+
+@app.command()
+def check(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+) -> None:
+    """Check RabbitMQ connectivity."""
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    configure_logging(json_output=False)
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+
+    typer.echo(f"environment: {env}")
+
+    # Check RabbitMQ
+    typer.echo(f"rabbitmq: checking {settings.rabbitmq_url}")
+    try:
+        from src.celery.queue_client import MatchQueueClient
+
+        client = MatchQueueClient(**_queue_client_kwargs(settings))
+        if client.check_connection():
+            typer.echo("  status: connected")
+        else:
+            typer.echo("  status: UNREACHABLE")
+    except Exception as exc:
+        typer.echo(f"  status: ERROR ({exc})")
+
+
+@app.command()
+def scrape(
+    target: Annotated[
+        str,
+        typer.Option(
+            "--target", help="Scrape target (u14-hg, u14-hg-ifa, u13-hg, etc.)"
+        ),
+    ],
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Output raw match dicts as JSON")
+    ] = False,
+    from_date: Annotated[
+        str | None,
+        typer.Option("--from", help="Start date (YYYY-MM-DD). Defaults to today."),
+    ] = None,
+    to_date: Annotated[
+        str | None,
+        typer.Option(
+            "--to", help="End date (YYYY-MM-DD). Defaults to season end (2026-06-30)."
+        ),
+    ] = None,
+    submit: Annotated[
+        bool,
+        typer.Option("--submit", help="Submit scraped matches to RabbitMQ queue"),
+    ] = False,
+    club: Annotated[
+        str | None,
+        typer.Option("--club", help="Filter to a specific club name"),
+    ] = None,
+) -> None:
+    """Scrape matches directly — no pipeline, just browser automation."""
+    import asyncio
+    from datetime import date
+
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+    from src.orchestrator.tools import (
+        _current_season,
+        _normalize_team_name,
+        clamp_scrape_range,
+        current_segment_window,
+    )
+    from src.scraper.config import ScrapingConfig
+    from src.scraper.mls_scraper import MLSScraper
+
+    configure_logging(json_output=False)
+
+    if target not in _TARGET_SCRAPER_CONFIG:
+        valid = ", ".join(sorted(_TARGET_SCRAPER_CONFIG))
+        typer.echo(f"Unknown target '{target}'. Valid targets: {valid}", err=True)
+        raise typer.Exit(code=1)
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    target_cfg = _TARGET_SCRAPER_CONFIG[target]
+    team_filter = _TARGET_TEAM_FILTER.get(target, "")
+
+    try:
+        start = date.fromisoformat(from_date) if from_date else date.today()
+        end = date.fromisoformat(to_date) if to_date else current_segment_window()[1]
+    except ValueError as exc:
+        typer.echo(f"Invalid date format: {exc}. Use YYYY-MM-DD.", err=True)
+        raise typer.Exit(code=1) from None
+
+    # This path builds ScrapingConfig directly rather than going through
+    # tools.scrape_matches, so it needs its own clamp.
+    requested = (start, end)
+    start, end = clamp_scrape_range(start, end)
+    if (start, end) != requested:
+        typer.echo(
+            f"Adjusted date range {requested[0]}..{requested[1]} -> {start}..{end} "
+            "(MLS Next only serves the current season, and not its final month)."
+        )
+
+    config = ScrapingConfig(
+        age_group=target_cfg.get("age_group", settings.age_group),
+        league=target_cfg.get("league", settings.league),
+        division=target_cfg.get("division", settings.division),
+        conference=target_cfg.get("conference", ""),
+        club=club or "",
+        start_date=start,
+        end_date=end,
+        look_back_days=(end - start).days,
+        missing_table_api_url=settings.missing_table_api_url,
+        missing_table_api_key=settings.missing_table_api_key or "unused",
+    )
+
+    label = f"{config.age_group} {config.league}"
+    if config.conference:
+        label += f" {config.conference}"
+    elif config.division:
+        label += f" {config.division}"
+    typer.echo(f"Scraping {label} ({start} to {end})...")
+
+    scraper = MLSScraper(config, headless=True)
+    matches = asyncio.run(scraper.scrape_matches())
+
+    if not matches:
+        typer.echo("No matches found.")
+        raise typer.Exit(code=0)
+
+    # Build match dicts (same logic as the engine tool)
+    mt_division = config.conference if config.conference else config.division
+    built = [
+        {
+            "home_team": _normalize_team_name(m.home_team, league=config.league),
+            "away_team": _normalize_team_name(m.away_team, league=config.league),
+            "match_date": m.match_datetime.date().isoformat(),
+            # Omit match_time when unknown — prevents overwriting an existing
+            # MT kick-off time with null (MLS Next drops time on completed matches)
+            **(
+                {"match_time": m.match_datetime.strftime("%H:%M")}
+                if m.match_datetime.hour or m.match_datetime.minute
+                else {}
+            ),
+            "season": _current_season(),
+            "age_group": config.age_group,
+            "match_type": "League",
+            "division": mt_division,
+            "league": config.league,
+            "home_score": m.home_score if isinstance(m.home_score, int) else None,
+            "away_score": m.away_score if isinstance(m.away_score, int) else None,
+            "match_status": m.match_status,
+            "external_match_id": m.match_id,
+            "location": m.location,
+            "source": "match-scraper-agent",
+        }
+        for m in matches
+    ]
+
+    # Apply team filter
+    if team_filter:
+        built = [m for m in built if team_filter in (m["home_team"], m["away_team"])]
+
+    if json_output:
+        import json
+
+        print(json.dumps(built, indent=2))
+    else:
+        typer.echo(f"\nFound {len(matches)} matches ({len(built)} after filtering):\n")
+        for m in built:
+            has_score = m["home_score"] is not None
+            score = f" ({m['home_score']}-{m['away_score']})" if has_score else ""
+            typer.echo(
+                f"  {m['match_date']} | {m['home_team']} vs {m['away_team']}"
+                f"{score} [{m['match_status']}]"
+            )
+
+    if submit:
+        from src.celery.queue_client import MatchQueueClient
+
+        queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
+        submitted = 0
+        errors = 0
+        for match_dict in built:
+            try:
+                queue_client.submit_match(match_dict)
+                submitted += 1
+            except Exception as exc:
+                errors += 1
+                logger.warning(
+                    "scrape.submit_error",
+                    match=f"{match_dict['home_team']} vs {match_dict['away_team']}",
+                    error=str(exc),
+                )
+        typer.echo(f"\nSubmitted {submitted} matches to queue ({errors} errors).")
+
+
+def _send_telegram_audit_report(
+    settings: AgentSettings,
+    result: Any,
+    env: str,
+) -> None:
+    """Send audit findings report to Telegram. Silently skips if not configured."""
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        logger.debug("telegram.skipped", reason="not configured")
+        return
+
+    from telegram_notify import TelegramClient
+
+    from src.orchestrator.audit.report import build_audit_report
+
+    report = build_audit_report(result=result, env=env)
+    try:
+        client = TelegramClient(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+        )
+        client.send(report)
+        logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
+    except Exception as exc:
+        logger.warning("telegram.failed", error=str(exc))
+        _send_email_alert(
+            settings,
+            subject="[match-scraper-agent] Telegram failed — audit report",
+            body=f"Telegram notification failed: {exc}\n\n{report}",
+        )
+
+
+def _send_telegram_processor_report(
+    settings: AgentSettings,
+    result: Any,
+    env: str,
+) -> None:
+    """Send processor summary report to Telegram. Silently skips if not configured."""
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        logger.debug("telegram.skipped", reason="not configured")
+        return
+
+    from telegram_notify import TelegramClient
+
+    from src.orchestrator.audit.report import build_processor_report
+
+    report = build_processor_report(result=result, env=env)
+    try:
+        client = TelegramClient(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+        )
+        client.send(report)
+        logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
+    except Exception as exc:
+        logger.warning("telegram.failed", error=str(exc))
+        _send_email_alert(
+            settings,
+            subject="[match-scraper-agent] Telegram failed — processor report",
+            body=f"Telegram notification failed: {exc}\n\n{report}",
+        )
+
+
+@app.command()
+def audit(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Skip mutating operations")
+    ] = False,
+    json_logs: Annotated[
+        bool, typer.Option("--json-logs", help="Output JSON log lines")
+    ] = False,
+    team: Annotated[
+        str | None,
+        typer.Option(
+            "--team",
+            help="Audit a specific team (skips rotation). Requires --age-group.",
+        ),
+    ] = None,
+    age_group: Annotated[
+        str | None,
+        typer.Option("--age-group", help="Age group for --team override (e.g. U14)"),
+    ] = None,
+    count: Annotated[
+        int,
+        typer.Option(
+            "--count", help="Max teams to audit per run (rotation). Default: 1."
+        ),
+    ] = 1,
+) -> None:
+    """Audit teams against mlssoccer.com source of truth."""
+    import asyncio
+    from datetime import date
+
+    from src.orchestrator.audit.runner import run_one_team_audit
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(
+        json_output=json_logs or settings.json_logs, log_level=settings.log_level
+    )
+
+    run_id = uuid.uuid4().hex[:12]
+    structlog.contextvars.bind_contextvars(run_id=run_id, env=env)
+
+    try:
+        season_start = date.fromisoformat(settings.audit_season_start)
+    except ValueError:
+        typer.echo(
+            f"Invalid AGENT_AUDIT_SEASON_START: {settings.audit_season_start}", err=True
+        )
+        raise typer.Exit(code=1) from None
+
+    from src.orchestrator.tools import SEASON_END
+
+    if bool(team) != bool(age_group):
+        typer.echo("--team and --age-group must be used together", err=True)
+        raise typer.Exit(code=1)
+
+    # When a specific team is requested, ignore --count and run exactly once
+    max_iterations = 1 if (team and age_group) else count
+
+    audited = 0
+    for _ in range(max_iterations):
+        try:
+            result = asyncio.run(
+                run_one_team_audit(
+                    settings=settings,
+                    dry_run=dry_run,
+                    season_start=season_start,
+                    season_end=SEASON_END,
+                    team_override=team,
+                    age_group_override=age_group,
+                )
+            )
+        except Exception as exc:
+            logger.error("audit.failed", error=str(exc), exc_info=exc)
+            raise typer.Exit(code=1) from None
+
+        if result is None:
+            logger.info("audit.all_teams_current")
+            typer.echo("All teams are up-to-date. Nothing to audit.")
+            break
+
+        audited += 1
+        logger.info(
+            "audit.completed",
+            team=result.team,
+            age_group=result.age_group,
+            scraped=result.scraped_count,
+            mt=result.mt_count,
+            findings=len(result.findings),
+        )
+        typer.echo(
+            f"Audited {result.team} {result.age_group}: "
+            f"{result.scraped_count} scraped, {result.mt_count} in MT, "
+            f"{len(result.findings)} findings"
+        )
+        if result.findings:
+            _send_telegram_audit_report(settings=settings, result=result, env=env)
+
+    if audited > 1:
+        logger.info("audit.batch_done", audited=audited)
+
+    structlog.contextvars.unbind_contextvars("run_id", "env")
+
+
+@app.command(name="audit-process")
+def audit_process(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Skip mutating operations")
+    ] = False,
+    json_logs: Annotated[
+        bool, typer.Option("--json-logs", help="Output JSON log lines")
+    ] = False,
+) -> None:
+    """Process pending audit findings — resubmit corrections to RabbitMQ."""
+    import asyncio
+
+    from src.celery.queue_client import MatchQueueClient
+    from src.orchestrator.audit.processor import process_pending_events
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(
+        json_output=json_logs or settings.json_logs, log_level=settings.log_level
+    )
+
+    run_id = uuid.uuid4().hex[:12]
+    structlog.contextvars.bind_contextvars(run_id=run_id, env=env)
+
+    queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
+
+    try:
+        result = asyncio.run(
+            process_pending_events(
+                settings=settings,
+                queue_client=queue_client,
+                dry_run=dry_run,
+            )
+        )
+    except Exception as exc:
+        logger.error("audit_process.failed", error=str(exc), exc_info=exc)
+        raise typer.Exit(code=1) from None
+
+    logger.info(
+        "audit_process.completed",
+        events_processed=result.events_processed,
+        matches_resubmitted=result.matches_resubmitted,
+        extra_in_mt_skipped=result.extra_in_mt_skipped,
+        errors=result.errors,
+    )
+
+    if result.matches_resubmitted or result.extra_in_mt_skipped:
+        _send_telegram_processor_report(settings=settings, result=result, env=env)
+
+    structlog.contextvars.unbind_contextvars("run_id", "env")
+
+
+@app.command(name="audit-report")
+def audit_report(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+) -> None:
+    """Show audit coverage for all HG Northeast teams across all age groups."""
+    import asyncio
+    from datetime import date, datetime
+
+    from src.orchestrator.audit.client import fetch_audit_team_status
+    from src.orchestrator.settings import AgentSettings, env_file_path
+    from src.orchestrator.tools import _current_season
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    season = _current_season()
+    today = date.today()
+
+    age_groups = ["U13", "U14", "U15", "U16"]
+    league = "Homegrown"
+    division = "Northeast"
+    overdue_days = 7
+
+    teams = asyncio.run(
+        fetch_audit_team_status(
+            api_url=settings.missing_table_api_url,
+            api_key=settings.missing_table_api_key or "",
+            season=season,
+            league=league,
+            division=division,
+        )
+    )
+
+    by_ag: dict[str, list] = {ag: [] for ag in age_groups}
+    for t in teams:
+        if t.age_group in by_ag:
+            by_ag[t.age_group].append(t)
+
+    typer.echo(f"\nAudit Progress — HG {division} — {season}")
+    typer.echo(f"Generated: {today}  |  Overdue threshold: >{overdue_days} days\n")
+
+    col_ag = 10
+    col_team = 34
+    col_date = 13
+    col_days = 6
+    col_findings = 10
+    header = (
+        f"{'AGE GRP':<{col_ag}}{'TEAM':<{col_team}}"
+        f"{'LAST AUDITED':<{col_date}}{'DAYS':>{col_days}}"
+        f"{'FINDINGS':>{col_findings}}  STATUS"
+    )
+    separator = "-" * len(header)
+    typer.echo(header)
+    typer.echo(separator)
+
+    total = audited_week = overdue_count = never_count = 0
+
+    for ag in age_groups:
+        for t in sorted(by_ag[ag], key=lambda x: x.team):
+            total += 1
+            if t.last_audited_at:
+                dt = datetime.fromisoformat(t.last_audited_at).replace(tzinfo=UTC)
+                days_ago = (today - dt.date()).days
+                date_str = dt.date().isoformat()
+                days_str = str(days_ago)
+                findings_str = str(t.findings_count) if t.findings_count else "-"
+                if days_ago <= overdue_days:
+                    status = "OK"
+                    audited_week += 1
+                else:
+                    status = "OVERDUE"
+                    overdue_count += 1
+            else:
+                date_str = "never"
+                days_str = "-"
+                findings_str = "-"
+                status = "PENDING"
+                never_count += 1
+
+            typer.echo(
+                f"{ag:<{col_ag}}{t.team:<{col_team}}"
+                f"{date_str:<{col_date}}{days_str:>{col_days}}"
+                f"{findings_str:>{col_findings}}  {status}"
+            )
+
+    typer.echo(separator)
+    typer.echo(
+        f"\nTotal: {total}  |  Audited this week: {audited_week}"
+        f"  |  Overdue: {overdue_count}  |  Pending: {never_count}\n"
+    )
+
+
+def _send_telegram_message(
+    settings: AgentSettings, message: str, *, subject: str
+) -> None:
+    """
+    Send one MarkdownV2 message, falling back to email if Telegram fails.
+
+    Mirrors _send_telegram_report but takes a prebuilt message, since the
+    release watcher has nothing to do with run summaries.
+    """
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        logger.debug("telegram.skipped", reason="not configured")
+        return
+
+    from telegram_notify import TelegramClient
+
+    try:
+        client = TelegramClient(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+        )
+        client.send(message)
+        logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
+    except Exception as exc:
+        logger.warning("telegram.failed", error=str(exc))
+        _send_email_alert(
+            settings,
+            subject=subject,
+            body=f"Telegram notification failed: {exc}\n\n{message}",
+        )
+
+
+@app.command(name="watch-release")
+def watch_release(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    age_groups: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--age-group", "-a", help="Age group to check; repeat for several."
+        ),
+    ] = None,
+    divisions: Annotated[
+        list[str] | None,
+        typer.Option("--division", "-d", help="Division to check; repeat for several."),
+    ] = None,
+    full_season: Annotated[
+        bool,
+        typer.Option(
+            "--full-season", help="Search the whole season, not just the fall."
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Probe and report, but send and save nothing."),
+    ] = False,
+) -> None:
+    """
+    Watch for the MLS Next schedule being published, and announce it once.
+
+    Designed to run unattended on a CronJob. Sends Telegram on the first
+    detection of each target and on a sustained probe outage; stays silent
+    otherwise, because "still not published" is the expected state for weeks.
+
+    Notify-only by design — it never scrapes. A new season's page format is
+    unverified until a human looks at it, and publishing bad data to
+    missing-table unattended is worse than waiting.
+    """
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.release_watch import read_state, write_state
+    from src.orchestrator.report import (
+        build_release_failure_report,
+        build_release_report,
+    )
+    from src.orchestrator.settings import AgentSettings, env_file_path
+    from src.scraper.release_detector import (
+        ReleaseDetectorError,
+        ScheduleReleaseDetector,
+    )
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(json_output=settings.json_logs)
+
+    try:
+        detector = ScheduleReleaseDetector(
+            age_groups=age_groups or None,
+            divisions=divisions or None,
+            fall_only=not full_season,
+        )
+    except ReleaseDetectorError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    import asyncio
+
+    probe = asyncio.run(detector.probe())
+
+    # S3 when a bucket is configured, otherwise a file on the mounted PVC.
+    # Either way the state must survive the pod, or every run re-announces.
+    bucket = settings.journal_s3_bucket
+    state_path = settings.release_watch_state_path
+    persist = bool(bucket or state_path) and not dry_run
+
+    if persist:
+        state = read_state(bucket, settings.release_watch_s3_key, state_path)
+    else:
+        from src.orchestrator.release_watch import ReleaseWatchState
+
+        state = ReleaseWatchState()
+
+    state.reset_for_season(probe.season)
+
+    live_labels = [r.label for r in probe.live]
+    newly_live = state.newly_live(live_labels)
+
+    typer.echo(probe.summary())
+
+    if probe.all_failed:
+        state.consecutive_failures += 1
+        threshold = settings.release_watch_failure_threshold
+        logger.warning(
+            "release_watch.all_failed",
+            consecutive=state.consecutive_failures,
+            threshold=threshold,
+        )
+        if state.consecutive_failures >= threshold and not state.failure_alert_sent:
+            sample = probe.errors[0].error if probe.errors else "unknown"
+            if not dry_run:
+                _send_telegram_message(
+                    settings,
+                    build_release_failure_report(
+                        season=probe.season,
+                        consecutive_failures=state.consecutive_failures,
+                        total_targets=len(probe.results),
+                        sample_error=sample or "unknown",
+                    ),
+                    subject="[match-scraper-agent] Schedule watch failing",
+                )
+            state.failure_alert_sent = True
+    else:
+        state.consecutive_failures = 0
+        state.failure_alert_sent = False
+
+    if newly_live:
+        logger.info("release_watch.released", targets=newly_live)
+        if not dry_run:
+            _send_telegram_message(
+                settings,
+                build_release_report(
+                    season=probe.season,
+                    newly_live=newly_live,
+                    window_start=probe.window_start.isoformat(),
+                    window_end=probe.window_end.isoformat(),
+                    total_targets=len(probe.results),
+                ),
+                subject="[match-scraper-agent] MLS Next schedule published",
+            )
+        state.record_live(newly_live)
+
+    state.touch()
+
+    if persist:
+        write_state(bucket, settings.release_watch_s3_key, state, state_path)
+
+    if probe.all_failed:
+        raise typer.Exit(code=20)
+    if newly_live:
+        raise typer.Exit(code=10)

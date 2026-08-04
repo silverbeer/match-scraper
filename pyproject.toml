@@ -28,11 +28,22 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "colorthief>=0.2.1",
     "Pillow>=10.0.0",
+    # Orchestrator (src/orchestrator) — the scheduling layer merged in from
+    # match-scraper-agent. structlog is its own logging stack: the scraper
+    # logs through src/utils/logger.py (stdlib + python-json-logger), the
+    # orchestrator through structlog's key-value events. They are not
+    # interchangeable, and merging them is not part of the consolidation.
+    "pydantic-settings>=2.0",
+    "structlog>=24.0",
+    "telegram-notify @ git+https://github.com/silverbeer/telegram-notify.git",
+    "resend>=2.0",
+    "boto3>=1.35",
 ]
 
 [project.scripts]
 run-e2e-test = "scripts.run_e2e_test:main"
 mls-scraper = "src.cli.main:app"
+match-scraper-agent = "src.orchestrator.cli:app"
 
 [dependency-groups]
 dev = [
@@ -52,6 +63,10 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# telegram-notify is a git dependency
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
