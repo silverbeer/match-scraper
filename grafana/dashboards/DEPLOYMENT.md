@@ -158,6 +158,12 @@ go install github.com/grafana/grizzly/cmd/grr@latest
    ```
 
 2. **Deploy dashboards**:
+
+   > **Deprecated (SB-558, 2026-08-03).** `k8s/grafana-dashboard-overview.yaml`
+   > was deleted along with the rest of the standalone scraper manifests, and
+   > `k8s/grafana-dashboard-errors.yaml` never existed. Recover the former from
+   > git history, or import the JSON in this directory through the Grafana UI.
+
    ```bash
    kubectl apply -f k8s/grafana-dashboard-overview.yaml
    kubectl apply -f k8s/grafana-dashboard-errors.yaml

@@ -150,10 +150,9 @@ fi
 if [[ "$RABBITMQ_ONLY" == false ]]; then
     echo -e "${YELLOW}⚽ Deploying match-scraper...${NC}"
 
-    # Apply match-scraper manifests
-    kubectl apply -f k3s/match-scraper/configmap.yaml
-    kubectl apply -f k3s/match-scraper/secret.yaml
-    kubectl apply -f k3s/match-scraper/cronjob.yaml
+    # The scraper CronJobs and their config were deleted in SB-558: the agent
+    # in match-scraper-agent covers the same targets with current code, and
+    # these ran an image eight months stale. Only the job reaper is left.
     kubectl apply -f k3s/match-scraper/cleanup-cronjob.yaml
 
     echo -e "${GREEN}✅ Match-scraper manifests applied${NC}"
