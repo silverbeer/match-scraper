@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: qop-rankings-scraper
+  namespace: match-scraper
+spec:
+  schedule: "0 12 * * 5"  # Every Friday at 12:00 (noon) America/New_York
+  timeZone: "America/New_York"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: rankings-scraper
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["uv", "run", "mls-scraper"]
+              args:
+                - rankings
+                - --age-group
+                - U14
+                - --division
+                - Northeast
+                - --headless
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              env:
+                # The mls-scraper rankings command reads these unprefixed names;
+                # we map them from the agent's AGENT_-prefixed equivalents.
+                - name: MISSING_TABLE_API_BASE_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: match-scraper-agent-config
+                      key: AGENT_MISSING_TABLE_API_URL
+                - name: MISSING_TABLE_API_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: match-scraper-agent-secret
+                      key: AGENT_MISSING_TABLE_API_KEY
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+                limits:
+                  cpu: "500m"
+                  memory: 1Gi
