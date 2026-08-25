@@ -137,7 +137,17 @@ def _send_telegram_report(
 
     from telegram_notify import TelegramClient
 
+    from src.orchestrator.ingest_failures import fetch_ingest_failures
     from src.orchestrator.report import build_report
+
+    # Asked after the work is done: publishing to the queue says nothing about
+    # whether missing-table could resolve the names, and that gap is how a run
+    # that landed nothing still reported as green (SB-831).
+    ingest_failures = fetch_ingest_failures(
+        api_url=ctx.missing_table_api_url,
+        api_key=ctx.missing_table_api_key,
+        since=ctx._started_at,
+    )
 
     report = build_report(
         result_summary=result.summary,
@@ -146,6 +156,7 @@ def _send_telegram_report(
         matches_submitted=result.matches_submitted,
         scraped_matches=ctx._scraped_matches,
         submission_errors=ctx._submission_errors,
+        ingest_failures=ingest_failures,
         protected_matches=ctx._protected_matches,
         env=env,
         target=target,

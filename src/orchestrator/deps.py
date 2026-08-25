@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -31,4 +32,8 @@ class RunContext:
     _submission_errors: list[dict[str, str]] = field(default_factory=list)
     _protected_matches: list[dict[str, Any]] = field(default_factory=list)
     _mt_status: str = ""  # "ok", "failed:<reason>", or "" (not called)
+    # When this run began, used as the `since` window when asking
+    # missing-table which names it could not resolve. Without it the report
+    # would carry every name that has ever failed, not what this run cost.
+    _started_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
     _scrape_plan: Any = None  # RunPlan from planner, or None for targeted runs

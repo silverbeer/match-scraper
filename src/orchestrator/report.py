@@ -24,6 +24,7 @@ def build_report(
     matches_submitted: int,
     scraped_matches: list[dict[str, Any]],
     submission_errors: list[dict[str, str]],
+    ingest_failures: list[dict[str, Any]] | None = None,
     protected_matches: list[dict[str, Any]] | None = None,
     env: str,
     target: str | None,
@@ -41,6 +42,11 @@ def build_report(
         matches_submitted: Total matches submitted to queue.
         scraped_matches: Raw match dicts from RunContext._scraped_matches.
         submission_errors: Error dicts from RunContext._submission_errors.
+            These are RabbitMQ PUBLISH failures only — see ingest_failures.
+        ingest_failures: Rows from missing-table's /api/admin/ingest-failures
+            (SB-829). Publishing to the queue succeeds whether or not
+            missing-table can resolve the names, so without these a run that
+            landed nothing still reports as green.
         env: Environment name (local, prod).
         target: Target filter name or None.
         dry_run: Whether this was a dry run.
@@ -109,6 +115,9 @@ def build_report(
     lines.append("")
 
     # --- Match Summary ---
+    failures = ingest_failures or []
+    dropped = sum(f.get("match_count", 0) for f in failures)
+
     completed = sum(1 for m in scraped_matches if m.get("match_status") == "completed")
     scheduled = sum(1 for m in scraped_matches if m.get("match_status") == "scheduled")
     tbd = sum(1 for m in scraped_matches if m.get("match_status") == "tbd")
@@ -120,6 +129,11 @@ def build_report(
     ]
     if error_count:
         summary_parts.append(escape(f"{error_count} errors"))
+    if dropped:
+        # Sits next to "submitted" deliberately. Submitted-but-dropped is the
+        # gap this whole section exists to close, and the two numbers only
+        # mean anything side by side.
+        summary_parts.append(escape(f"{dropped} rejected by MT"))
     lines.append(f"*Matches:* {' · '.join(summary_parts)}")
 
     no_kickoff = sum(
@@ -148,6 +162,22 @@ def build_report(
             match = escape(err.get("match", "unknown"))
             error = escape(err.get("error", "unknown"))
             lines.append(f"  • {match} — {error}")
+        lines.append("")
+
+    # --- Ingest Failures (missing-table side) ---
+    if failures:
+        lines.append(
+            f"*Ingest Failures \\({escape(str(len(failures)))} names, {escape(str(dropped))} matches\\):*"
+        )
+        lines.append(escape("  Matches published but rejected by missing-table."))
+        for f in failures:
+            name = escape(str(f.get("raw_name", "unknown")))
+            kind = escape(str(f.get("kind", "name")))
+            count = escape(str(f.get("match_count", 0)))
+            lines.append(f"  • {kind}: {name} ×{count}")
+        # The fix is one command per line above, so say which one rather than
+        # leaving the reader to remember it.
+        lines.append(escape('  Fix a team name: mt team alias add <team> "<name>"'))
         lines.append("")
 
     # --- Live Score Protected ---
