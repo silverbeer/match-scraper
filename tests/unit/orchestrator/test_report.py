@@ -418,3 +418,87 @@ class TestMissingKickoff:
             now=now,
         )
         assert "⏰" in report
+
+
+# ── Ingest failures: the gap between "submitted" and "landed" (SB-831) ──
+
+
+def _failure(
+    raw_name: str = "Intercontinental Football Academy of New England",
+    kind: str = "team",
+    match_count: int = 88,
+) -> dict:
+    return {
+        "raw_name": raw_name,
+        "kind": kind,
+        "match_count": match_count,
+        "league": "Homegrown",
+    }
+
+
+def _report(**overrides) -> str:
+    defaults = {
+        "result_summary": "Completed run",
+        "actions": [],
+        "matches_found": 100,
+        "matches_submitted": 100,
+        "scraped_matches": [_match()],
+        "submission_errors": [],
+        "env": "prod",
+        "target": None,
+        "dry_run": False,
+        "now": datetime(2026, 9, 5, 14, 0, tzinfo=UTC),
+    }
+    return build_report(**{**defaults, **overrides})
+
+
+class TestIngestFailuresSection:
+    def test_a_clean_run_says_nothing_about_ingest(self) -> None:
+        assert "Ingest Failures" not in _report(ingest_failures=[])
+
+    def test_omitting_the_argument_is_the_old_behaviour(self) -> None:
+        # The report is built from several call sites and by tests; a missing
+        # argument must degrade to what it said before, not raise.
+        assert "Ingest Failures" not in _report()
+
+    def test_rejected_matches_appear_next_to_submitted(self) -> None:
+        # "1432 submitted, 0 errors" was the whole problem: publishing to the
+        # queue is not missing-table accepting the match. The two numbers only
+        # mean anything side by side.
+        report = _report(
+            ingest_failures=[
+                _failure(match_count=88),
+                _failure("Connecticut United FC", match_count=61),
+            ]
+        )
+        assert "100 submitted" in report
+        assert "149 rejected by MT" in report
+
+    def test_each_unresolved_name_is_listed_with_its_cost(self) -> None:
+        report = _report(ingest_failures=[_failure(match_count=88)])
+        assert "Intercontinental Football Academy of New England" in report
+        assert "×88" in report
+
+    def test_the_heading_counts_names_and_matches(self) -> None:
+        report = _report(
+            ingest_failures=[
+                _failure(match_count=88),
+                _failure("Turnpike", kind="division", match_count=3),
+            ]
+        )
+        assert "2 names, 91 matches" in report
+
+    def test_the_section_names_the_fix(self) -> None:
+        assert "mt team alias add" in _report(ingest_failures=[_failure()])
+
+    def test_the_kind_distinguishes_a_division_from_a_team(self) -> None:
+        report = _report(
+            ingest_failures=[_failure("Turnpike", kind="division", match_count=3)]
+        )
+        assert "division: Turnpike" in report
+
+    def test_a_missing_count_does_not_break_the_report(self) -> None:
+        # The API shape is another service's; a row without match_count should
+        # cost a number in the summary, not the whole report.
+        report = _report(ingest_failures=[{"raw_name": "Mystery FC", "kind": "team"}])
+        assert "Mystery FC" in report
