@@ -166,23 +166,6 @@ def normalize_team_name_for_display(team_name: str) -> str:
     return TEAM_NAME_MAPPINGS.get(team_name, team_name)
 
 
-def apply_league_specific_team_name(team_name: str, league: str) -> str:
-    """Apply league-specific suffixes to team names for disambiguation.
-
-    Args:
-        team_name: The normalized team name
-        league: The league being scraped (e.g., "Homegrown", "Academy")
-
-    Returns:
-        Team name with league-specific suffix if needed
-    """
-    # IFA has teams in both Homegrown and Academy leagues
-    # Add "HG" suffix for Homegrown to distinguish from Academy teams
-    if team_name == "IFA" and league == "Homegrown":
-        return "IFA HG"
-    return team_name
-
-
 def setup_environment(verbose: bool = False) -> None:
     """Set up environment variables for CLI usage."""
     # Load .env file first
@@ -611,15 +594,18 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
         conference=config.conference,
     )
 
-    # Normalize team names and apply league-specific suffixes
-    home_team_normalized = normalize_team_name_for_display(match.home_team)
-    away_team_normalized = normalize_team_name_for_display(match.away_team)
-    home_team_final = apply_league_specific_team_name(
-        home_team_normalized, config.league
-    )
-    away_team_final = apply_league_specific_team_name(
-        away_team_normalized, config.league
-    )
+    # Normalize team names to the ones missing-table stores.
+    #
+    # No league suffix. The CLI used to append "HG" for IFA's Homegrown team
+    # while the orchestrator sent plain "IFA", so the same fixture had two
+    # names depending on which path submitted it — and "IFA HG" matches
+    # nothing in MT, so the CLI path silently dropped those matches (SB-844).
+    #
+    # The suffix was meant to disambiguate IFA's Homegrown team from its
+    # Academy one, but the Academy path already maps to a different name
+    # entirely ("IFA Academy"), so plain "IFA" was never ambiguous.
+    home_team_final = normalize_team_name_for_display(match.home_team)
+    away_team_final = normalize_team_name_for_display(match.away_team)
 
     return {
         "home_team": home_team_final,

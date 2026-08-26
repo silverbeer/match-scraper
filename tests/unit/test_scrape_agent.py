@@ -15,7 +15,6 @@ from typer.testing import CliRunner
 
 from src.cli.main import (
     app,
-    apply_league_specific_team_name,
     build_match_dict,
     create_config,
     normalize_team_name_for_display,
@@ -98,33 +97,6 @@ class TestTeamNameNormalization:
 
     def test_empty_string_passes_through(self):
         assert normalize_team_name_for_display("") == ""
-
-
-class TestLeagueSpecificTeamName:
-    """Tests for apply_league_specific_team_name."""
-
-    def test_ifa_homegrown_gets_hg_suffix(self):
-        assert apply_league_specific_team_name("IFA", "Homegrown") == "IFA HG"
-
-    def test_ifa_academy_unchanged(self):
-        assert apply_league_specific_team_name("IFA", "Academy") == "IFA"
-
-    def test_non_ifa_homegrown_unchanged(self):
-        assert (
-            apply_league_specific_team_name("FC Dallas Youth", "Homegrown")
-            == "FC Dallas Youth"
-        )
-
-    def test_non_ifa_academy_unchanged(self):
-        assert (
-            apply_league_specific_team_name("FC Dallas Youth", "Academy")
-            == "FC Dallas Youth"
-        )
-
-
-# ===========================================================================
-# 2. Config Creation
-# ===========================================================================
 
 
 class TestCreateConfig:
@@ -257,10 +229,31 @@ class TestBuildMatchDict:
         )
         result = build_match_dict(match, config)
 
-        assert result["home_team"] == "IFA HG"
+        # Plain "IFA" — the name missing-table actually stores (team 19).
+        # This asserted "IFA HG" until SB-844, so the suite was defending the
+        # bug that silently dropped IFA's Homegrown fixtures.
+        assert result["home_team"] == "IFA"
         assert result["away_team"] == "NEFC"
 
-    def test_ifa_team_normalized_academy_no_suffix(self):
+    def test_the_cli_and_the_agent_agree_on_ifa(self):
+        """Two submit paths must not produce two names for one team (SB-844).
+
+        The CLI appended an "HG" suffix the orchestrator never did, so the
+        same fixture arrived as "IFA HG" or "IFA" depending on which path
+        sent it — and only one of those exists in missing-table.
+        """
+        from src.orchestrator.tools import _normalize_team_name
+
+        feed_name = "Intercontinental Football Academy of New England"
+        config = _make_config(league="Homegrown")
+        match = _make_match(home_team=feed_name, away_team="NEFC")
+
+        cli_name = build_match_dict(match, config)["home_team"]
+        agent_name = _normalize_team_name(feed_name, league="Homegrown")
+
+        assert cli_name == agent_name == "IFA"
+
+    def test_ifa_academy_normalizes_to_the_academy_team(self):
         config = _make_config(league="Academy", conference="New England")
         match = _make_match(
             home_team="Intercontinental Football Academy of New England",
