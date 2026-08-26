@@ -565,6 +565,47 @@ def display_upcoming_games(matches: list[Match], limit: int = 5) -> None:
             console.print()
 
 
+# MLS Next competition name -> missing-table match_type.
+#
+# The feed states the competition PER EVENT, not per target: an event carries
+# `competition: {id, name}`, and MLS Next's own schedule page shows it as a
+# column. So this reads what the fixture says it is rather than inferring it
+# from which bracket was scraped.
+#
+#   League (1605)                      -> League
+#   League (Pro Player Pathway) (1606) -> League
+#   MLS NEXT Flex (1607)               -> Flex
+#
+# Pathway maps to League deliberately. Those ARE League fixtures, played in a
+# different bracket — moving them out of League would empty ~29 pro academies'
+# League records, and `mt team stats <club>` defaults to -c League.
+_COMPETITION_TO_MATCH_TYPE = {
+    "League": "League",
+    "League (Pro Player Pathway)": "League",
+    "MLS NEXT Flex": "Flex",
+}
+
+
+def mt_match_type(match, league: str = "") -> str:
+    """The missing-table match_type for one fixture.
+
+    Getting this wrong is not cosmetic: `mt team stats -c` and the Golden Boot
+    resolve a competition name to a match_type, so a Flex fixture filed as
+    League inflates every League scorer and makes games-played read 25 instead
+    of 19 (SB-846).
+
+    Falls back to the target's league when the feed says nothing, so an
+    unrecognised competition degrades to the old behaviour rather than to a
+    match type missing-table has no row for.
+    """
+    competition = getattr(match, "competition", None)
+    if competition:
+        mapped = _COMPETITION_TO_MATCH_TYPE.get(str(competition).strip())
+        if mapped:
+            return mapped
+    return "Flex" if league == "Flex" else "League"
+
+
 def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
     """Build a queue-ready match dict from a Match object and config.
 
@@ -626,7 +667,7 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
             )
         ),
         "age_group": config.age_group,
-        "match_type": "League",
+        "match_type": mt_match_type(match, config.league),
         "division": division_name,
         "division_id": division_id,
         "league": config.league,
