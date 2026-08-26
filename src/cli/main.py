@@ -40,6 +40,7 @@ from src.models.schedule_release import (  # noqa: E402
     ReleaseProbe,
     ReleaseState,
 )
+from src.scraper.assist_client import LEAGUE_FEEDS as _LEAGUE_FEEDS  # noqa: E402
 from src.scraper.config import ScrapingConfig  # noqa: E402
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError  # noqa: E402
 from src.scraper.models import Match  # noqa: E402
@@ -91,7 +92,12 @@ DEFAULT_DAYS = 3  # Keep for upcoming command backward compatibility
 
 # Valid options
 VALID_AGE_GROUPS = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
-VALID_LEAGUES = ["Homegrown", "Academy"]
+# Competitions MLS Next publishes, taken from the feed map rather than repeated
+# here. Flex joined in 2026-2027 (SB-836) — a separate competition played by the
+# same teams as Homegrown, with its own conference brackets — and adding it
+# meant tracking down three hardcoded copies of this list, two of which only
+# surfaced when a scrape failed.
+VALID_LEAGUES = sorted(_LEAGUE_FEEDS)
 # modular11-era division names, kept ONLY for the playwright source (2025-2026
 # and earlier). Do not add to this list: for 2026-2027 the assist feeds carry
 # their own structure and are asked directly — see valid_divisions().
@@ -880,7 +886,7 @@ def scrape(
         raise typer.Exit(1)
 
     # Validate league-specific parameters
-    if league == "Homegrown":
+    if league in ("Homegrown", "Flex"):
         known = valid_divisions(league)
         # known is None for the assist source: the feed is the authority and
         # the scrape checks against it, listing real brackets on a miss.
@@ -901,7 +907,7 @@ def scrape(
         # Warn if division is provided but league is Academy
         if division and division != DEFAULT_DIVISION:
             console.print(
-                "[yellow]⚠️  --division is only used with --league Homegrown. It will be ignored.[/yellow]"
+                "[yellow]⚠️  --division is only used with --league Homegrown or Flex. It will be ignored.[/yellow]"
             )
 
     if not quiet:

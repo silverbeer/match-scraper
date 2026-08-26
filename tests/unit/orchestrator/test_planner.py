@@ -462,3 +462,55 @@ class TestPathwayTargets:
 
         assert T["u16-hg"]["division"] == "Northeast"
         assert T["u16-ppp-northeast"]["division"] == "Northeast (Pro Player Pathway)"
+
+
+# ── MLS NEXT Flex targets (SB-836) ───────────────────────────────────
+
+
+class TestFlexTargets:
+    def test_all_flex_brackets_are_targets(self):
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        flex = {k: v for k, v in _TARGET_SCRAPER_CONFIG.items() if "-flex-" in k}
+        assert len(flex) == 52, "13 brackets x U15/U16/U17/U19"
+
+    def test_flex_targets_use_the_flex_league(self):
+        # Not "Homegrown". The league drives match_type, so posting these as
+        # Homegrown would file every Flex goal as a League goal.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
+            if "-flex-" in key:
+                assert cfg["league"] == "Flex"
+
+    def test_no_flex_target_at_u13_or_u14(self):
+        # Those age groups play no Flex at all — the feed has no bracket for
+        # them, so targeting them would be a standing empty scrape.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
+            if "-flex-" in key:
+                assert cfg["age_group"] in ("U15", "U16", "U17", "U19")
+
+    def test_colliding_bracket_names_get_distinct_target_keys(self):
+        # Florida, Frontier, Northwest and Southeast name both a Homegrown
+        # division and a Flex bracket. The keys must not collide or one
+        # competition silently overwrites the other in the target dict.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
+
+        assert T["u15-flex-florida"]["league"] == "Flex"
+        assert T["u15-hg"]["league"] == "Homegrown"
+        assert T["u15-flex-florida"]["division"] == "Florida"
+
+    def test_bracket_names_with_parentheses_produce_readable_keys(self):
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
+
+        assert T["u16-flex-mid-america-east"]["division"] == "Mid-America (East)"
+        assert T["u16-flex-southwest-north"]["division"] == "Southwest (North)"
+
+    def test_every_target_key_is_unique_to_one_config(self):
+        # The dict cannot hold duplicates, so this asserts the generators do
+        # not silently overwrite each other: 12 base + 12 Pathway + 52 Flex.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
+
+        assert len(T) == 76

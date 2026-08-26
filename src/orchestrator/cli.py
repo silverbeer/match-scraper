@@ -109,6 +109,54 @@ for _bracket in _PATHWAY_BRACKETS:
             "division": f"{_bracket} (Pro Player Pathway)",
         }
 
+
+# MLS NEXT Flex (SB-836).
+#
+# A separate competition played by the same teams: 563 of Flex's 567 squads
+# also appear in the Homegrown league feed, and none appear in Academy — which
+# is why non-academy teams play roughly 6 Flex fixtures alongside 19 League
+# ones. It has its own thirteen conference brackets, which do NOT partition the
+# Homegrown divisions: Northeast U15's nineteen teams split across New England,
+# Turnpike and Empire.
+#
+# league is "Flex" rather than "Homegrown" so these post with match_type
+# "Flex", keeping Flex goals out of the League Golden Boot, and so missing-table
+# scopes its division lookup — four of these names collide with Homegrown
+# divisions (Florida, Frontier, Northwest, Southeast).
+#
+# U15 and up only. U13 and U14 play no Flex at all, so those combinations are
+# absent rather than scraped and found empty.
+_FLEX_BRACKETS = (
+    "Empire",
+    "Florida",
+    "Frontier",
+    "Mid-America (East)",
+    "Mid-America (West)",
+    "Mid-Atlantic (North)",
+    "Mid-Atlantic (South)",
+    "New England",
+    "Northwest",
+    "Southeast",
+    "Southwest (North)",
+    "Southwest (South)",
+    "Turnpike",
+)
+_FLEX_AGE_GROUPS = ("U15", "U16", "U17", "U19")
+
+
+def _slug(name: str) -> str:
+    """Bracket name to target-key fragment: 'Mid-America (East)' -> 'mid-america-east'."""
+    return name.lower().replace(" (", "-").replace(")", "").replace(" ", "-")
+
+
+for _bracket in _FLEX_BRACKETS:
+    for _age in _FLEX_AGE_GROUPS:
+        _TARGET_SCRAPER_CONFIG[f"{_age.lower()}-flex-{_slug(_bracket)}"] = {
+            "age_group": _age,
+            "league": "Flex",
+            "division": _bracket,
+        }
+
 # Targets that include a team filter — value is the DB team name used for filtering
 _TARGET_TEAM_FILTER: dict[str, str] = {
     "u14-hg-ifa": "IFA",

@@ -188,6 +188,18 @@ async def scrape_matches(
     # (MT has no separate conference field — "New England" is a division in Academy)
     mt_division = config.conference if config.conference else config.division
 
+    # The competition, as a missing-table match_type. This was hardcoded to
+    # "League" while every scraped fixture was a League fixture; Flex is a
+    # genuinely different competition played by the same teams (SB-836).
+    #
+    # Getting it wrong is not cosmetic. `mt team stats -c` and the Golden Boot
+    # both resolve a competition name to a match_type, so Flex fixtures posted
+    # as League would inflate every League scorer and make GP read 25 instead
+    # of 19. Pro Player Pathway is deliberately NOT here: those are League
+    # fixtures in a different bracket, and moving them out of League would
+    # empty ~29 pro academies' League records.
+    mt_match_type = "Flex" if config.league == "Flex" else "League"
+
     # Accumulate matches for submit_matches to pick up
     built = [
         {
@@ -203,7 +215,7 @@ async def scrape_matches(
             ),
             "season": _current_season(),
             "age_group": config.age_group,
-            "match_type": "League",
+            "match_type": mt_match_type,
             "division": mt_division,
             "league": config.league,
             "home_score": m.home_score if isinstance(m.home_score, int) else None,

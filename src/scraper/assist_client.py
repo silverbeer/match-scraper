@@ -68,6 +68,14 @@ FEED_KEY_TEMPLATES: dict[str, str] = {
 LEAGUE_FEEDS: dict[str, tuple[str, ...]] = {
     "Homegrown": ("league",),
     "Academy": ("academy",),
+    # Flex is its own competition season with its own conference brackets,
+    # played by the SAME teams as Homegrown: 563 of its 567 squads also appear
+    # in the league feed, and none appear in Academy. It stays a separate
+    # league name rather than being folded into Homegrown so that an existing
+    # Homegrown scrape does not silently grow new fixtures, and so MT can scope
+    # its division lookup — four Flex bracket names collide with Homegrown ones
+    # (Florida, Frontier, Northwest, Southeast).
+    "Flex": ("flex",),
 }
 
 DEFAULT_HEADERS = {

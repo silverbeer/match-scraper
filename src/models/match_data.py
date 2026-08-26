@@ -14,6 +14,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+# Competitions missing-table has a `leagues` row for.
+VALID_LEAGUES = ("Homegrown", "Academy", "Flex")
+
 
 class MatchData(BaseModel):
     """
@@ -57,9 +60,20 @@ class MatchData(BaseModel):
     @field_validator("league")
     @classmethod
     def validate_league(cls, v: str | None) -> str | None:
-        """Validate league is either Homegrown or Academy."""
-        if v is not None and v not in ["Homegrown", "Academy"]:
-            raise ValueError("League must be 'Homegrown' or 'Academy'")
+        """Validate the league is one missing-table has a row for.
+
+        Flex joined in 2026-2027 (SB-836). It is a distinct competition, not a
+        variant of Homegrown: missing-table carries it as its own `leagues` row
+        so that Flex bracket names can coexist with the Homegrown ones they
+        collide with, and so Flex goals do not land in the League Golden Boot.
+
+        This list is duplicated by design in missing-table's own
+        models/match_data.py and in match-message-schema.json — the contract is
+        enforced by the schema and contract tests, not by shared code. Change
+        one, change all three.
+        """
+        if v is not None and v not in VALID_LEAGUES:
+            raise ValueError(f"League must be one of: {', '.join(VALID_LEAGUES)}")
         return v
 
     class Config:
