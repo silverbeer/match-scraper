@@ -3,7 +3,74 @@
 What breaks when MLS Next starts a new season, and why. Written after the
 2025-2026 → 2026-2027 rollover (observed 2026-08-02, SB-499).
 
-## What the rollover actually did
+## 2026-08-24: MLS Next left modular11 (SB-818)
+
+**Everything below about modular11 now describes 2025-2026 and earlier only.**
+
+MLS Next replaced the schedule iframe with a Kitman "assist" SPA that reads two
+static JSON documents per competition season. There is no division dropdown any
+more, no calendar widget and no HTML fragment to parse:
+
+```
+https://mls-assist.theintelligenceplatform.com/data/schedule/<key>.json
+https://mls-assist.theintelligenceplatform.com/data/standings/<key>.json
+```
+
+| Key | Competition | Events (2026-2027) |
+|-----|-------------|--------------------|
+| `mls-next-league-26-27` | Homegrown — League + Pro Player Pathway | 7,763 |
+| `mls-next-flex-26-27` | MLS NEXT Flex | 3,160 |
+| `mls-next-2-academy-division-26-27` | Academy Division | 13,705 |
+
+The 2026-2027 season is published **only** there — modular11 answers `No data
+available.` for every 26/27 target while still serving 2025-2026. Prior seasons
+are the mirror image: no `*-25-26` key exists on the new platform (the request
+returns the SPA's HTML shell with a 200, not a 404).
+
+### Where the division filter went
+
+The schedule feed's `division` field is useless for Homegrown — every event
+reports `MLS Next`. Conference structure lives in the **standings** feed, whose
+`competition_brackets` are one per conference x age group, each listing its
+teams by `squad_id`. Those IDs appear on every schedule event, so the join is
+exact and needs no name matching:
+
+```
+standings.competition_brackets[].standings[].team.squad_id
+    -> schedule.events[].home_squad_id / away_squad_id
+```
+
+`AssistIndex` in `src/scraper/assist_client.py` does this. Membership is asked
+per bracket rather than resolved per squad, because a club can sit in two
+brackets at once — FC Dallas U17 is in both `Frontier` and `Southeast (Pro
+Player Pathway)` for 2026-2027.
+
+**This retires the hand-maintained ID tables.** `AGE_GROUP_IDS` and
+`DIVISION_GROUP_IDS` no longer need to be re-read off a live `<select>` each
+season; the feed carries its own structure. The ID-drift table below is kept as
+the record of what that cost.
+
+### Choosing a source
+
+`ScrapingConfig.source` (env `MATCH_SOURCE`) selects it, and every caller of
+`MLSScraper.scrape_matches()` picks it up:
+
+| Value | Path | Use for |
+|-------|------|---------|
+| `assist` (default) | HTTP, two JSON reads, ~300 ms | 2026-2027 onwards |
+| `playwright` | Browser + modular11 | 2025-2026 backfill |
+
+### What still needs verifying
+
+Every 2026-2027 fixture is `completed: false` with null scores — the season had
+not started when this was written (first Homegrown match 2026-09-05). The
+score-sync path cannot be exercised until then.
+
+Note also that MLS publishes placeholder kick-offs: 157 of 273 Northeast U14
+fixtures carry venue `TBD` and 10:00 UTC. The site itself renders those as
+"6:00 AM EDT", so reproducing them is correct behaviour, not a timezone bug.
+
+## What the 2026-2027 rollover did *on modular11*
 
 The MLS Next schedule page embeds a modular11 iframe. On rollover:
 

@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from ..utils.logger import get_logger
 from ..utils.metrics import get_metrics
+from .assist_client import AssistClient, AssistFeedError
 from .browser import BrowserConfig, BrowserManager, PageNavigator
 from .calendar_interaction import CalendarInteractionError, MLSCalendarInteractor
 from .config import ScrapingConfig
@@ -74,7 +75,8 @@ class MLSScraper:
         """
         Execute the complete scraping workflow.
 
-        This method orchestrates the entire scraping process:
+        With the default ``assist`` source this is a pair of HTTP requests. The
+        ``playwright`` source keeps the original browser workflow:
         1. Initialize browser
         2. Navigate to MLS website
         3. Apply filters
@@ -96,18 +98,23 @@ class MLSScraper:
                 extra={
                     "age_group": self.config.age_group,
                     "division": self.config.division,
+                    "source": self.config.source,
                     "date_range": f"{self.config.start_date} to {self.config.end_date}",
                     "club_filter": self.config.club or "All clubs",
                     "competition_filter": self.config.competition or "All competitions",
                 },
             )
 
-            # Initialize browser with retry logic
-            await self._initialize_browser_with_retry()
+            if self.config.source == "assist":
+                with metrics.time_operation("full_scraping_workflow"):
+                    matches = await self._scrape_via_assist()
+            else:
+                # Initialize browser with retry logic
+                await self._initialize_browser_with_retry()
 
-            # Execute scraping workflow with metrics timing
-            with metrics.time_operation("full_scraping_workflow"):
-                matches = await self._execute_scraping_workflow()
+                # Execute scraping workflow with metrics timing
+                with metrics.time_operation("full_scraping_workflow"):
+                    matches = await self._execute_scraping_workflow()
 
             # Update execution metrics
             execution_duration_ms = int((time.time() - start_time) * 1000)
@@ -553,6 +560,79 @@ class MLSScraper:
                     ) from e
 
         return []  # unreachable, but satisfies mypy
+
+    async def _scrape_via_assist(self) -> list[Match]:
+        """
+        Read fixtures from the assist JSON feeds instead of driving a browser.
+
+        The site no longer offers a division filter — that structure now lives
+        in the standings feed, which :class:`AssistClient` joins to the schedule
+        by squad ID. Homegrown targets a ``division``, Academy a ``conference``;
+        both name a bracket in the same feed.
+
+        Returns:
+            List of Match objects for the configured target
+
+        Raises:
+            MLSScraperError: If the feeds cannot be read
+        """
+        bracket = (
+            self.config.conference
+            if self.config.league == "Academy"
+            else self.config.division
+        )
+
+        try:
+            async with AssistClient() as client:
+                matches = await client.get_matches(
+                    division=bracket,
+                    age_group=self.config.age_group,
+                    start_date=self.config.start_date,
+                    end_date=self.config.end_date,
+                    league=self.config.league,
+                )
+        except AssistFeedError as e:
+            self.execution_metrics.errors_encountered += 1
+            raise MLSScraperError(f"Assist feed read failed: {e}") from e
+
+        if self.config.club:
+            total_before_filter = len(matches)
+            club = self.config.club.lower()
+            matches = [
+                m
+                for m in matches
+                if club in m.home_team.lower() or club in m.away_team.lower()
+            ]
+            logger.info(
+                "Applied client-side club filter",
+                extra={
+                    "club": self.config.club,
+                    "matches_before": total_before_filter,
+                    "matches_after": len(matches),
+                    "filtered_out": total_before_filter - len(matches),
+                },
+            )
+
+        self.execution_metrics.games_scheduled = len(
+            [m for m in matches if m.match_status == "scheduled"]
+        )
+        self.execution_metrics.games_scored = len([m for m in matches if m.has_score()])
+
+        self._log_discovered_matches(matches)
+
+        logger.info(
+            "Assist feed read completed",
+            extra={
+                "bracket": bracket,
+                "age_group": self.config.age_group,
+                "league": self.config.league,
+                "total_matches": len(matches),
+                "games_scheduled": self.execution_metrics.games_scheduled,
+                "games_scored": self.execution_metrics.games_scored,
+            },
+        )
+
+        return matches
 
     async def _emit_final_metrics(self, matches: list[Match]) -> None:
         """

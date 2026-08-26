@@ -299,6 +299,9 @@ class TestMLSScraperWorkflow:
             missing_table_api_url="https://api.test.com",
             missing_table_api_key="test-key",
             log_level="INFO",
+            # These tests drive the browser workflow, which is no longer the
+            # default source — without this they would reach the live feeds.
+            source="playwright",
         )
 
     @pytest.fixture
@@ -956,3 +959,153 @@ class TestMLSScraperRetryLogic:
 
         # Should not raise error
         await mls_scraper._emit_final_metrics(sample_matches)
+
+
+class TestMLSScraperAssistSource:
+    """The assist JSON feeds are the default source (SB-818)."""
+
+    def _config(self, **overrides) -> ScrapingConfig:
+        base = {
+            "age_group": "U14",
+            "division": "Northeast",
+            "league": "Homegrown",
+            "club": "",
+            "competition": "",
+            "look_back_days": 1,
+            "start_date": datetime(2026, 9, 5).date(),
+            "end_date": datetime(2026, 9, 30).date(),
+            "missing_table_api_url": "https://api.test.com",
+            "missing_table_api_key": "test-key",
+            "log_level": "INFO",
+        }
+        base.update(overrides)
+        return ScrapingConfig(**base)
+
+    def _match(self, match_id: str, home: str, away: str, **kwargs) -> Match:
+        return Match(
+            match_id=match_id,
+            match_datetime=kwargs.get("when", datetime(2026, 9, 5, 11, 0)),
+            location="Revolution Training Center - Field 3",
+            competition="League",
+            home_team=home,
+            away_team=away,
+            home_score=kwargs.get("home_score"),
+            away_score=kwargs.get("away_score"),
+        )
+
+    def test_assist_is_the_default_source(self) -> None:
+        assert self._config().source == "assist"
+
+    @pytest.mark.asyncio
+    async def test_scrape_matches_reads_the_feeds_without_a_browser(self) -> None:
+        matches = [
+            self._match("26092", "New England Revolution", "IFA"),
+            self._match("26090", "FC Westchester", "TSF Academy"),
+        ]
+        client = AsyncMock()
+        client.get_matches.return_value = matches
+        client.__aenter__.return_value = client
+
+        scraper = MLSScraper(self._config())
+        with (
+            patch(
+                "src.scraper.mls_scraper.AssistClient", return_value=client
+            ) as client_cls,
+            patch.object(
+                scraper, "_initialize_browser_with_retry", new=AsyncMock()
+            ) as browser,
+        ):
+            result = await scraper.scrape_matches()
+
+        assert result == matches
+        assert client_cls.called
+        browser.assert_not_awaited()
+        client.get_matches.assert_awaited_once_with(
+            division="Northeast",
+            age_group="U14",
+            start_date=datetime(2026, 9, 5).date(),
+            end_date=datetime(2026, 9, 30).date(),
+            league="Homegrown",
+        )
+
+    @pytest.mark.asyncio
+    async def test_academy_targets_a_conference_not_a_division(self) -> None:
+        client = AsyncMock()
+        client.get_matches.return_value = []
+        client.__aenter__.return_value = client
+
+        config = self._config(league="Academy", conference="New England")
+        with patch("src.scraper.mls_scraper.AssistClient", return_value=client):
+            await MLSScraper(config).scrape_matches()
+
+        assert client.get_matches.await_args.kwargs["division"] == "New England"
+        assert client.get_matches.await_args.kwargs["league"] == "Academy"
+
+    @pytest.mark.asyncio
+    async def test_playwright_source_still_drives_the_browser(self) -> None:
+        scraper = MLSScraper(self._config(source="playwright"))
+        with (
+            patch("src.scraper.mls_scraper.AssistClient") as client_cls,
+            patch.object(scraper, "_initialize_browser_with_retry", new=AsyncMock()),
+            patch.object(
+                scraper, "_execute_scraping_workflow", new=AsyncMock(return_value=[])
+            ) as workflow,
+        ):
+            await scraper.scrape_matches()
+
+        client_cls.assert_not_called()
+        workflow.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_club_filter_applied_client_side(self) -> None:
+        client = AsyncMock()
+        client.get_matches.return_value = [
+            self._match("26092", "New England Revolution", "IFA"),
+            self._match("26090", "FC Westchester", "TSF Academy"),
+        ]
+        client.__aenter__.return_value = client
+
+        config = self._config(club="Westchester")
+        with patch("src.scraper.mls_scraper.AssistClient", return_value=client):
+            result = await MLSScraper(config).scrape_matches()
+
+        assert [m.match_id for m in result] == ["26090"]
+
+    @pytest.mark.asyncio
+    async def test_metrics_counted_from_the_feed(self) -> None:
+        client = AsyncMock()
+        client.get_matches.return_value = [
+            self._match("26092", "New England Revolution", "IFA"),
+            self._match(
+                "26099",
+                "FC Westchester",
+                "TSF Academy",
+                when=datetime(2020, 9, 5, 11, 0),
+                home_score=3,
+                away_score=1,
+            ),
+        ]
+        client.__aenter__.return_value = client
+
+        scraper = MLSScraper(self._config())
+        with patch("src.scraper.mls_scraper.AssistClient", return_value=client):
+            await scraper.scrape_matches()
+
+        assert scraper.execution_metrics.games_scheduled == 1
+        assert scraper.execution_metrics.games_scored == 1
+        assert scraper.execution_metrics.execution_duration_ms >= 0
+
+    @pytest.mark.asyncio
+    async def test_feed_failure_surfaces_as_a_scraper_error(self) -> None:
+        from src.scraper.assist_client import AssistFeedError
+
+        client = AsyncMock()
+        client.get_matches.side_effect = AssistFeedError("did not return JSON")
+        client.__aenter__.return_value = client
+
+        scraper = MLSScraper(self._config())
+        with patch("src.scraper.mls_scraper.AssistClient", return_value=client):
+            with pytest.raises(MLSScraperError, match="Assist feed read failed"):
+                await scraper.scrape_matches()
+
+        assert scraper.execution_metrics.errors_encountered >= 1

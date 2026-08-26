@@ -205,6 +205,12 @@ modular11 fixtures endpoint over plain HTTP — no browser, about a second for t
 default 18 targets — so it is cheap enough to run on a poll interval while
 waiting for a schedule to drop.
 
+> **Stale for 2026-2027 (SB-818).** MLS Next moved to the Kitman assist feeds in
+> August 2026 and modular11 no longer carries the current season, so this command
+> reports a released schedule as unpublished. Repointing it is pending; until
+> then, check `synced_at` on the assist feed instead. See
+> [Season Rollover](../architecture/season-rollover.md).
+
 ```bash
 # Default: U15-first across Northeast, Florida and Mid-Atlantic, fall segment
 uv run mls-scraper poll-release
@@ -346,6 +352,9 @@ export MISSING_TABLE_API_TOKEN=...        # API token (if using API)
 - `AGE_GROUP` - Default age group (U13-U19)
 - `DIVISION` - Default division
 - `LOOK_BACK_DAYS` - Default number of days to look ahead
+- `MATCH_SOURCE` - Where fixtures come from: `assist` (default — the Kitman JSON
+  feeds, 2026-2027 onwards) or `playwright` (browser + modular11, for 2025-2026
+  and earlier). See [Season Rollover](../architecture/season-rollover.md)
 
 ### Default Settings
 - Age Group: U14

@@ -5,7 +5,7 @@ Handles environment variable parsing with defaults and validation.
 
 import os
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -36,6 +36,14 @@ class ScrapingConfig(BaseModel):
     missing_table_api_url: str = Field(..., description="Missing Table API base URL")
     missing_table_api_key: str = Field(..., description="Missing Table API key")
     log_level: str = Field(default="INFO", description="Logging level")
+
+    # Where fixtures come from. MLS Next publishes 2026-2027 onwards through the
+    # Kitman "assist" JSON feeds only — modular11 stops at 2025-2026 — so
+    # "assist" is the default and "playwright" exists for older seasons.
+    source: Literal["assist", "playwright"] = Field(
+        default="assist",
+        description="Fixture source: assist JSON feeds or Playwright/modular11",
+    )
 
     # API integration configuration
     use_async_api: bool = Field(
@@ -183,6 +191,7 @@ def load_config() -> ScrapingConfig:
     division = os.getenv("DIVISION", "Northeast")
     conference = os.getenv("CONFERENCE", "New England")
     log_level = os.getenv("LOG_LEVEL", "INFO")
+    source = os.getenv("MATCH_SOURCE", "assist").strip().lower()
 
     # Parse look_back_days with validation
     try:
@@ -229,6 +238,7 @@ def load_config() -> ScrapingConfig:
         missing_table_api_url=missing_table_api_url,
         missing_table_api_key=missing_table_api_key,
         log_level=log_level,
+        source=source,
         use_async_api=use_async_api,
         enable_team_cache=enable_team_cache,
         cache_refresh_on_miss=cache_refresh_on_miss,
