@@ -412,3 +412,53 @@ class TestSeasonStartClamping:
                         assert s.end_date >= s.start_date, (
                             f"{today} {s.action} inverted"
                         )
+
+
+# ── Pro Player Pathway targets (SB-827) ──────────────────────────────
+
+
+class TestPathwayTargets:
+    def test_all_twelve_pathway_brackets_are_targets(self):
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        ppp = {k: v for k, v in _TARGET_SCRAPER_CONFIG.items() if "-ppp-" in k}
+        assert len(ppp) == 12, "4 brackets x U16/U17/U19"
+
+    def test_pathway_targets_name_the_bracket_exactly_as_the_feed_does(self):
+        # AssistIndex keys on the bracket name, and MT resolves the division by
+        # name too (SB-830). A near-miss here yields zero matches with only a
+        # warning, which is the silent gap SB-827 exists to close.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        assert _TARGET_SCRAPER_CONFIG["u16-ppp-northeast"] == {
+            "age_group": "U16",
+            "league": "Homegrown",
+            "division": "Northeast (Pro Player Pathway)",
+        }
+
+    def test_pathway_is_the_homegrown_league_not_a_competition_of_its_own(self):
+        # Pathway fixtures are League fixtures in a different bracket. Sending
+        # any other league would break MT's league-scoped division lookup.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
+            if "-ppp-" in key:
+                assert cfg["league"] == "Homegrown"
+
+    def test_no_pathway_target_below_u16(self):
+        # There is no Pathway bracket at U13/U14/U15 — 29 of 30 Pathway clubs
+        # field no U15 side, that cohort plays up. Targeting them would be a
+        # standing empty scrape.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+
+        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
+            if "-ppp-" in key:
+                assert cfg["age_group"] in ("U16", "U17", "U19")
+
+    def test_pathway_targets_do_not_collide_with_geographic_ones(self):
+        # u16-hg is Northeast geographic; u16-ppp-northeast is the Pathway
+        # bracket. Different divisions, disjoint fixtures.
+        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
+
+        assert T["u16-hg"]["division"] == "Northeast"
+        assert T["u16-ppp-northeast"]["division"] == "Northeast (Pro Player Pathway)"

@@ -80,6 +80,35 @@ _TARGET_SCRAPER_CONFIG: dict[str, dict[str, str]] = {
     },
 }
 
+
+# Pro Player Pathway (SB-827).
+#
+# For 2026-2027 MLS Next moved the senior age groups of its pro-academy clubs
+# into separate "(Pro Player Pathway)" brackets inside the Homegrown league.
+# They are ordinary League fixtures — same competition, same match type — that
+# simply live in a different bracket, so they are targets like any other.
+#
+# Nothing here leaks through the geographic targets: of the 171 fixtures a
+# Northeast U16/U17/U19 scrape returns, ZERO involve a Pathway squad. Without
+# these entries those clubs are present at U13/U14 and then vanish from the
+# senior age groups, with no error to say so.
+#
+# Generated rather than written out because it is a clean product: four
+# brackets x three age groups. There is no Pathway bracket at U13/U14/U15 —
+# 29 of the 30 Pathway clubs field no U15 side at all, that cohort plays up
+# into U16 — so those combinations are deliberately absent rather than
+# scraped and found empty.
+_PATHWAY_BRACKETS = ("Central", "Northeast", "Southeast", "West")
+_PATHWAY_AGE_GROUPS = ("U16", "U17", "U19")
+
+for _bracket in _PATHWAY_BRACKETS:
+    for _age in _PATHWAY_AGE_GROUPS:
+        _TARGET_SCRAPER_CONFIG[f"{_age.lower()}-ppp-{_bracket.lower()}"] = {
+            "age_group": _age,
+            "league": "Homegrown",
+            "division": f"{_bracket} (Pro Player Pathway)",
+        }
+
 # Targets that include a team filter — value is the DB team name used for filtering
 _TARGET_TEAM_FILTER: dict[str, str] = {
     "u14-hg-ifa": "IFA",
