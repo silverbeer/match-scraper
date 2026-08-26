@@ -19,7 +19,7 @@ class ScrapingConfig(BaseModel):
     age_group: str = Field(..., description="Age group for scraping (e.g., U14)")
     league: str = Field(
         default="Homegrown",
-        description="League type: 'Homegrown' or 'Academy'",
+        description="League type: 'Homegrown', 'Academy' or 'Flex'",
     )
     club: str = Field(default="", description="Club filter")
     competition: str = Field(default="", description="Competition filter")
@@ -99,8 +99,16 @@ class ScrapingConfig(BaseModel):
     @field_validator("league")
     @classmethod
     def validate_league(cls, v: str) -> str:
-        """Validate league type."""
-        valid_leagues = ["Homegrown", "Academy"]
+        """Validate league type against the feeds the scraper can actually read.
+
+        Derived from LEAGUE_FEEDS rather than repeated, because it was
+        repeated: adding Flex meant finding this list, one in cli/main.py and
+        one in models/match_data.py, and the first two were found only by a
+        scrape failing (SB-836).
+        """
+        from .assist_client import LEAGUE_FEEDS
+
+        valid_leagues = sorted(LEAGUE_FEEDS)
         if v and v not in valid_leagues:
             raise ValueError(f"Invalid league: {v}. Must be one of {valid_leagues}")
         return v
