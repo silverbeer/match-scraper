@@ -92,7 +92,15 @@ DEFAULT_DAYS = 3  # Keep for upcoming command backward compatibility
 # Valid options
 VALID_AGE_GROUPS = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
 VALID_LEAGUES = ["Homegrown", "Academy"]
-VALID_DIVISIONS = [
+# modular11-era division names, kept ONLY for the playwright source (2025-2026
+# and earlier). Do not add to this list: for 2026-2027 the assist feeds carry
+# their own structure and are asked directly — see valid_divisions().
+#
+# It is stale in both directions, which is why it is no longer authoritative:
+# Great Lakes, Texas and California were removed for 2026-2027, while Frontier,
+# Mid-America and the four "(Pro Player Pathway)" brackets never appeared here
+# at all — so six of the twelve Homegrown brackets could not be scraped.
+LEGACY_DIVISIONS = [
     "Northeast",
     "Southeast",
     "Central",
@@ -116,6 +124,24 @@ VALID_CONFERENCES = [
     "Northwest",
     "California",
 ]
+
+
+def valid_divisions(league: str = "Homegrown") -> list[str] | None:
+    """Division names to validate against, or None when there is no fixed list.
+
+    The assist feeds publish their own bracket structure and it changes between
+    seasons, so there is nothing meaningful to check a name against up front —
+    LEGACY_DIVISIONS was wrong in both directions and said so to nobody
+    (SB-827). None means "accept it and let the scrape report", which it does:
+    an unknown bracket raises with the real names listed.
+
+    Deliberately does no I/O. Reading the feed here would put a network call in
+    argument validation, and it would run before the scrape's own feed read
+    rather than reusing it.
+    """
+    if os.getenv("MATCH_SOURCE", "assist").strip().lower() != "assist":
+        return LEGACY_DIVISIONS
+    return None
 
 
 # Team name mappings for display
@@ -855,9 +881,12 @@ def scrape(
 
     # Validate league-specific parameters
     if league == "Homegrown":
-        if division not in VALID_DIVISIONS:
+        known = valid_divisions(league)
+        # known is None for the assist source: the feed is the authority and
+        # the scrape checks against it, listing real brackets on a miss.
+        if known is not None and division not in known:
             console.print(f"[red]❌ Invalid division: {division}[/red]")
-            console.print(f"Valid options: {', '.join(VALID_DIVISIONS)}")
+            console.print(f"Valid options: {', '.join(known)}")
             raise typer.Exit(1)
         # Warn if conference is provided but league is Homegrown
         if conference and conference != DEFAULT_CONFERENCE:
@@ -1211,8 +1240,10 @@ def interactive(
     )
 
     # Division selection
-    console.print(f"\nAvailable divisions: {', '.join(VALID_DIVISIONS)}")
-    division = Prompt.ask("Division", default=DEFAULT_DIVISION, choices=VALID_DIVISIONS)
+    console.print(f"\nAvailable divisions: {', '.join(LEGACY_DIVISIONS)}")
+    division = Prompt.ask(
+        "Division", default=DEFAULT_DIVISION, choices=LEGACY_DIVISIONS
+    )
 
     # Date range selection
     start_offset = int(
@@ -2148,8 +2179,8 @@ def config_options() -> None:
     div_table = Table(title="🗺️  Available Divisions", show_header=False)
     div_table.add_column("Division", style="green")
 
-    for i in range(0, len(VALID_DIVISIONS), 3):
-        row = VALID_DIVISIONS[i : i + 3]
+    for i in range(0, len(LEGACY_DIVISIONS), 3):
+        row = LEGACY_DIVISIONS[i : i + 3]
         div_table.add_row(*row)
 
     console.print(div_table)
@@ -2353,10 +2384,10 @@ def discover(
     setup_environment(verbose)
 
     # Validate division
-    if division not in VALID_DIVISIONS:
+    if division not in LEGACY_DIVISIONS:
         console.print(
             f"[red]Invalid division: {division}[/red]\n"
-            f"[dim]Valid divisions: {', '.join(VALID_DIVISIONS)}[/dim]"
+            f"[dim]Valid divisions: {', '.join(LEGACY_DIVISIONS)}[/dim]"
         )
         raise typer.Exit(code=1)
 

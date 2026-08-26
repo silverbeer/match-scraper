@@ -1032,6 +1032,9 @@ class TestMLSScraperAssistSource:
     async def test_academy_targets_a_conference_not_a_division(self) -> None:
         client = AsyncMock()
         client.get_matches.return_value = []
+        # An empty result is now checked against the feed's brackets, so the
+        # conference has to be one the feed publishes (SB-827).
+        client.divisions.return_value = ["New England"]
         client.__aenter__.return_value = client
 
         config = self._config(league="Academy", conference="New England")

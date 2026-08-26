@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from ..utils.logger import get_logger
 from ..utils.metrics import get_metrics
-from .assist_client import AssistClient, AssistFeedError
+from .assist_client import AssistClient, AssistFeedError, league_feeds
 from .browser import BrowserConfig, BrowserManager, PageNavigator
 from .calendar_interaction import CalendarInteractionError, MLSCalendarInteractor
 from .config import ScrapingConfig
@@ -591,6 +591,24 @@ class MLSScraper:
                     end_date=self.config.end_date,
                     league=self.config.league,
                 )
+
+                # An unknown bracket yields no matches and only a log line,
+                # which is how the Pro Player Pathway brackets stayed missing
+                # without anyone noticing (SB-827). Check the name against the
+                # feed on the empty path only — the feeds are already cached on
+                # this client, so it costs nothing — and say what the real
+                # options are rather than reporting a successful scrape of
+                # nothing.
+                if not matches:
+                    known: list[str] = []
+                    for feed in league_feeds(self.config.league):
+                        known.extend(await client.divisions(feed))
+                    if bracket not in known:
+                        raise MLSScraperError(
+                            f"Unknown division {bracket!r} for league "
+                            f"{self.config.league!r}. Published brackets: "
+                            f"{', '.join(sorted(set(known)))}"
+                        )
         except AssistFeedError as e:
             self.execution_metrics.errors_encountered += 1
             raise MLSScraperError(f"Assist feed read failed: {e}") from e

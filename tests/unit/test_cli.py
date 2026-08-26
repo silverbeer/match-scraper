@@ -11,12 +11,13 @@ from src.cli.main import (
     DEFAULT_AGE_GROUP,
     DEFAULT_DAYS,
     DEFAULT_DIVISION,
+    LEGACY_DIVISIONS,
     VALID_AGE_GROUPS,
-    VALID_DIVISIONS,
     app,
     create_config,
     handle_cli_error,
     setup_environment,
+    valid_divisions,
 )
 
 
@@ -187,12 +188,25 @@ class TestCliCommands:
         assert result.exit_code == 1
         assert "Invalid age group" in result.stdout
 
-    def test_scrape_command_invalid_division(self):
-        """Test scrape command with invalid division."""
+    def test_scrape_command_invalid_division_on_the_legacy_source(self, monkeypatch):
+        """The static allowlist still guards the playwright/modular11 path."""
+        monkeypatch.setenv("MATCH_SOURCE", "playwright")
         result = self.runner.invoke(app, ["scrape", "--division", "INVALID"])
 
         assert result.exit_code == 1
         assert "Invalid division" in result.stdout
+
+    def test_the_assist_source_does_not_pre_reject_a_division(self, monkeypatch):
+        """SB-827: the feed is the authority, not a list in this file.
+
+        LEGACY_DIVISIONS was wrong in both directions — it offered Great Lakes,
+        Texas and California after MLS Next removed them, and omitted Frontier,
+        Mid-America and the four Pro Player Pathway brackets. Rejecting a name
+        up front made six of the twelve Homegrown brackets unscrapeable. The
+        scrape checks against the feed instead and lists the real brackets.
+        """
+        monkeypatch.setenv("MATCH_SOURCE", "assist")
+        assert valid_divisions("Homegrown") is None
 
     @patch("src.cli.main.run_scraper")
     @patch("src.cli.main.setup_environment")
@@ -274,8 +288,16 @@ class TestConstants:
         expected_age_groups = ["U13", "U14", "U15", "U16", "U17", "U18", "U19"]
         assert VALID_AGE_GROUPS == expected_age_groups
 
-    def test_valid_divisions(self):
-        """Test valid divisions contain expected values."""
+    def test_legacy_divisions_are_frozen(self):
+        """The modular11-era list, pinned so nobody grows it (SB-827).
+
+        These names are correct for 2025-2026 and the playwright source only.
+        For 2026-2027 the assist feed is asked directly — see valid_divisions()
+        — because this list went stale in both directions: Great Lakes, Texas
+        and California were removed, while Frontier, Mid-America and the four
+        Pro Player Pathway brackets never appeared, leaving six of the twelve
+        Homegrown brackets unscrapeable with no signal that anything was wrong.
+        """
         expected_divisions = [
             "Northeast",
             "Southeast",
@@ -288,7 +310,7 @@ class TestConstants:
             "California",
             "Florida",
         ]
-        assert VALID_DIVISIONS == expected_divisions
+        assert LEGACY_DIVISIONS == expected_divisions
 
 
 class TestCliIntegration:
