@@ -1099,6 +1099,15 @@ def scrape(
             if limit > 0:
                 matches = matches[:limit]
 
+        # Save before the output branches. --save is a side effect, not console
+        # output, and quiet mode returns early — which used to skip the save
+        # silently, so `--quiet --save` wrote nothing and said nothing (SB-880).
+        saved = (
+            save_matches_to_file(matches, save_file, age_group, division)
+            if save_file and matches
+            else False
+        )
+
         if quiet:
             # Minimal output for scripting
             for match in matches:
@@ -1143,12 +1152,10 @@ def scrape(
                     f"\n[green]✅ Successfully found {len(matches)} matches![/green]"
                 )
 
-            # Save matches to file if requested
-            if save_file and matches:
-                if save_matches_to_file(matches, save_file, age_group, division):
-                    console.print(
-                        f"[green]💾 Saved {len(matches)} matches to {save_file}[/green]"
-                    )
+            if saved:
+                console.print(
+                    f"[green]💾 Saved {len(matches)} matches to {save_file}[/green]"
+                )
 
     except MLSScraperError as e:
         console.print(f"[red]❌ Scraping failed: {e}[/red]")
