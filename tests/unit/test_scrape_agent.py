@@ -881,3 +881,108 @@ class TestRunSummaryAndAuditLogging:
         summary = mock_audit.log_run_completed.call_args[0][0]
         assert summary.total_matches == 0
         assert summary.discovered == 0
+
+
+# ============================================================================
+# 9. --save honoured in both output modes (SB-880)
+# ============================================================================
+
+
+class TestSaveFlagAcrossOutputModes:
+    """`--save` must write the file whether or not `--quiet` is set.
+
+    Quiet mode returns before the rich-output block, and the save used to live
+    after that return — so `--quiet --save` wrote nothing, printed nothing and
+    exited 0, which is indistinguishable from a successful save.
+    """
+
+    def setup_method(self):
+        self.runner = CliRunner(env={"NO_COLOR": "1"})
+
+    @pytest.mark.parametrize("quiet", [True, False])
+    @patch("src.cli.main.asyncio.run")
+    @patch("src.cli.main.AuditLogger")
+    @patch("src.cli.main.MatchComparison")
+    @patch("src.utils.metrics.get_metrics")
+    @patch("src.cli.main.setup_environment")
+    def test_save_writes_file(
+        self,
+        mock_setup,
+        mock_metrics,
+        mock_comparison_cls,
+        mock_audit_cls,
+        mock_async_run,
+        quiet,
+        tmp_path,
+    ):
+        mock_metrics.return_value.time_execution.return_value.__enter__ = MagicMock()
+        mock_metrics.return_value.time_execution.return_value.__exit__ = MagicMock()
+
+        mock_async_run.return_value = [_make_match(), _make_match(match_id="100002")]
+
+        mock_comparison = MagicMock()
+        mock_comparison.compare_match.return_value = ("discovered", None)
+        mock_comparison_cls.return_value = mock_comparison
+
+        mock_audit = MagicMock()
+        mock_audit.get_state_file_path.return_value = Path("/tmp/test-state.json")
+        mock_audit_cls.return_value = mock_audit
+
+        out = tmp_path / "matches.json"
+        args = [
+            "scrape",
+            "--no-submit-queue",
+            "--start",
+            "0",
+            "--end",
+            "0",
+            "--save",
+            str(out),
+        ]
+        if quiet:
+            args.append("--quiet")
+
+        self.runner.invoke(app, args)
+
+        assert out.exists(), f"--save wrote no file (quiet={quiet})"
+        saved = json.loads(out.read_text())
+        assert saved["metadata"]["total_matches"] == 2
+        assert [m["match_id"] for m in saved["matches"]] == ["100001", "100002"]
+
+    @patch("src.cli.main.asyncio.run")
+    @patch("src.cli.main.AuditLogger")
+    @patch("src.cli.main.MatchComparison")
+    @patch("src.utils.metrics.get_metrics")
+    @patch("src.cli.main.setup_environment")
+    def test_saved_confirmation_only_in_rich_output(
+        self,
+        mock_setup,
+        mock_metrics,
+        mock_comparison_cls,
+        mock_audit_cls,
+        mock_async_run,
+        tmp_path,
+    ):
+        """The 'Saved N matches' line is output, so quiet still suppresses it."""
+        mock_metrics.return_value.time_execution.return_value.__enter__ = MagicMock()
+        mock_metrics.return_value.time_execution.return_value.__exit__ = MagicMock()
+
+        mock_async_run.return_value = [_make_match()]
+
+        mock_comparison = MagicMock()
+        mock_comparison.compare_match.return_value = ("discovered", None)
+        mock_comparison_cls.return_value = mock_comparison
+
+        mock_audit = MagicMock()
+        mock_audit.get_state_file_path.return_value = Path("/tmp/test-state.json")
+        mock_audit_cls.return_value = mock_audit
+
+        out = tmp_path / "matches.json"
+        base = ["scrape", "--no-submit-queue", "--start", "0", "--end", "0", "--save"]
+
+        quiet_result = self.runner.invoke(app, [*base, str(out), "--quiet"])
+        assert "Saved" not in quiet_result.output
+
+        out.unlink()
+        rich_result = self.runner.invoke(app, [*base, str(out)])
+        assert "Saved" in rich_result.output
