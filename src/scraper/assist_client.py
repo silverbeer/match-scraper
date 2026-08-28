@@ -88,6 +88,16 @@ class AssistFeedError(Exception):
     """Raised when a feed cannot be fetched or parsed."""
 
 
+class AssistSeasonNotPublished(AssistFeedError):
+    """Raised when a competition-season key has no feed on the platform.
+
+    The platform answers an unknown key with the SPA's HTML shell and a 200,
+    so this is what "MLS Next has not published this season" looks like from
+    the outside. It is a normal state to wait in, not a transport failure —
+    the release detector distinguishes the two (SB-883).
+    """
+
+
 def season_suffix(year: int | None = None) -> str:
     """
     Return the two-digit season label used in feed keys.
@@ -344,9 +354,9 @@ class AssistClient:
                 try:
                     payload = response.json()
                 except ValueError as exc:
-                    raise AssistFeedError(
+                    raise AssistSeasonNotPublished(
                         f"{url} did not return JSON ({len(response.content)} bytes) — "
-                        "the competition-season key is probably wrong"
+                        "the competition season is not published, or the key is wrong"
                     ) from exc
                 if not isinstance(payload, dict):
                     raise AssistFeedError(f"{url} returned {type(payload).__name__}")

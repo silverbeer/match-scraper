@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 
 from src.cli.main import app
 from src.models.schedule_release import DivisionRelease, ReleaseProbe, ReleaseState
+from src.scraper.assist_client import AssistFeedError, AssistSeasonNotPublished
 from src.scraper.release_detector import ReleaseDetectorError, ScheduleReleaseDetector
 
 runner = CliRunner()
@@ -79,9 +80,18 @@ def _serving(body, status=200):
 
 
 class TestProbeAgainstMockedEndpoint:
+    """The modular11 path, kept for seasons the assist platform does not host.
+
+    These construct the detector with ``source="modular11"`` explicitly: the
+    default moved to the assist feeds when the modular11 probe stopped being
+    able to see a published season at all (SB-883).
+    """
+
     @pytest.mark.asyncio
     async def test_empty_response_yields_empty_state(self):
-        detector = ScheduleReleaseDetector(age_groups=["U15"], divisions=["Northeast"])
+        detector = ScheduleReleaseDetector(
+            age_groups=["U15"], divisions=["Northeast"], source="modular11"
+        )
 
         with _serving(EMPTY_BODY):
             probe = await detector.probe()
@@ -92,7 +102,9 @@ class TestProbeAgainstMockedEndpoint:
 
     @pytest.mark.asyncio
     async def test_fixture_rows_yield_live_state(self):
-        detector = ScheduleReleaseDetector(age_groups=["U15"], divisions=["Northeast"])
+        detector = ScheduleReleaseDetector(
+            age_groups=["U15"], divisions=["Northeast"], source="modular11"
+        )
 
         with _serving(MATCH_BODY):
             probe = await detector.probe()
@@ -104,7 +116,9 @@ class TestProbeAgainstMockedEndpoint:
     @pytest.mark.asyncio
     async def test_http_error_becomes_an_error_result_not_an_exception(self):
         """One dead target must not sink the whole probe."""
-        detector = ScheduleReleaseDetector(age_groups=["U15"], divisions=["Northeast"])
+        detector = ScheduleReleaseDetector(
+            age_groups=["U15"], divisions=["Northeast"], source="modular11"
+        )
         detector.RETRY_DELAY_BASE = 0  # no need to actually back off in a test
 
         with _serving("boom", status=503):
@@ -117,7 +131,9 @@ class TestProbeAgainstMockedEndpoint:
     @pytest.mark.asyncio
     async def test_probes_every_age_group_division_pair(self):
         detector = ScheduleReleaseDetector(
-            age_groups=["U15", "U14"], divisions=["Northeast", "Florida"]
+            age_groups=["U15", "U14"],
+            divisions=["Northeast", "Florida"],
+            source="modular11",
         )
 
         with _serving(EMPTY_BODY):
@@ -141,7 +157,10 @@ class TestProbeAgainstMockedEndpoint:
             return httpx.Response(200, text=EMPTY_BODY)
 
         detector = ScheduleReleaseDetector(
-            age_groups=["U15"], divisions=["Mid-Atlantic"], season_year=2026
+            age_groups=["U15"],
+            divisions=["Mid-Atlantic"],
+            season_year=2026,
+            source="modular11",
         )
 
         with _mock_transport(handler):
@@ -351,3 +370,83 @@ class TestPollReleaseDisplay:
 
         assert result.exit_code == 1
         assert "endpoint gone" in result.stdout
+
+
+class TestProbeReadsTheAssistFeeds:
+    """The default path: publication is the season's feed existing at all.
+
+    The modular11 probe answered "No data available." for 2026-2027 forever
+    once MLS Next moved, so it could never fire again (SB-883).
+    """
+
+    @staticmethod
+    def _client_returning(**behaviour):
+        """Patch AssistClient with an async-context stub for get_events."""
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        client.__aexit__.return_value = False
+        client.get_events = AsyncMock(**behaviour)
+        return patch(
+            "src.scraper.release_detector.AssistClient", return_value=client
+        ), client
+
+    @pytest.mark.asyncio
+    async def test_published_season_is_live_with_a_real_count(self):
+        detector = ScheduleReleaseDetector(age_groups=["U15"], divisions=["Northeast"])
+        patcher, client = self._client_returning(return_value=[object()] * 171)
+
+        with patcher:
+            probe = await detector.probe()
+
+        assert probe.is_released
+        assert probe.results[0].state is ReleaseState.LIVE
+        # The whole season, not modular11's 25-row first page.
+        assert probe.results[0].match_count == 171
+
+    @pytest.mark.asyncio
+    async def test_unpublished_season_is_empty_not_an_error(self):
+        """No feed for the key is what waiting looks like — it must not page."""
+        detector = ScheduleReleaseDetector(age_groups=["U15"], divisions=["Northeast"])
+        patcher, client = self._client_returning(
+            side_effect=AssistSeasonNotPublished("no JSON for mls-next-league-27-28")
+        )
+
+        with patcher:
+            probe = await detector.probe()
+
+        assert not probe.is_released
+        assert not probe.all_failed
+        assert probe.results[0].state is ReleaseState.EMPTY
+        assert probe.results[0].error is None
+
+    @pytest.mark.asyncio
+    async def test_a_broken_feed_is_still_an_error(self):
+        detector = ScheduleReleaseDetector(age_groups=["U15"], divisions=["Northeast"])
+        patcher, client = self._client_returning(
+            side_effect=AssistFeedError("GET failed after 3 attempts")
+        )
+
+        with patcher:
+            probe = await detector.probe()
+
+        assert probe.all_failed
+        assert probe.results[0].state is ReleaseState.ERROR
+        assert "AssistFeedError" in probe.results[0].error
+
+    @pytest.mark.asyncio
+    async def test_every_target_is_asked_from_one_client(self):
+        """The feed is downloaded per season, not per target — one client, N asks."""
+        detector = ScheduleReleaseDetector(
+            age_groups=["U15", "U14"], divisions=["Northeast", "Florida"]
+        )
+        patcher, client = self._client_returning(return_value=[])
+
+        with patcher:
+            probe = await detector.probe()
+
+        assert len(probe.results) == 4
+        assert client.get_events.await_count == 4
+
+    def test_unknown_source_is_rejected(self):
+        with pytest.raises(ReleaseDetectorError, match="Unknown source"):
+            ScheduleReleaseDetector(source="carrier-pigeon")

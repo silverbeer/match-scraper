@@ -2763,9 +2763,9 @@ def poll_release(
     """
     📡 Check whether MLS Next has published its schedule yet.
 
-    Queries the modular11 fixtures endpoint directly — no browser, roughly one
-    second for the default 18 targets — so it is cheap enough to run on a poll
-    interval while waiting for a release.
+    Reads the assist feeds the MLS Next schedule page itself reads — no
+    browser, and one download per competition season however many targets are
+    checked, so it is cheap enough to run on a poll interval while waiting.
 
     Exit codes are the notification contract for an unattended caller:
 
