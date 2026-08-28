@@ -20,6 +20,14 @@ spec:
               image: ghcr.io/silverbeer/match-scraper:latest
               imagePullPolicy: Always
               args: ["run", "--env", "prod"]
+              env:
+                # Feed bodies live beside the run journal on the PVC, so an
+                # unchanged schedule feed costs a 304 instead of 7 MB from
+                # someone else's CloudFront distribution (SB-884). Unset, or
+                # pointed at a path with no volume behind it, the cache simply
+                # does nothing.
+                - name: ASSIST_FEED_CACHE_DIR
+                  value: /data/agent-state/assist-feeds
               envFrom:
                 - configMapRef:
                     name: match-scraper-agent-config
