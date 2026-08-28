@@ -44,6 +44,12 @@ spec:
                     20) echo "watch: probe failing — notified if sustained" ;;
                     *)  echo "watch: unexpected exit $code"; exit "$code" ;;
                   esac
+              env:
+                # This job polls every 30 minutes and the feed re-syncs roughly
+                # every two hours, so most runs revalidate to a 304 and skip the
+                # 7 MB download entirely (SB-884). Shares the agent's PVC.
+                - name: ASSIST_FEED_CACHE_DIR
+                  value: /data/agent-state/assist-feeds
               envFrom:
                 - configMapRef:
                     name: match-scraper-agent-config

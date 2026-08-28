@@ -35,8 +35,12 @@ in one run costs one download per feed.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
+import os
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -285,6 +289,93 @@ class AssistIndex(BaseModel):
         )
 
 
+class FeedCache:
+    """Bodies kept between runs so an unchanged feed costs a 304, not 7 MB.
+
+    The schedule feed is ~7 MB and mostly identical from one run to the next —
+    it only moves when the platform re-syncs. The response carries a strong
+    ETag and Last-Modified, so a conditional request answers "nothing changed"
+    in a few hundred bytes (SB-884).
+
+    Every failure here is survivable by design: a miss, an unreadable entry or
+    an unwritable directory all mean "fetch it in full", never an error. A
+    cache that breaks a scrape would be worse than no cache.
+    """
+
+    ENV_VAR = "ASSIST_FEED_CACHE_DIR"
+
+    def __init__(self, directory: str | Path | None = None) -> None:
+        configured = directory if directory is not None else os.getenv(self.ENV_VAR)
+        self.directory = Path(configured) if configured else None
+
+    @property
+    def enabled(self) -> bool:
+        return self.directory is not None
+
+    def _path(self, url: str) -> Path | None:
+        if self.directory is None:
+            return None
+        # The key is the URL; the filename is a digest of it so a competition
+        # key with a slash or a query string cannot escape the directory.
+        digest = hashlib.sha256(url.encode()).hexdigest()[:32]
+        return self.directory / f"{digest}.json"
+
+    def load(self, url: str) -> tuple[dict | None, dict[str, str]]:
+        """The cached payload and the headers that would revalidate it."""
+        path = self._path(url)
+        if path is None:
+            return None, {}
+        try:
+            entry = json.loads(path.read_text())
+            payload = entry["payload"]
+        except (OSError, ValueError, KeyError, TypeError):
+            # Absent, truncated, or written by an older shape — refetch.
+            return None, {}
+
+        headers: dict[str, str] = {}
+        if etag := entry.get("etag"):
+            headers["If-None-Match"] = etag
+        if last_modified := entry.get("last_modified"):
+            headers["If-Modified-Since"] = last_modified
+        if not headers:
+            # Nothing to revalidate with; a stored body we cannot check is not
+            # worth trusting.
+            return None, {}
+        return payload, headers
+
+    def store(self, url: str, payload: dict, headers: object) -> None:
+        """Keep the body against its validators, if the response carries any."""
+        path = self._path(url)
+        if path is None:
+            return
+        get = getattr(headers, "get", None)
+        etag = get("etag") if get else None
+        last_modified = get("last-modified") if get else None
+        if not etag and not last_modified:
+            return
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+            # Write-then-rename: a run killed mid-write must not leave a
+            # half-written body that the next run reads as valid.
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(
+                json.dumps(
+                    {
+                        "url": url,
+                        "etag": etag,
+                        "last_modified": last_modified,
+                        "payload": payload,
+                    }
+                )
+            )
+            tmp.replace(path)
+        except OSError as exc:
+            logger.debug(
+                "Could not cache assist feed",
+                extra={"url": url, "error": str(exc)},
+            )
+
+
 class AssistClient:
     """
     Fetches and filters the assist schedule feeds.
@@ -305,11 +396,13 @@ class AssistClient:
         season_year: int | None = None,
         timeout: float | None = None,
         client: httpx.AsyncClient | None = None,
+        cache: FeedCache | None = None,
     ) -> None:
         self.season_year = (
             season_year if season_year is not None else current_season_year()
         )
         self.timeout = timeout if timeout is not None else self.REQUEST_TIMEOUT
+        self.cache = cache if cache is not None else FeedCache()
         self._client = client
         self._owns_client = client is None
         self._schedules: dict[str, AssistSchedule] = {}
@@ -342,11 +435,33 @@ class AssistClient:
         return lock
 
     async def _fetch_json(self, url: str) -> dict:
-        """GET a feed with backoff, failing loudly on a non-JSON response."""
+        """GET a feed with backoff, failing loudly on a non-JSON response.
+
+        Revalidates a cached body rather than re-downloading it: the schedule
+        feed is ~7 MB and changes only when the platform re-syncs (SB-884).
+        """
+        cached, conditional = self.cache.load(url)
         last_exc: Exception | None = None
         for attempt in range(self.MAX_RETRIES):
             try:
-                response = await self._http().get(url)
+                response = await self._http().get(url, headers=conditional or None)
+                if response.status_code == 304:
+                    if cached is not None:
+                        logger.info(
+                            "Assist feed unchanged since last run",
+                            extra={"url": url},
+                        )
+                        return cached
+                    # Told "unchanged" with nothing to show for it — the body
+                    # went missing between load and now. Ask again without the
+                    # validators rather than decoding an empty response, which
+                    # would surface as "season not published".
+                    logger.warning(
+                        "Assist feed returned 304 with no cached body; refetching",
+                        extra={"url": url},
+                    )
+                    conditional = {}
+                    continue
                 response.raise_for_status()
                 # An unknown key returns the SPA's HTML shell with a 200, so a
                 # decode failure here means "no such competition season", not a
@@ -360,6 +475,7 @@ class AssistClient:
                     ) from exc
                 if not isinstance(payload, dict):
                     raise AssistFeedError(f"{url} returned {type(payload).__name__}")
+                self.cache.store(url, payload, response.headers)
                 return payload
             except (httpx.HTTPError, httpx.RequestError) as exc:
                 last_exc = exc
