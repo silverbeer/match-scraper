@@ -2911,5 +2911,110 @@ def _display_release_probe(
         console.print(f"[red]{r.label}: {r.error}[/red]")
 
 
+@app.command("verify-scores")
+def verify_scores(
+    feeds: Optional[list[str]] = typer.Option(
+        None,
+        "--feed",
+        "-f",
+        help="Competition feed to check; repeat for several. Defaults to league.",
+    ),
+    from_date: Optional[str] = typer.Option(
+        None, "--from", help="Window start (YYYY-MM-DD). Defaults to three days ago."
+    ),
+    to_date: Optional[str] = typer.Option(
+        None, "--to", help="Window end (YYYY-MM-DD). Defaults to yesterday."
+    ),
+    season_year: Optional[int] = typer.Option(
+        None,
+        "--season-year",
+        help="Season start year (2026 = the 2026-2027 season). Defaults to current.",
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit the check as JSON on stdout instead of a table."
+    ),
+) -> None:
+    """
+    🥁 Check that the feed is actually delivering scores, not just fixtures.
+
+    Counts the fixtures in the window whose kick-off has passed, and how many
+    of them came back with a score. A scrape that returns every fixture and no
+    result looks exactly like a quiet week, so fixture counts cannot catch it.
+
+    Exit codes are the notification contract for an unattended caller:
+
+    \b
+      0  scores are arriving, or nothing in the window has kicked off yet
+      10 fixtures have been played and none came back scored (notify!)
+      20 the season has no feed at all (notify if it persists)
+    """
+    setup_environment()
+
+    from src.scraper.score_canary import check_feed  # noqa: PLC0415
+
+    def _parse(value: Optional[str], label: str) -> Optional[date]:
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError as exc:
+            console.print(
+                f"[red]Invalid --{label}: {value!r}, expected YYYY-MM-DD[/red]"
+            )
+            raise typer.Exit(code=1) from exc
+
+    start = _parse(from_date, "from")
+    end = _parse(to_date, "to")
+
+    checks = [
+        asyncio.run(
+            check_feed(
+                feed,
+                window_start=start,
+                window_end=end,
+                season_year=season_year,
+            )
+        )
+        for feed in (feeds or ["league"])
+    ]
+
+    if as_json:
+        print(json.dumps([c.model_dump(mode="json") for c in checks]))
+    else:
+        table = Table(title="Score canary", header_style="bold cyan")
+        table.add_column("Feed")
+        table.add_column("Window")
+        table.add_column("Played", justify="right")
+        table.add_column("Scored", justify="right")
+        table.add_column("Verdict")
+        for c in checks:
+            colour = (
+                "red"
+                if c.published and not c.nothing_to_judge and not c.has_scores
+                else "green"
+                if c.has_scores
+                else "yellow"
+            )
+            table.add_row(
+                c.feed,
+                f"{c.window_start} → {c.window_end}",
+                str(c.kicked_off),
+                str(c.scored),
+                f"[{colour}]{c.verdict}[/{colour}]",
+            )
+        console.print(table)
+        for c in checks:
+            if c.completed_without_scores:
+                console.print(
+                    f"[yellow]{c.feed}: {c.completed_without_scores} fixture(s) flagged "
+                    "completed but carrying no score — half-populated results[/yellow]"
+                )
+
+    if any(not c.published for c in checks):
+        raise typer.Exit(code=20)
+    if any(not c.nothing_to_judge and not c.has_scores for c in checks):
+        raise typer.Exit(code=10)
+
+
 if __name__ == "__main__":
     app()
