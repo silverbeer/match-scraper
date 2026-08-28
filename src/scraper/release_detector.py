@@ -1,14 +1,18 @@
 """
 Detect whether MLS Next has published its schedule for a season.
 
-Hits the modular11 ``get_matches`` endpoint that the schedule iframe uses
-internally — the same source the Playwright scraper reads, minus the browser.
-A probe costs one HTTP request per age group/division pair, which makes it
-cheap enough to run on a short poll interval while waiting for a release.
+Reads the assist feeds the MLS Next schedule page itself reads, so the probe
+sees exactly what the site shows. One download per competition season covers
+every age group and division, because the feed holds the whole season.
 
-Before publication the endpoint answers ``No data available.`` in about 70
-bytes; afterwards it returns one ``[js-match-game]`` element per fixture. That
-difference is the whole signal.
+Before publication the platform has no feed for the season's key at all and
+answers with the SPA's HTML shell; afterwards the JSON carries an ``events``
+array. That difference is the whole signal.
+
+The modular11 probe this replaced kept answering "not published" forever once
+MLS Next moved (SB-883): it is retained behind ``source="modular11"`` because
+it is still the only reader for 2025-2026 and earlier, which the assist
+platform does not host.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from bs4 import BeautifulSoup
 
 from ..models.schedule_release import DivisionRelease, ReleaseProbe, ReleaseState
 from ..utils.logger import get_logger
+from .assist_client import AssistClient, AssistSeasonNotPublished
 from .modular11 import (
     AGE_GROUP_IDS,
     DIVISION_GROUP_IDS,
@@ -70,15 +75,25 @@ class ScheduleReleaseDetector:
     # else's server, and a release-day poll is not latency-sensitive.
     MAX_CONCURRENCY = 4
 
+    #: Where the fixtures are read from. "assist" is where MLS Next publishes
+    #: now; "modular11" reaches 2025-2026 and earlier, which assist does not host.
+    DEFAULT_SOURCE = "assist"
+
     def __init__(
         self,
         age_groups: Iterable[str] | None = None,
         divisions: Iterable[str] | None = None,
         season_year: int | None = None,
         fall_only: bool = True,
+        source: str | None = None,
     ) -> None:
         self.age_groups = list(age_groups or PRIORITY_AGE_GROUPS)
         self.divisions = list(divisions or PRIORITY_DIVISIONS)
+        self.source = (source or self.DEFAULT_SOURCE).strip().lower()
+        if self.source not in ("assist", "modular11"):
+            raise ReleaseDetectorError(
+                f"Unknown source {self.source!r}. Known: assist, modular11"
+            )
         self.season_year = (
             season_year if season_year is not None else current_season_year()
         )
@@ -113,23 +128,17 @@ class ScheduleReleaseDetector:
             "Starting schedule release probe",
             extra={
                 "season": season_label(self.season_year),
+                "source": self.source,
                 "targets": len(targets),
                 "window_start": start.isoformat(),
                 "window_end": end.isoformat(),
             },
         )
 
-        semaphore = asyncio.Semaphore(self.MAX_CONCURRENCY)
-
-        async with httpx.AsyncClient(timeout=self.REQUEST_TIMEOUT) as client:
-
-            async def run(age_group: str, division: str) -> DivisionRelease:
-                async with semaphore:
-                    return await self._check_target(
-                        client, age_group, division, start, end
-                    )
-
-            results = await asyncio.gather(*(run(age, div) for age, div in targets))
+        if self.source == "assist":
+            results = await self._probe_assist(targets, start, end)
+        else:
+            results = await self._probe_modular11(targets, start, end)
 
         probe = ReleaseProbe(
             season=season_label(self.season_year),
@@ -143,6 +152,7 @@ class ScheduleReleaseDetector:
             "Schedule release probe completed",
             extra={
                 "season": probe.season,
+                "source": self.source,
                 "released": probe.is_released,
                 "live_targets": len(probe.live),
                 "error_targets": len(probe.errors),
@@ -151,6 +161,89 @@ class ScheduleReleaseDetector:
         )
 
         return probe
+
+    async def _probe_assist(
+        self,
+        targets: list[tuple[str, str]],
+        start: date,
+        end: date,
+    ) -> list[DivisionRelease]:
+        """Probe every target from the assist feeds, at one download per feed.
+
+        The client caches each feed it fetches, so the cost here is the feed,
+        not the target count — the opposite of the modular11 path.
+        """
+        async with AssistClient(season_year=self.season_year) as client:
+            results: list[DivisionRelease] = []
+            for age_group, division in targets:
+                try:
+                    events = await client.get_events(
+                        division=division,
+                        age_group=age_group,
+                        start_date=start,
+                        end_date=end,
+                    )
+                except AssistSeasonNotPublished:
+                    # No feed for this season yet. That is the state we are
+                    # waiting in, not a failure — reporting it as ERROR would
+                    # page someone every 30 minutes all summer.
+                    results.append(
+                        DivisionRelease(
+                            age_group=age_group,
+                            division=division,
+                            state=ReleaseState.EMPTY,
+                            match_count=0,
+                        )
+                    )
+                    continue
+                except Exception as exc:  # noqa: BLE001 — one target must not sink the probe
+                    logger.warning(
+                        "Release probe target failed",
+                        extra={
+                            "age_group": age_group,
+                            "division": division,
+                            "error": str(exc),
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                    results.append(
+                        DivisionRelease(
+                            age_group=age_group,
+                            division=division,
+                            state=ReleaseState.ERROR,
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
+                    )
+                    continue
+
+                results.append(
+                    DivisionRelease(
+                        age_group=age_group,
+                        division=division,
+                        state=ReleaseState.LIVE if events else ReleaseState.EMPTY,
+                        match_count=len(events),
+                    )
+                )
+            return results
+
+    async def _probe_modular11(
+        self,
+        targets: list[tuple[str, str]],
+        start: date,
+        end: date,
+    ) -> list[DivisionRelease]:
+        """Probe every target from modular11, one HTTP request each."""
+        semaphore = asyncio.Semaphore(self.MAX_CONCURRENCY)
+
+        async with httpx.AsyncClient(timeout=self.REQUEST_TIMEOUT) as client:
+
+            async def run(age_group: str, division: str) -> DivisionRelease:
+                async with semaphore:
+                    return await self._check_target(
+                        client, age_group, division, start, end
+                    )
+
+            return list(await asyncio.gather(*(run(age, div) for age, div in targets)))
 
     async def _check_target(
         self,
