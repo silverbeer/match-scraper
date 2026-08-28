@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: score-canary
+  namespace: match-scraper
+spec:
+  # Mondays at 12:00 UTC, which is the morning after a weekend of fixtures.
+  # The first run that can prove anything is 2026-09-07, the Monday after the
+  # 2026-2027 opening weekend — until then the window holds no played fixtures
+  # and the job exits 0 quietly.
+  #
+  # Weekly rather than one-shot on purpose: the question "did results arrive"
+  # does not stop mattering after the first weekend, and a feed that silently
+  # stops carrying scores in March is the same defect as one that never
+  # carried them in September.
+  schedule: "0 12 * * 1"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: score-canary
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              # Exit codes are outcomes, not crashes — same reasoning as the
+              # release watcher. 10 is the finding this job exists to make, and
+              # letting Kubernetes read it as a failed Job would retry it and
+              # bury the signal in a restart loop.
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  # Friday through Sunday: the weekend just gone, whatever
+                  # Monday it is.
+                  from=$(date -u -d 'last friday' +%Y-%m-%d 2>/dev/null || date -u -v-3d +%Y-%m-%d)
+                  to=$(date -u -d 'yesterday' +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
+                  uv run mls-scraper verify-scores --from "$from" --to "$to"
+                  code=$?
+                  case "$code" in
+                    0)  echo "canary: scores arriving, or nothing played" ;;
+                    10) echo "canary: FIXTURES PLAYED AND NONE SCORED — the feed is not delivering results" ;;
+                    20) echo "canary: season has no feed" ;;
+                    *)  echo "canary: unexpected exit $code"; exit "$code" ;;
+                  esac
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              resources:
+                # One JSON download, no browser.
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                limits:
+                  cpu: "250m"
+                  memory: 512Mi
