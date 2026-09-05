@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from src.orchestrator.planner import RunPlan, ScrapeAction, ScrapePlan
 from src.orchestrator.report import (
+    _TELEGRAM_MAX_CHARS,
     _agent_awareness,
     _format_delta,
     _is_last_weekend,
@@ -502,3 +504,137 @@ class TestIngestFailuresSection:
         # cost a number in the summary, not the whole report.
         report = _report(ingest_failures=[{"raw_name": "Mystery FC", "kind": "team"}])
         assert "Mystery FC" in report
+
+
+class TestTelegramLimit:
+    """SB-1015 — Telegram rejects a message over 4096 chars with a 400.
+
+    The 2026-2027 season put 71 targets in the plan, which rendered a 4920-char
+    report, so every run reported nothing at all.
+    """
+
+    def _skip_actions(self, n: int) -> list[dict]:
+        return [
+            {
+                "action": "skip",
+                "detail": f"U15 Flex Bracket{i}: Up to date (30 matches, last played None)",
+                "dry_run": False,
+            }
+            for i in range(n)
+        ]
+
+    def test_skip_actions_collapse_to_a_count(self) -> None:
+        now = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+        report = build_report(
+            result_summary="Completed run",
+            actions=self._skip_actions(71),
+            matches_found=0,
+            matches_submitted=0,
+            scraped_matches=[],
+            submission_errors=[],
+            env="prod",
+            target=None,
+            dry_run=False,
+            now=now,
+        )
+        assert len(report) <= _TELEGRAM_MAX_CHARS
+        assert "71 target\\(s\\) up to date" in report
+        assert "Bracket0" not in report
+
+    def test_scraped_actions_are_still_listed(self) -> None:
+        now = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+        report = build_report(
+            result_summary="Completed run",
+            actions=[
+                *self._skip_actions(70),
+                {
+                    "action": "scrape",
+                    "detail": "U14 Homegrown Northeast: 18 matches",
+                    "dry_run": False,
+                },
+            ],
+            matches_found=18,
+            matches_submitted=18,
+            scraped_matches=[_match()],
+            submission_errors=[],
+            env="prod",
+            target=None,
+            dry_run=False,
+            now=now,
+        )
+        assert "U14 Homegrown Northeast: 18 matches" in report
+        assert "70 target\\(s\\) up to date" in report
+
+    def test_long_report_is_clamped_and_keeps_the_footer(self) -> None:
+        now = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)  # Monday
+        matches = [
+            _match(
+                home=f"Some Long Club Name FC {i}",
+                away=f"Another Long Club Name SC {i}",
+                match_date="2026-09-05",
+            )
+            for i in range(400)
+        ]
+        report = build_report(
+            result_summary="Completed run",
+            actions=[
+                {
+                    "action": "scrape",
+                    "detail": f"U15 Flex Bracket{i}: scraped 12 matches",
+                    "dry_run": False,
+                }
+                for i in range(71)
+            ],
+            matches_found=400,
+            matches_submitted=400,
+            scraped_matches=matches,
+            submission_errors=[],
+            env="prod",
+            target=None,
+            dry_run=False,
+            now=now,
+        )
+        assert len(report) <= _TELEGRAM_MAX_CHARS
+        assert "line\\(s\\) dropped" in report
+        assert report.splitlines()[-1].startswith("*Next run:*")
+
+    def test_plan_lists_only_the_targets_being_scraped(self) -> None:
+        now = datetime(2026, 9, 6, 6, 0, tzinfo=UTC)
+        plan = RunPlan(
+            plans=[
+                ScrapePlan(
+                    target_key="u14-hg",
+                    target_label="U14 Homegrown Northeast",
+                    action=ScrapeAction.SCORE_SYNC,
+                    reason="4 match(es) awaiting scores",
+                ),
+                *[
+                    ScrapePlan(
+                        target_key=f"u15-flex-{i}",
+                        target_label=f"U15 Flex Bracket{i}",
+                        action=ScrapeAction.SKIP,
+                        reason="Up to date (30 matches, last played None)",
+                    )
+                    for i in range(70)
+                ],
+            ],
+            mt_api_status="ok",
+        )
+        report = build_report(
+            result_summary="Completed run",
+            actions=[],
+            matches_found=0,
+            matches_submitted=0,
+            scraped_matches=[],
+            submission_errors=[],
+            env="prod",
+            target=None,
+            dry_run=False,
+            mt_status="ok",
+            scrape_plan=plan,
+            now=now,
+        )
+        assert len(report) <= _TELEGRAM_MAX_CHARS
+        assert "1 active, 70 skipped" in report
+        assert "U14 Homegrown Northeast" in report
+        assert "Bracket0" not in report

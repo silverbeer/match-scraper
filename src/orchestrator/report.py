@@ -15,6 +15,10 @@ _CRON_HOURS_WEEKEND = [2, 5, 8, 11, 14, 17, 20, 23]
 # Display timezone for reports
 _DISPLAY_TZ = ZoneInfo("America/New_York")
 
+# Telegram rejects a sendMessage over this length outright with a 400, so an
+# over-long report is not a long report — it is no report at all (SB-1015).
+_TELEGRAM_MAX_CHARS = 4096
+
 
 def build_report(
     *,
@@ -78,13 +82,18 @@ def build_report(
 
     # --- Scrape Plan ---
     if scrape_plan and hasattr(scrape_plan, "plans"):
+        # Skipped targets are the count in the header line and nothing more.
+        # There are 70-odd of them on a quiet run, each saying the same
+        # "up to date" — listing them is most of what pushed the message past
+        # Telegram's limit, and none of it is news.
         plan_parts = []
         for p in scrape_plan.plans:
+            if p.action.value == "skip":
+                continue
             icon = {
                 "full_sync": "🔄",
                 "score_sync": "🎯",
                 "kickoff_sync": "⏰",
-                "skip": "⏭️",
             }.get(p.action.value, "•")
             plan_parts.append(f"  {icon} {escape(p.target_label)}: {escape(p.reason)}")
         if mt_status.startswith("failed:"):
@@ -102,13 +111,22 @@ def build_report(
     lines.append("")
 
     # --- Actions Taken ---
+    # One line per skipped target repeats the scrape plan it was computed from,
+    # so they are collapsed to a count here for the same reason (SB-1015).
+    skipped = 0
     for action in actions:
+        if action.get("action") == "skip":
+            skipped += 1
+            continue
         prefix = escape("[DRY RUN] ") if action.get("dry_run") else ""
         icon = _action_icon(action.get("action", ""))
         # Use only the first line — full match list lives in the pod logs
         detail_str = action.get("detail", "")
         detail = escape(detail_str.split("\n")[0])
         lines.append(f"{icon} {prefix}{detail}")
+
+    if skipped:
+        lines.append(f"⏭️ {escape(f'{skipped} target(s) up to date')}")
 
     if not actions:
         lines.append(escape("No actions taken."))
@@ -227,9 +245,35 @@ def build_report(
     next_tz = next_local.strftime("%Z")
     next_str = escape(next_local.strftime(f"%-I:%M %p {next_tz}"))
     delta_str = _format_delta(delta)
-    lines.append(f"*Next run:* {next_str} \\(in {escape(delta_str)}\\)")
+    footer = f"*Next run:* {next_str} \\(in {escape(delta_str)}\\)"
 
-    return "\n".join(lines)
+    return "\n".join(_clamp_to_telegram_limit(lines, footer))
+
+
+def _clamp_to_telegram_limit(body: list[str], footer: str) -> list[str]:
+    """Drop trailing body lines until the message fits Telegram's limit.
+
+    Whole lines, never a partial one: every bold marker and backslash escape
+    in this report is balanced within its own line, and a cut inside one
+    yields unparseable MarkdownV2 — which Telegram rejects with the same 400
+    this function exists to avoid.
+
+    The footer is kept whatever else goes. "When does it run next" is the one
+    line a reader needs from a report that had to be trimmed.
+    """
+    if len("\n".join([*body, footer])) <= _TELEGRAM_MAX_CHARS:
+        return [*body, footer]
+
+    kept = list(body)
+    dropped = 0
+    while kept:
+        kept.pop()
+        dropped += 1
+        marker = escape(f"… {dropped} line(s) dropped — full detail in the pod logs")
+        if len("\n".join([*kept, marker, footer])) <= _TELEGRAM_MAX_CHARS:
+            return [*kept, marker, footer]
+
+    return [escape("… report too long to send — see the pod logs"), footer]
 
 
 def _agent_awareness(now: datetime, matches: list[dict[str, Any]]) -> str:
