@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 
 import httpx
 import pytest
+from freezegun import freeze_time
 
 from src.scraper.assist_client import (
     AssistClient,
@@ -288,6 +289,13 @@ class TestAssistIndex:
         assert index.squads("Northeast", "U14") == frozenset({2})
 
 
+# The payloads below were captured on 2026-08-24 and carry that week's fixture
+# dates. Match.match_status is computed against the wall clock, so without a
+# frozen one these assertions decay from "scheduled" to "tbd" the moment those
+# dates pass — which is exactly what happened on 2026-09-05 (SB-1017). Freeze
+# to the capture date so the tests keep asking the question they were written
+# to ask.
+@freeze_time("2026-08-24T12:00:00Z")
 class TestAssistEvent:
     """Field mapping onto the scraper's Match model."""
 
