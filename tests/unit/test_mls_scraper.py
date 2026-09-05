@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from freezegun import freeze_time
 
 from src.scraper.config import ScrapingConfig
 from src.scraper.mls_scraper import MLSScraper, MLSScraperError
@@ -1074,7 +1075,11 @@ class TestMLSScraperAssistSource:
 
         assert [m.match_id for m in result] == ["26090"]
 
+    # games_scheduled counts fixtures dated ahead of now, and _match dates its
+    # fixtures 2026-09-05 — so this test scored 1 until that date arrived and 0
+    # after (SB-1017).
     @pytest.mark.asyncio
+    @freeze_time("2026-08-24T12:00:00Z")
     async def test_metrics_counted_from_the_feed(self) -> None:
         client = AsyncMock()
         client.get_matches.return_value = [
