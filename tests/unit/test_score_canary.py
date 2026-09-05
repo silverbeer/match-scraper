@@ -192,6 +192,54 @@ class TestVerifyScoresCommand:
 
         assert result.exit_code == 20
 
+    def test_every_named_feed_is_probed(self):
+        """The k3s canary probes league, flex and academy (SB-1016)."""
+        probe = AsyncMock(
+            side_effect=[
+                self._check(feed="league", kicked_off=40, completed=40, scored=40),
+                self._check(feed="flex", kicked_off=20, completed=20, scored=20),
+                self._check(feed="academy", kicked_off=10, completed=10, scored=10),
+            ]
+        )
+        with patch("src.scraper.score_canary.check_feed", probe):
+            result = self.runner.invoke(
+                app,
+                [
+                    "verify-scores",
+                    "--json",
+                    "-f",
+                    "league",
+                    "-f",
+                    "flex",
+                    "-f",
+                    "academy",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert [call.args[0] for call in probe.await_args_list] == [
+            "league",
+            "flex",
+            "academy",
+        ]
+
+    def test_one_silent_feed_among_several_still_exits_ten(self):
+        """A healthy league feed must not mask a Flex feed delivering nothing."""
+        with patch(
+            "src.scraper.score_canary.check_feed",
+            AsyncMock(
+                side_effect=[
+                    self._check(feed="league", kicked_off=40, completed=40, scored=40),
+                    self._check(feed="flex", kicked_off=20),
+                ]
+            ),
+        ):
+            result = self.runner.invoke(
+                app, ["verify-scores", "--json", "-f", "league", "-f", "flex"]
+            )
+
+        assert result.exit_code == 10
+
     def test_bad_date_is_rejected(self):
         result = self.runner.invoke(app, ["verify-scores", "--from", "5th September"])
 

@@ -32,7 +32,9 @@ spec:
               # Exit codes are outcomes, not crashes — same reasoning as the
               # release watcher. 10 is the finding this job exists to make, and
               # letting Kubernetes read it as a failed Job would retry it and
-              # bury the signal in a restart loop.
+              # bury the signal in a restart loop. With several feeds probed,
+              # 10 and 20 mean "at least one feed" — the table above the exit
+              # names which.
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -40,12 +42,18 @@ spec:
                   # Monday it is.
                   from=$(date -u -d 'last friday' +%Y-%m-%d 2>/dev/null || date -u -v-3d +%Y-%m-%d)
                   to=$(date -u -d 'yesterday' +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
-                  uv run mls-scraper verify-scores --from "$from" --to "$to"
+                  # All three competition seasons, not just the league one.
+                  # Flex and Academy are separate feeds with their own keys —
+                  # Flex alone is 52 of the 76 configured targets — so probing
+                  # only the league feed leaves most of what we scrape
+                  # unwatched by the job that exists to watch it (SB-1016).
+                  uv run mls-scraper verify-scores --from "$from" --to "$to" \
+                    --feed league --feed flex --feed academy
                   code=$?
                   case "$code" in
                     0)  echo "canary: scores arriving, or nothing played" ;;
-                    10) echo "canary: FIXTURES PLAYED AND NONE SCORED — the feed is not delivering results" ;;
-                    20) echo "canary: season has no feed" ;;
+                    10) echo "canary: FIXTURES PLAYED AND NONE SCORED — a feed is not delivering results" ;;
+                    20) echo "canary: a competition season has no feed" ;;
                     *)  echo "canary: unexpected exit $code"; exit "$code" ;;
                   esac
               envFrom:

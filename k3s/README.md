@@ -9,7 +9,13 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 | `agent/cronjob.yaml` | `match-scraper-agent` | `0 2,8,14,20 * * *` |
 | `release-watch/cronjob.yaml` | `schedule-release-watch` | `*/30 * * * *` |
 | `match-scraper/cleanup-cronjob.yaml` | `cleanup-completed-jobs` | `0 2 * * *` |
+| `score-canary/cronjob.yaml` | `score-canary` | `0 12 * * 1` |
 | `agent/configmap.yaml` | `match-scraper-agent-config` | — |
+
+The canary answers a question fixture counts cannot: it probes the league, Flex
+and Academy feeds for the weekend just gone and exits 10 if fixtures were played
+and none came back scored. A feed that quietly stops carrying results looks
+exactly like a quiet week otherwise.
 
 Both scraper CronJobs run `ghcr.io/silverbeer/match-scraper:latest`, built by `.github/workflows/test-and-publish.yml` on every push to `main`, with `imagePullPolicy: Always`. **Merging to main is a deploy** on the next tick.
 
