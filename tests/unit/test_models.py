@@ -1,10 +1,11 @@
 """Unit tests for data models."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
 
+from src.models.match_data import MatchData
 from src.scraper.models import Match, ScrapingMetrics
 
 
@@ -357,3 +358,52 @@ class TestScrapingMetrics:
         )
 
         assert metrics.get_success_rate() == 0.0
+
+
+class TestShootoutOnTheWire:
+    """MatchData is the published contract — SB-1025."""
+
+    @staticmethod
+    def _payload(**overrides):
+        base = {
+            "home_team": "Beachside of Connecticut",
+            "away_team": "Cedar Stars Academy Bergen",
+            "match_date": date(2026, 9, 5),
+            "season": "2026-2027",
+            "age_group": "U15",
+            "match_type": "Flex",
+            "home_score": 1,
+            "away_score": 1,
+            "home_penalty_score": 4,
+            "away_penalty_score": 2,
+        }
+        base.update(overrides)
+        return base
+
+    def test_the_shootout_reaches_the_wire(self):
+        published = MatchData(**self._payload()).model_dump()
+        assert published["home_penalty_score"] == 4
+        assert published["away_penalty_score"] == 2
+
+    def test_half_a_shootout_is_rejected(self):
+        with pytest.raises(ValidationError, match="as a pair"):
+            MatchData(**self._payload(away_penalty_score=None))
+
+    def test_a_shootout_on_a_decided_match_is_rejected(self):
+        with pytest.raises(ValidationError, match="ended level"):
+            MatchData(**self._payload(home_score=3, away_score=1))
+
+    def test_a_shootout_with_no_regulation_score_is_rejected(self):
+        with pytest.raises(ValidationError, match="regulation score"):
+            MatchData(**self._payload(home_score=None, away_score=None))
+
+    def test_a_match_that_never_went_to_penalties_is_fine(self):
+        published = MatchData(
+            **self._payload(
+                home_score=2,
+                away_score=1,
+                home_penalty_score=None,
+                away_penalty_score=None,
+            )
+        ).model_dump()
+        assert published["home_penalty_score"] is None
