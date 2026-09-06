@@ -40,6 +40,17 @@ class Match(BaseModel):
     away_score: Optional[Union[int, str]] = Field(
         None, description="Away team score or 'TBD'"
     )
+    # MLS NEXT Flex fixtures cannot end level — a regulation draw goes to
+    # penalties (SB-1019). Set only when the regulation score was a draw,
+    # mirroring missing-table's CHECK constraint on the same pair.
+    home_penalty_score: Optional[int] = Field(
+        None,
+        description="Home penalty shootout score, when the match went to penalties",
+    )
+    away_penalty_score: Optional[int] = Field(
+        None,
+        description="Away penalty shootout score, when the match went to penalties",
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property

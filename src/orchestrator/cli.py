@@ -635,6 +635,10 @@ def scrape(
             "league": config.league,
             "home_score": m.home_score if isinstance(m.home_score, int) else None,
             "away_score": m.away_score if isinstance(m.away_score, int) else None,
+            # A Flex draw is decided on penalties (SB-1019). Sent as a pair or
+            # not at all — missing-table rejects one without the other.
+            "home_penalty_score": m.home_penalty_score,
+            "away_penalty_score": m.away_penalty_score,
             "match_status": m.match_status,
             "external_match_id": m.match_id,
             "location": m.location,
