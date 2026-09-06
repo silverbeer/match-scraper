@@ -674,6 +674,10 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
         # Convert non-integer scores (like "TBD") to None for RabbitMQ validation
         "home_score": match.home_score if isinstance(match.home_score, int) else None,
         "away_score": match.away_score if isinstance(match.away_score, int) else None,
+        # A Flex draw is decided on penalties (SB-1019). Sent as a pair or not
+        # at all — missing-table rejects one without the other.
+        "home_penalty_score": match.home_penalty_score,
+        "away_penalty_score": match.away_penalty_score,
         "match_status": match.match_status,
         "external_match_id": match.match_id,
         "location": match.location,

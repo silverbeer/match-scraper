@@ -214,6 +214,7 @@ class AssistEvent(BaseModel):
                 f"Event {self.game_key} is missing a club name "
                 f"(home={home!r}, away={away!r})"
             )
+        home_pens, away_pens = self.shootout()
         return Match(
             match_id=self.game_key,
             match_datetime=self.local_datetime,
@@ -223,7 +224,33 @@ class AssistEvent(BaseModel):
             away_team=away,
             home_score=self.home_score,
             away_score=self.away_score,
+            home_penalty_score=home_pens,
+            away_penalty_score=away_pens,
         )
+
+    def shootout(self) -> tuple[int | None, int | None]:
+        """
+        The penalty shootout result, or ``(None, None)`` if there was none.
+
+        MLS NEXT Flex fixtures cannot end level, so a regulation draw is
+        decided on penalties and the feed carries the result (SB-1019).
+
+        The feed says "no shootout" with zeros rather than nulls — 55 of the
+        68 Flex fixtures played by 2026-09-06 carry ``0``/``0`` — and a real
+        shootout cannot end 0-0, so zeros are read as absence. The result is
+        also ignored unless regulation actually ended level, because that is
+        the only shape missing-table will store: its CHECK constraint rejects
+        penalty scores on a decided match.
+        """
+        home = self.home_penalty_shootout_score or 0
+        away = self.away_penalty_shootout_score or 0
+        if not home and not away:
+            return None, None
+        if self.home_score is None or self.away_score is None:
+            return None, None
+        if self.home_score != self.away_score:
+            return None, None
+        return home, away
 
 
 class AssistSchedule(BaseModel):

@@ -15,6 +15,9 @@ Each time both paths were defensible in isolation and wrong relative to each
 other, and nothing compared them. That is what this file is for.
 """
 
+import ast
+import importlib
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -106,3 +109,35 @@ def test_an_unmapped_team_name_passes_through_both_paths_unchanged():
         == _normalize_team_name(name, league="Homegrown")
         == name
     )
+
+
+def _payload_keys(module_name: str, marker: str) -> set[str]:
+    """Keys of the queue payload a builder constructs, read from its source.
+
+    Parsed rather than called: two of the three builders are inline inside a
+    scrape routine that wants a live feed and a queue client.
+    """
+    module = importlib.import_module(module_name)
+    tree = ast.parse(inspect.getsource(module))
+    for node in ast.walk(tree):
+        keys = getattr(node, "keys", None)
+        if isinstance(node, ast.Dict) and any(
+            isinstance(k, ast.Constant) and k.value == marker for k in keys
+        ):
+            return {k.value for k in keys if isinstance(k, ast.Constant)}
+    raise AssertionError(f"no payload dict containing {marker!r} in {module_name}")
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    ["src.cli.main", "src.orchestrator.tools", "src.orchestrator.cli"],
+)
+def test_every_submit_path_sends_the_shootout(module_name):
+    """A Flex draw is decided on penalties, and every sender must say so.
+
+    Three builders construct the queue payload, and a field added to one and
+    forgotten in another is exactly how SB-844 and SB-846 happened. Compare the
+    key sets rather than trusting a reviewer to notice (SB-1019).
+    """
+    keys = _payload_keys(module_name, "external_match_id")
+    assert {"home_penalty_score", "away_penalty_score"} <= keys

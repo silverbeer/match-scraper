@@ -530,3 +530,56 @@ class TestAssistClient:
         monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
         matches = await fetch_matches("Florida", "U14", season_year=2026)
         assert [m.match_id for m in matches] == ["26030", "26099"]
+
+
+@freeze_time("2026-09-06T12:00:00Z")
+class TestShootout:
+    """MLS NEXT Flex fixtures cannot end level — a draw goes to penalties (SB-1019)."""
+
+    @staticmethod
+    def _event(**overrides) -> AssistEvent:
+        raw = dict(
+            SCHEDULE_PAYLOAD["events"][1],
+            start_time="2026-09-05T13:00:00Z",
+            **overrides,
+        )
+        return AssistEvent.model_validate(raw)
+
+    def test_a_shootout_after_a_draw_is_carried(self) -> None:
+        match = self._event(
+            home_score=1,
+            away_score=1,
+            home_penalty_shootout_score=4,
+            away_penalty_shootout_score=2,
+        ).to_match()
+        assert (match.home_score, match.away_score) == (1, 1)
+        assert (match.home_penalty_score, match.away_penalty_score) == (4, 2)
+
+    def test_feed_zeros_mean_no_shootout(self) -> None:
+        """The feed says 'never went to penalties' with zeros, not nulls."""
+        match = self._event(
+            home_score=1,
+            away_score=1,
+            home_penalty_shootout_score=0,
+            away_penalty_shootout_score=0,
+        ).to_match()
+        assert (match.home_penalty_score, match.away_penalty_score) == (None, None)
+
+    def test_a_decided_match_carries_no_penalties(self) -> None:
+        """missing-table's CHECK constraint rejects penalties on a non-draw."""
+        match = self._event(
+            home_score=3,
+            away_score=1,
+            home_penalty_shootout_score=5,
+            away_penalty_shootout_score=4,
+        ).to_match()
+        assert (match.home_penalty_score, match.away_penalty_score) == (None, None)
+
+    def test_an_unplayed_fixture_carries_no_penalties(self) -> None:
+        match = self._event(
+            home_score=None,
+            away_score=None,
+            home_penalty_shootout_score=None,
+            away_penalty_shootout_score=None,
+        ).to_match()
+        assert (match.home_penalty_score, match.away_penalty_score) == (None, None)
