@@ -12,7 +12,7 @@ via the JSON schema and contract tests, not shared Python code.
 from datetime import date as DateType
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Competitions missing-table has a `leagues` row for.
 VALID_LEAGUES = ("Homegrown", "Academy", "Flex")
@@ -45,6 +45,21 @@ class MatchData(BaseModel):
     league: str | None = Field(None, description="League name (Homegrown or Academy)")
     home_score: int | None = Field(None, ge=0, description="Home team score")
     away_score: int | None = Field(None, ge=0, description="Away team score")
+    # An MLS NEXT Flex fixture cannot end level: a regulation draw is decided
+    # on penalties (SB-1019). This model is what actually goes on the wire —
+    # MatchQueueClient publishes the validated model, not the dict it was
+    # handed — so a field missing here is dropped between the builder and the
+    # queue however many senders set it (SB-1025).
+    home_penalty_score: int | None = Field(
+        None,
+        ge=0,
+        description="Home penalty shootout score, when a level match went to penalties",
+    )
+    away_penalty_score: int | None = Field(
+        None,
+        ge=0,
+        description="Away penalty shootout score, when a level match went to penalties",
+    )
     match_status: (
         Literal["scheduled", "tbd", "completed", "postponed", "cancelled"] | None
     ) = Field(None, description="Match status (tbd = match played, score pending)")
@@ -56,6 +71,31 @@ class MatchData(BaseModel):
     source: str | None = Field(
         None, description="Data source (e.g., 'match-scraper', 'manual')"
     )
+
+    @model_validator(mode="after")
+    def validate_shootout(self) -> "MatchData":
+        """A shootout is a pair, and only exists on a level score.
+
+        Both rules are missing-table's, enforced by CHECK constraints on the
+        matches table. Rejecting here means a malformed pair is caught at the
+        sender, where the fixture can still be logged with its name, rather
+        than at an insert that fails on the far side of a queue.
+        """
+        home, away = self.home_penalty_score, self.away_penalty_score
+        if home is None and away is None:
+            return self
+        if home is None or away is None:
+            raise ValueError(
+                f"Penalty scores must be given as a pair: home={home}, away={away}"
+            )
+        if self.home_score is None or self.away_score is None:
+            raise ValueError("Penalty scores require a regulation score")
+        if self.home_score != self.away_score:
+            raise ValueError(
+                "Penalty scores are only valid when regulation ended level, "
+                f"but the score was {self.home_score}-{self.away_score}"
+            )
+        return self
 
     @field_validator("league")
     @classmethod

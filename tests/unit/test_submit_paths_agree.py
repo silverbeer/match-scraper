@@ -141,3 +141,24 @@ def test_every_submit_path_sends_the_shootout(module_name):
     """
     keys = _payload_keys(module_name, "external_match_id")
     assert {"home_penalty_score", "away_penalty_score"} <= keys
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    ["src.cli.main", "src.orchestrator.tools", "src.orchestrator.cli"],
+)
+def test_every_payload_key_survives_the_wire_contract(module_name):
+    """MatchData is what gets published, not the dict a builder returns.
+
+    MatchQueueClient.submit_match validates the payload into MatchData and
+    publishes the model, so Pydantic drops any key the model has no field for.
+    SB-1019 added the penalty pair to all three builders, all three agreed with
+    each other, and every one of them was discarded one layer down (SB-1025).
+    """
+    from src.models.match_data import MatchData
+
+    keys = _payload_keys(module_name, "external_match_id")
+    unknown = keys - set(MatchData.model_fields)
+    assert not unknown, (
+        f"{module_name} sends keys MatchData will drop: {sorted(unknown)}"
+    )
