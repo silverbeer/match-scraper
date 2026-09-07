@@ -1,0 +1,221 @@
+{
+ "competition_season": {
+  "name": "Flex 26/27",
+  "competition_brackets": [
+   {
+    "id": 190,
+    "name": "Mid-America (East)",
+    "age_group": {
+     "id": 39,
+     "name": "U16"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1471,
+       "squad_id": 7197,
+       "name": "FC Cincinnati",
+       "logo_url": "https://kitman.imgix.net/fccincinnati/Crest_Cincinnati%20FC.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "3.0",
+        "description": "3 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "3.0",
+        "description": "3 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 1 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1459,
+       "squad_id": 5996,
+       "name": "Michigan Jaguars",
+       "logo_url": "https://kitman.imgix.net/michiganjaguars/New%20Crest%20Logo.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "2.0",
+        "description": "2 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "3.0",
+        "description": "3 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 225,
+    "name": "Turnpike",
+    "age_group": {
+     "id": 44,
+     "name": "U15"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1615,
+       "squad_id": 9718,
+       "name": "Connecticut United FC",
+       "logo_url": "https://kitman.imgix.net/connecticutunitedfc/CT%20United%20Logo%20Update.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "4.0",
+        "description": "4 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "4.0",
+        "description": "4 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 1 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1361,
+       "squad_id": 6186,
+       "name": "Beachside of Connecticut",
+       "logo_url": "https://kitman.imgix.net/beachsideoc/beachside.jpeg?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "2.0",
+        "description": "2 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

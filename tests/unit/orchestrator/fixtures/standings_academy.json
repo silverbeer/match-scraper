@@ -1,0 +1,221 @@
+{
+ "competition_season": {
+  "name": "Academy Division 26/27",
+  "competition_brackets": [
+   {
+    "id": 518,
+    "name": "New England",
+    "age_group": {
+     "id": 43,
+     "name": "U14"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1356,
+       "squad_id": 8960,
+       "name": "Bayside FC",
+       "logo_url": "https://kitman.imgix.net/baysidefc/FINAL-Bayside%20FC_03-2025-01.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1342,
+       "squad_id": 8966,
+       "name": "FC Greater Boston Bolts",
+       "logo_url": "https://kitman.imgix.net/fcgbb/Bolts-Logo.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 558,
+    "name": "Pioneer",
+    "age_group": {
+     "id": 41,
+     "name": "U19"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 2070,
+       "squad_id": 11008,
+       "name": "210 FC",
+       "logo_url": "https://kitman.imgix.net/210fc/San%20Antonion%20logo.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "4.0",
+        "description": "4 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "4.0",
+        "description": "4 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 1 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1761,
+       "squad_id": 8345,
+       "name": "Aspire FC",
+       "logo_url": "https://kitman.imgix.net/aspirefc/Aspire%20FC.svg?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "3.0",
+        "description": "3 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "3.0",
+        "description": "3 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 1 matches"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

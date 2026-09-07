@@ -209,7 +209,13 @@ def compute_scrape_plan(
         mt_data = mt_lookup.get(lookup_key)
 
         if mt_data is None or mt_data.get("total", 0) == 0:
-            full_start, full_end = _clamp(today, season_end, season_start)
+            # Season-to-date, not today onwards. A target MT has nothing for is
+            # either new to the config or new to MLS Next, and in both cases
+            # the fixtures it is missing are the ones already played: the forty
+            # Homegrown brackets added in SB-1024 had a month of results
+            # waiting in the feed. Starting at `today` would have scraped the
+            # rest of the season and quietly left the season so far behind.
+            full_start, full_end = _clamp(season_start, season_end, season_start)
             plans.append(
                 ScrapePlan(
                     target_key=target_key,

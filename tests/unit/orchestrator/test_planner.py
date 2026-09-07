@@ -414,103 +414,83 @@ class TestSeasonStartClamping:
                         )
 
 
-# ── Pro Player Pathway targets (SB-827) ──────────────────────────────
+# The Pathway and Flex target tests moved to test_targets.py in SB-1024: the
+# targets are no longer a literal in cli.py to assert against, they are built
+# from a recorded standings feed.
 
 
-class TestPathwayTargets:
-    def test_all_twelve_pathway_brackets_are_targets(self):
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+class TestBackfillingANewTarget:
+    """A target MT has nothing for is scraped season-to-date (SB-1024).
 
-        ppp = {k: v for k, v in _TARGET_SCRAPER_CONFIG.items() if "-ppp-" in k}
-        assert len(ppp) == 12, "4 brackets x U16/U17/U19"
+    The forty Homegrown brackets added in SB-1024 came with a month of results
+    already sitting in the feed. A FULL_SYNC starting at `today` would have
+    collected the rest of the season and left every played fixture behind —
+    and, because the next run would then find matches in MT, it would have
+    settled into score-syncing a bracket whose first month never arrived.
+    """
 
-    def test_pathway_targets_name_the_bracket_exactly_as_the_feed_does(self):
-        # AssistIndex keys on the bracket name, and MT resolves the division by
-        # name too (SB-830). A near-miss here yields zero matches with only a
-        # warning, which is the silent gap SB-827 exists to close.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+    SEASON_START = date(2026, 8, 1)
+    SEASON_END = date(2027, 7, 15)
+    TODAY = date(2026, 9, 7)
 
-        assert _TARGET_SCRAPER_CONFIG["u16-ppp-northeast"] == {
+    CONFIG = {
+        "u16-hg-mid-atlantic": {
             "age_group": "U16",
             "league": "Homegrown",
-            "division": "Northeast (Pro Player Pathway)",
+            "division": "Mid-Atlantic",
         }
+    }
 
-    def test_pathway_is_the_homegrown_league_not_a_competition_of_its_own(self):
-        # Pathway fixtures are League fixtures in a different bracket. Sending
-        # any other league would break MT's league-scoped division lookup.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+    def _plan(self, mt_targets):
+        return compute_scrape_plan(
+            mt_targets=mt_targets,
+            target_configs=self.CONFIG,
+            today=self.TODAY,
+            season_end=self.SEASON_END,
+            season_start=self.SEASON_START,
+        ).plans[0]
 
-        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
-            if "-ppp-" in key:
-                assert cfg["league"] == "Homegrown"
+    def test_a_target_mt_has_never_heard_of_backfills_the_season(self):
+        plan = self._plan([])
 
-    def test_no_pathway_target_below_u16(self):
-        # There is no Pathway bracket at U13/U14/U15 — 29 of 30 Pathway clubs
-        # field no U15 side, that cohort plays up. Targeting them would be a
-        # standing empty scrape.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
+        assert plan.action == ScrapeAction.FULL_SYNC
+        assert plan.start_date == self.SEASON_START
+        assert plan.end_date == self.SEASON_END
 
-        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
-            if "-ppp-" in key:
-                assert cfg["age_group"] in ("U16", "U17", "U19")
+    def test_a_target_mt_reports_empty_backfills_the_season(self):
+        """`bootstrap_divisions` is MT saying "this division exists and holds
+        nothing" — the same case, arriving as a row rather than an absence."""
+        plan = self._plan(
+            [
+                {
+                    "age_group": "U16",
+                    "league": "Homegrown",
+                    "division": "Mid-Atlantic",
+                    "total": 0,
+                    "needs_score": 0,
+                    "needs_kickoff": 0,
+                }
+            ]
+        )
 
-    def test_pathway_targets_do_not_collide_with_geographic_ones(self):
-        # u16-hg is Northeast geographic; u16-ppp-northeast is the Pathway
-        # bracket. Different divisions, disjoint fixtures.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
+        assert plan.action == ScrapeAction.FULL_SYNC
+        assert plan.start_date == self.SEASON_START
 
-        assert T["u16-hg"]["division"] == "Northeast"
-        assert T["u16-ppp-northeast"]["division"] == "Northeast (Pro Player Pathway)"
+    def test_a_populated_target_is_not_backfilled(self):
+        """Once the fixtures are in, the weekend window takes over — a
+        season-long scrape four times a day is 40x the work for no news."""
+        plan = self._plan(
+            [
+                {
+                    "age_group": "U16",
+                    "league": "Homegrown",
+                    "division": "Mid-Atlantic",
+                    "total": 132,
+                    "needs_score": 4,
+                    "needs_kickoff": 0,
+                }
+            ]
+        )
 
-
-# ── MLS NEXT Flex targets (SB-836) ───────────────────────────────────
-
-
-class TestFlexTargets:
-    def test_all_flex_brackets_are_targets(self):
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
-
-        flex = {k: v for k, v in _TARGET_SCRAPER_CONFIG.items() if "-flex-" in k}
-        assert len(flex) == 52, "13 brackets x U15/U16/U17/U19"
-
-    def test_flex_targets_use_the_flex_league(self):
-        # Not "Homegrown". The league drives match_type, so posting these as
-        # Homegrown would file every Flex goal as a League goal.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
-
-        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
-            if "-flex-" in key:
-                assert cfg["league"] == "Flex"
-
-    def test_no_flex_target_at_u13_or_u14(self):
-        # Those age groups play no Flex at all — the feed has no bracket for
-        # them, so targeting them would be a standing empty scrape.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG
-
-        for key, cfg in _TARGET_SCRAPER_CONFIG.items():
-            if "-flex-" in key:
-                assert cfg["age_group"] in ("U15", "U16", "U17", "U19")
-
-    def test_colliding_bracket_names_get_distinct_target_keys(self):
-        # Florida, Frontier, Northwest and Southeast name both a Homegrown
-        # division and a Flex bracket. The keys must not collide or one
-        # competition silently overwrites the other in the target dict.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
-
-        assert T["u15-flex-florida"]["league"] == "Flex"
-        assert T["u15-hg"]["league"] == "Homegrown"
-        assert T["u15-flex-florida"]["division"] == "Florida"
-
-    def test_bracket_names_with_parentheses_produce_readable_keys(self):
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
-
-        assert T["u16-flex-mid-america-east"]["division"] == "Mid-America (East)"
-        assert T["u16-flex-southwest-north"]["division"] == "Southwest (North)"
-
-    def test_every_target_key_is_unique_to_one_config(self):
-        # The dict cannot hold duplicates, so this asserts the generators do
-        # not silently overwrite each other: 12 base + 12 Pathway + 52 Flex.
-        from src.orchestrator.cli import _TARGET_SCRAPER_CONFIG as T
-
-        assert len(T) == 76
+        assert plan.action == ScrapeAction.SCORE_SYNC
+        assert plan.start_date > self.SEASON_START
