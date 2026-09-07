@@ -638,3 +638,78 @@ class TestTelegramLimit:
         assert "1 active, 70 skipped" in report
         assert "U14 Homegrown Northeast" in report
         assert "Bracket0" not in report
+
+
+class TestAHundredTargets:
+    """SB-1024 took the config from 71 targets to 112, and the first run of the
+    new ones is a FULL_SYNC apiece — the case SB-1015's collapse-the-skips
+    trick does not help with, because none of them are skips."""
+
+    def _plan(self, n: int) -> RunPlan:
+        return RunPlan(
+            plans=[
+                ScrapePlan(
+                    target_key=f"u16-hg-conference{i}",
+                    target_label=f"U16 Homegrown Conference {i}",
+                    action=ScrapeAction.FULL_SYNC,
+                    reason="No matches in MT — needs initial sync",
+                )
+                for i in range(n)
+            ],
+            mt_api_status="ok",
+        )
+
+    def test_a_backfill_run_still_sends(self) -> None:
+        now = datetime(2026, 9, 7, 6, 0, tzinfo=UTC)
+        report = build_report(
+            result_summary="Completed run",
+            actions=[
+                {
+                    "action": "scrape",
+                    "detail": f"U16 Homegrown Conference {i}: 132 matches",
+                    "dry_run": False,
+                }
+                for i in range(112)
+            ],
+            matches_found=8000,
+            matches_submitted=8000,
+            scraped_matches=[],
+            submission_errors=[],
+            env="prod",
+            target=None,
+            dry_run=False,
+            mt_status="ok",
+            scrape_plan=self._plan(112),
+            now=now,
+        )
+
+        assert len(report) <= _TELEGRAM_MAX_CHARS
+        assert "112 active, 0 skipped" in report
+        assert report.splitlines()[-1].startswith("*Next run:*")
+
+    def test_a_quiet_run_at_that_scale_is_short(self) -> None:
+        """Once the backfill lands they are all skips again, and the whole
+        report is a couple of lines."""
+        now = datetime(2026, 9, 14, 6, 0, tzinfo=UTC)
+        report = build_report(
+            result_summary="Completed run",
+            actions=[
+                {
+                    "action": "skip",
+                    "detail": f"target {i}: Up to date",
+                    "dry_run": False,
+                }
+                for i in range(112)
+            ],
+            matches_found=0,
+            matches_submitted=0,
+            scraped_matches=[],
+            submission_errors=[],
+            env="prod",
+            target=None,
+            dry_run=False,
+            now=now,
+        )
+
+        assert len(report) < 500
+        assert "112 target\\(s\\) up to date" in report

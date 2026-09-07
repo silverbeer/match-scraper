@@ -470,3 +470,44 @@ class TestRunPipeline:
         # Should have been downgraded to SKIP by all_scored_skip modifier
         assert result.actions[0].action == "skip"
         assert "All scored last run" in result.actions[0].detail
+
+
+class TestTargetConfigSelection:
+    """Which leagues a run plans for (SB-1024)."""
+
+    @staticmethod
+    def _settings(**kwargs):
+        from src.orchestrator.settings import AgentSettings
+
+        return AgentSettings(_env_file=None, **kwargs)
+
+    def test_academy_is_left_out_by_default(self):
+        from unittest.mock import patch
+
+        from src.orchestrator import cli
+
+        with patch.object(cli, "load_targets") as load:
+            load.return_value = _completed({})
+            cli._target_config(self._settings())
+
+        assert load.call_args.kwargs["leagues"] == ["Homegrown", "Flex"]
+
+    def test_academy_joins_when_asked_for(self):
+        from unittest.mock import patch
+
+        from src.orchestrator import cli
+
+        with patch.object(cli, "load_targets") as load:
+            load.return_value = _completed({})
+            cli._target_config(self._settings(academy_targets=True))
+
+        assert load.call_args.kwargs["leagues"] == ["Homegrown", "Flex", "Academy"]
+
+
+def _completed(value):
+    """A coroutine already holding its result, for asyncio.run to unwrap."""
+
+    async def _coro():
+        return value
+
+    return _coro()

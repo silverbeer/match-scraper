@@ -1,0 +1,640 @@
+{
+ "competition_season": {
+  "name": "League 26/27",
+  "competition_brackets": [
+   {
+    "id": 65,
+    "name": "Central (Pro Player Pathway)",
+    "age_group": {
+     "id": 39,
+     "name": "U16"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 927,
+       "squad_id": 7266,
+       "name": "Chicago Fire FC",
+       "logo_url": "https://kitman.imgix.net/chicagofirefc/Crest_Chicago%20Fire%20FC.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1385,
+       "squad_id": 7224,
+       "name": "Colorado Rapids",
+       "logo_url": "https://kitman.imgix.net/coloradorapids/Crest_Colorado%20Rapids.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 66,
+    "name": "Central (Pro Player Pathway)",
+    "age_group": {
+     "id": 40,
+     "name": "U17"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 927,
+       "squad_id": 2934,
+       "name": "Chicago Fire FC",
+       "logo_url": "https://kitman.imgix.net/chicagofirefc/Crest_Chicago%20Fire%20FC.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1385,
+       "squad_id": 5742,
+       "name": "Colorado Rapids",
+       "logo_url": "https://kitman.imgix.net/coloradorapids/Crest_Colorado%20Rapids.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 70,
+    "name": "Florida",
+    "age_group": {
+     "id": 44,
+     "name": "U15"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1421,
+       "squad_id": 7199,
+       "name": "Orlando City Soccer School South",
+       "logo_url": "https://kitman.imgix.net/ocsss/Orlando%20City%20Soccer%20School%20South.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "2.0",
+        "description": "2 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "4.0",
+        "description": "4 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "2.0",
+        "description": "2 goals / 1 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1367,
+       "squad_id": 5947,
+       "name": "Athletum FC Academy",
+       "logo_url": "https://kitman.imgix.net/athletumfc/Logo-Athletum-FC-BLACK_YELLOW-620x1024.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "1",
+        "description": "1 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "1.0",
+        "description": "1 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "1",
+        "description": "1 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 86,
+    "name": "Mid-Atlantic",
+    "age_group": {
+     "id": 42,
+     "name": "U13"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": [
+     {
+      "key": "taka_quality_of_play",
+      "name": "Quality of Play",
+      "abbr": "Quality of Play"
+     },
+     {
+      "key": "taka_att_score",
+      "name": "Att Score",
+      "abbr": "Att Score"
+     },
+     {
+      "key": "taka_def_score",
+      "name": "Def Score",
+      "abbr": "Def Score"
+     }
+    ],
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1358,
+       "squad_id": 6268,
+       "name": "Achilles FC",
+       "logo_url": "https://kitman.imgix.net/achillesfc/Achilles_2985.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {}
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1366,
+       "squad_id": 6079,
+       "name": "Alexandria SA",
+       "logo_url": "https://kitman.imgix.net/alexandriasa/ASA_HighRes-897x1024.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {}
+     }
+    ]
+   },
+   {
+    "id": 89,
+    "name": "Mid-Atlantic",
+    "age_group": {
+     "id": 39,
+     "name": "U16"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1618,
+       "squad_id": 9733,
+       "name": "Keystone FC",
+       "logo_url": "https://kitman.imgix.net/keystonefc/Keystone%20FC.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "4",
+        "description": "4 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "2.0",
+        "description": "4 points / 2 matches"
+       },
+       "matches_played": {
+        "value": "2",
+        "description": "2 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "1",
+        "description": "1 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "2.0",
+        "description": "4 GD / 2 matches"
+       },
+       "goals_for_per_match": {
+        "value": "3.0",
+        "description": "6 goals / 2 matches"
+       },
+       "goals_against_per_match": {
+        "value": "1.0",
+        "description": "2 goals / 2 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1369,
+       "squad_id": 6111,
+       "name": "Beadling SC",
+       "logo_url": "https://kitman.imgix.net/beadlingsc/11159003_feef469dc70348ffaa6c4f6b5a6f6c3d.jpg?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "1",
+        "description": "1 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "1.0",
+        "description": "1 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "1",
+        "description": "1 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 92,
+    "name": "Northeast",
+    "age_group": {
+     "id": 42,
+     "name": "U13"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": [
+     {
+      "key": "taka_quality_of_play",
+      "name": "Quality of Play",
+      "abbr": "Quality of Play"
+     },
+     {
+      "key": "taka_att_score",
+      "name": "Att Score",
+      "abbr": "Att Score"
+     },
+     {
+      "key": "taka_def_score",
+      "name": "Def Score",
+      "abbr": "Def Score"
+     }
+    ],
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1356,
+       "squad_id": 5738,
+       "name": "Bayside FC",
+       "logo_url": "https://kitman.imgix.net/baysidefc/FINAL-Bayside%20FC_03-2025-01.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {}
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1361,
+       "squad_id": 6184,
+       "name": "Beachside of Connecticut",
+       "logo_url": "https://kitman.imgix.net/beachsideoc/beachside.jpeg?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {}
+     }
+    ]
+   },
+   {
+    "id": 95,
+    "name": "Northeast",
+    "age_group": {
+     "id": 39,
+     "name": "U16"
+    },
+    "gender": "male",
+    "competitions": [],
+    "tiebreakers": null,
+    "standings": [
+     {
+      "position": 1,
+      "team": {
+       "organisation_id": 1616,
+       "squad_id": 9721,
+       "name": "Downtown United Soccer Club",
+       "logo_url": "https://kitman.imgix.net/downtownunitedsc/Downtown%20United%20Soccer%20Club.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "3",
+        "description": "3 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "3.0",
+        "description": "3 points / 1 matches"
+       },
+       "matches_played": {
+        "value": "1",
+        "description": "1 matches"
+       },
+       "won": {
+        "value": "1",
+        "description": "1 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "2.0",
+        "description": "2 GD / 1 matches"
+       },
+       "goals_for_per_match": {
+        "value": "3.0",
+        "description": "3 goals / 1 matches"
+       },
+       "goals_against_per_match": {
+        "value": "1.0",
+        "description": "1 goals / 1 matches"
+       }
+      }
+     },
+     {
+      "position": 2,
+      "team": {
+       "organisation_id": 1356,
+       "squad_id": 5744,
+       "name": "Bayside FC",
+       "logo_url": "https://kitman.imgix.net/baysidefc/FINAL-Bayside%20FC_03-2025-01.png?ixlib=rails-4.2.0&fit=fill&trim=off&bg=00FFFFFF&w=100&h=100"
+      },
+      "tiebreaker_values": {
+       "points": {
+        "value": "0",
+        "description": "0 points"
+       },
+       "points_per_match_penalty_shootout": {
+        "value": "0.0",
+        "description": "0 points / 0 matches"
+       },
+       "matches_played": {
+        "value": "0",
+        "description": "0 matches"
+       },
+       "won": {
+        "value": "0",
+        "description": "0 wins"
+       },
+       "loss": {
+        "value": "0",
+        "description": "0 losses"
+       },
+       "tie": {
+        "value": "0",
+        "description": "0 ties"
+       },
+       "goal_differential_per_match": {
+        "value": "0.0",
+        "description": "0 GD / 0 matches"
+       },
+       "goals_for_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       },
+       "goals_against_per_match": {
+        "value": "0.0",
+        "description": "0 goals / 0 matches"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

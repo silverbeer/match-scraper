@@ -103,7 +103,12 @@ def _journal_key(sp: ScrapePlan) -> str:
     cfg = sp.scraper_params
     ag = cfg.get("age_group", "?")
     league = cfg.get("league", "?")
-    league_short = "HG" if league == "Homegrown" else "Academy"
+    # Every league gets its own label. "Academy" used to stand in for anything
+    # that was not Homegrown, which was harmless while Flex had no conference
+    # name in common with Academy — they now share New England, Northeast and
+    # Mid-Atlantic, and two targets sharing a journal key means one target's
+    # failure is credited to the other (SB-1024).
+    league_short = {"Homegrown": "HG"}.get(league, league)
     div = cfg.get("conference") or cfg.get("division", "?")
     return f"{ag} {league_short} {div}"
 

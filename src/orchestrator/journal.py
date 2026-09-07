@@ -263,7 +263,10 @@ def _target_label(match: dict[str, Any]) -> str:
     ag = match.get("age_group", "?")
     league = match.get("league", "?")
     div = match.get("division", "?")
-    league_short = "HG" if league == "Homegrown" else "Academy"
+    # Must agree with engine._journal_key. Flex and Academy share three
+    # conference names, so collapsing both to "Academy" put two targets on one
+    # journal entry (SB-1024).
+    league_short = {"Homegrown": "HG"}.get(league, league)
     return f"{ag} {league_short} {div}"
 
 

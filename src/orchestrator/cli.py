@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Annotated, Any
 import structlog
 import typer
 
+from src.orchestrator.targets import TEAM_FILTER_TARGETS as _TARGET_TEAM_FILTER
+from src.orchestrator.targets import load_targets
+
 if TYPE_CHECKING:
     from src.orchestrator.settings import AgentSettings
 
@@ -16,155 +19,26 @@ app = typer.Typer(name="match-scraper-agent", no_args_is_help=True)
 logger = structlog.get_logger()
 
 
-# Target → scraper config (age_group, league, division, conference, club)
-_TARGET_SCRAPER_CONFIG: dict[str, dict[str, str]] = {
-    "u14-hg": {
-        "age_group": "U14",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u14-hg-ifa": {
-        "age_group": "U14",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u13-hg": {
-        "age_group": "U13",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u13-hg-ifa": {
-        "age_group": "U13",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u14-academy": {
-        "age_group": "U14",
-        "league": "Academy",
-        "conference": "New England",
-    },
-    "u14-academy-ifa": {
-        "age_group": "U14",
-        "league": "Academy",
-        "conference": "New England",
-    },
-    "u14-hg-florida": {
-        "age_group": "U14",
-        "league": "Homegrown",
-        "division": "Florida",
-    },
-    "u13-hg-florida": {
-        "age_group": "U13",
-        "league": "Homegrown",
-        "division": "Florida",
-    },
-    "u15-hg": {
-        "age_group": "U15",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u15-hg-ifa": {
-        "age_group": "U15",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u16-hg": {
-        "age_group": "U16",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-    "u16-hg-ifa": {
-        "age_group": "U16",
-        "league": "Homegrown",
-        "division": "Northeast",
-    },
-}
+# What to scrape is read from the standings feeds, not typed out here — see
+# src/orchestrator/targets.py. The hand-written list this replaces covered
+# Northeast plus Florida at U13/U14, which left forty of the league's
+# forty-eight brackets unscraped and silent about it (SB-1024).
 
 
-# Pro Player Pathway (SB-827).
-#
-# For 2026-2027 MLS Next moved the senior age groups of its pro-academy clubs
-# into separate "(Pro Player Pathway)" brackets inside the Homegrown league.
-# They are ordinary League fixtures — same competition, same match type — that
-# simply live in a different bracket, so they are targets like any other.
-#
-# Nothing here leaks through the geographic targets: of the 171 fixtures a
-# Northeast U16/U17/U19 scrape returns, ZERO involve a Pathway squad. Without
-# these entries those clubs are present at U13/U14 and then vanish from the
-# senior age groups, with no error to say so.
-#
-# Generated rather than written out because it is a clean product: four
-# brackets x three age groups. There is no Pathway bracket at U13/U14/U15 —
-# 29 of the 30 Pathway clubs field no U15 side at all, that cohort plays up
-# into U16 — so those combinations are deliberately absent rather than
-# scraped and found empty.
-_PATHWAY_BRACKETS = ("Central", "Northeast", "Southeast", "West")
-_PATHWAY_AGE_GROUPS = ("U16", "U17", "U19")
+def _target_config(settings: AgentSettings) -> dict[str, dict[str, str]]:
+    """The targets the feeds declare, for this run.
 
-for _bracket in _PATHWAY_BRACKETS:
-    for _age in _PATHWAY_AGE_GROUPS:
-        _TARGET_SCRAPER_CONFIG[f"{_age.lower()}-ppp-{_bracket.lower()}"] = {
-            "age_group": _age,
-            "league": "Homegrown",
-            "division": f"{_bracket} (Pro Player Pathway)",
-        }
+    Academy is opt-in (``AGENT_ACADEMY_TARGETS``): its feed lists 120 brackets
+    whose clubs missing-table mostly does not have yet, and a target whose
+    teams cannot be resolved drops its matches and files a name failure for
+    each one (SB-1018).
+    """
+    import asyncio
 
-
-# MLS NEXT Flex (SB-836).
-#
-# A separate competition played by the same teams: 563 of Flex's 567 squads
-# also appear in the Homegrown league feed, and none appear in Academy — which
-# is why non-academy teams play roughly 6 Flex fixtures alongside 19 League
-# ones. It has its own thirteen conference brackets, which do NOT partition the
-# Homegrown divisions: Northeast U15's nineteen teams split across New England,
-# Turnpike and Empire.
-#
-# league is "Flex" rather than "Homegrown" so these post with match_type
-# "Flex", keeping Flex goals out of the League Golden Boot, and so missing-table
-# scopes its division lookup — four of these names collide with Homegrown
-# divisions (Florida, Frontier, Northwest, Southeast).
-#
-# U15 and up only. U13 and U14 play no Flex at all, so those combinations are
-# absent rather than scraped and found empty.
-_FLEX_BRACKETS = (
-    "Empire",
-    "Florida",
-    "Frontier",
-    "Mid-America (East)",
-    "Mid-America (West)",
-    "Mid-Atlantic (North)",
-    "Mid-Atlantic (South)",
-    "New England",
-    "Northwest",
-    "Southeast",
-    "Southwest (North)",
-    "Southwest (South)",
-    "Turnpike",
-)
-_FLEX_AGE_GROUPS = ("U15", "U16", "U17", "U19")
-
-
-def _slug(name: str) -> str:
-    """Bracket name to target-key fragment: 'Mid-America (East)' -> 'mid-america-east'."""
-    return name.lower().replace(" (", "-").replace(")", "").replace(" ", "-")
-
-
-for _bracket in _FLEX_BRACKETS:
-    for _age in _FLEX_AGE_GROUPS:
-        _TARGET_SCRAPER_CONFIG[f"{_age.lower()}-flex-{_slug(_bracket)}"] = {
-            "age_group": _age,
-            "league": "Flex",
-            "division": _bracket,
-        }
-
-# Targets that include a team filter — value is the DB team name used for filtering
-_TARGET_TEAM_FILTER: dict[str, str] = {
-    "u14-hg-ifa": "IFA",
-    "u13-hg-ifa": "IFA",
-    "u15-hg-ifa": "IFA",
-    "u16-hg-ifa": "IFA",
-    "u14-academy-ifa": "IFA Academy",
-}
+    leagues = ["Homegrown", "Flex"]
+    if settings.academy_targets:
+        leagues.append("Academy")
+    return asyncio.run(load_targets(leagues=leagues))
 
 
 def _queue_client_kwargs(settings: AgentSettings) -> dict[str, str]:
@@ -303,8 +177,9 @@ def run(
     try:
         queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
 
-        if target and target not in _TARGET_SCRAPER_CONFIG:
-            valid = ", ".join(sorted(_TARGET_SCRAPER_CONFIG))
+        target_configs = _target_config(settings)
+        if target and target not in target_configs:
+            valid = ", ".join(sorted(target_configs))
             typer.echo(f"Unknown target '{target}'. Valid targets: {valid}", err=True)
             raise typer.Exit(code=1)
 
@@ -328,7 +203,7 @@ def run(
             from src.orchestrator.planner import RunPlan, ScrapeAction, ScrapePlan
             from src.orchestrator.tools import current_segment_window
 
-            target_cfg = _TARGET_SCRAPER_CONFIG[target]
+            target_cfg = target_configs[target]
             label = _target_label(target_cfg)
             plan = RunPlan(
                 plans=[
@@ -382,7 +257,7 @@ def run(
 
             plan = compute_scrape_plan(
                 mt_targets=mt_targets,
-                target_configs=_TARGET_SCRAPER_CONFIG,
+                target_configs=target_configs,
                 today=now_utc.date(),
                 season_end=segment_end,
                 season_start=SEASON_START,
@@ -561,13 +436,15 @@ def scrape(
 
     configure_logging(json_output=False)
 
-    if target not in _TARGET_SCRAPER_CONFIG:
-        valid = ", ".join(sorted(_TARGET_SCRAPER_CONFIG))
+    settings = AgentSettings(_env_file=env_file_path(env))
+
+    target_configs = _target_config(settings)
+    if target not in target_configs:
+        valid = ", ".join(sorted(target_configs))
         typer.echo(f"Unknown target '{target}'. Valid targets: {valid}", err=True)
         raise typer.Exit(code=1)
 
-    settings = AgentSettings(_env_file=env_file_path(env))
-    target_cfg = _TARGET_SCRAPER_CONFIG[target]
+    target_cfg = target_configs[target]
     team_filter = _TARGET_TEAM_FILTER.get(target, "")
 
     try:

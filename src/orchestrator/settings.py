@@ -34,6 +34,12 @@ class AgentSettings(BaseSettings):
 
     model_config = {"env_prefix": "AGENT_", "extra": "ignore"}
 
+    # Academy targets are off by default. The Academy feed declares 120
+    # brackets and 271 clubs, 155 of which missing-table does not have; a
+    # target whose teams cannot be resolved drops its matches and files a name
+    # failure for each one, so this waits on the club onboarding (SB-1018).
+    academy_targets: bool = False
+
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
     exchange_name: str = "matches-fanout"
     queue_name: str = ""
