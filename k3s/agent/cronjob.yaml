@@ -4,7 +4,7 @@ metadata:
   name: match-scraper-agent
   namespace: match-scraper
 spec:
-  schedule: "0 2,8,14,20 * * *"  # 4x/day every day (02:00, 08:00, 14:00, 20:00 UTC) — see cronjob-weekend.yaml for 4 extra Sat/Sun slots
+  schedule: "0 2,8,14,20 * * *"  # 4x/day every day (02:00, 08:00, 14:00, 20:00 UTC) — see cronjob-weekend.yaml for the hourly Sat 15:00 → Sun 20:00 ET cadence layered on top
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

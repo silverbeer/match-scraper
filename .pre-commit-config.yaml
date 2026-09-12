@@ -5,6 +5,9 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # k8s manifests legitimately stream several documents from one file
+        # (k3s/agent/cronjob-weekend.yaml, k3s/match-scraper/cleanup-cronjob.yaml).
+        args: [--allow-multiple-documents]
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: debug-statements
