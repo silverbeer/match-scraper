@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 from enum import StrEnum
 from typing import Any
@@ -13,6 +14,11 @@ logger = structlog.get_logger()
 
 # Kickoff-sync lookahead: check matches within this many days for missing kick-off times
 _KICKOFF_LOOKAHEAD_DAYS = 14
+
+# MT's match-summary endpoint intermittently 500s on a cold Supabase gateway
+# timeout; a retry seconds later succeeds. See fetch_mt_status.
+_MT_FETCH_ATTEMPTS = 4
+_MT_FETCH_BACKOFF_SECONDS = 2.0
 
 
 class ScrapeAction(StrEnum):
@@ -121,6 +127,13 @@ def fetch_mt_status(
     Passes last weekend's date range as score_from/score_to so that
     needs_score only reflects matches from last weekend.
 
+    Retries a server-side failure before giving up. The endpoint reads the whole
+    season out of PostgREST, so the first caller after an idle gap can trip
+    Supabase's gateway timeout and come back 500 while the call right behind it
+    succeeds in under two seconds (SB-1055; MT-side fix is SB-1057). This agent
+    runs hours apart and is always that first caller, and because the run halts
+    fail-fast without a plan, one cold 504 used to cost the entire run.
+
     Returns:
         (targets_list, status_string) where status is "ok", "failed:<reason>", or "empty".
     """
@@ -135,22 +148,54 @@ def fetch_mt_status(
         "planner.fetch_mt_status", url=url, season=season, score_from=sat, score_to=sun
     )
 
-    try:
-        resp = httpx.get(
-            url,
-            params={
-                "season": season,
-                "score_from": sat.isoformat(),
-                "score_to": sun.isoformat(),
-            },
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=15.0,
+    params = {
+        "season": season,
+        "score_from": sat.isoformat(),
+        "score_to": sun.isoformat(),
+    }
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    data: dict[str, Any] | None = None
+    last_error = ""
+
+    for attempt in range(1, _MT_FETCH_ATTEMPTS + 1):
+        try:
+            resp = httpx.get(url, params=params, headers=headers, timeout=15.0)
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except httpx.HTTPStatusError as exc:
+            # A 4xx is a bad request or a bad token: the next attempt sends the
+            # same thing and gets the same answer. Only 5xx is worth repeating.
+            if exc.response.status_code < 500:
+                logger.warning(
+                    "planner.fetch_mt_status.failed",
+                    error=str(exc),
+                    status_code=exc.response.status_code,
+                )
+                return [], f"failed:{exc}"
+            last_error = str(exc)
+        except Exception as exc:
+            last_error = str(exc)
+
+        if attempt < _MT_FETCH_ATTEMPTS:
+            delay = _MT_FETCH_BACKOFF_SECONDS * 2 ** (attempt - 1)
+            logger.warning(
+                "planner.fetch_mt_status.retrying",
+                error=last_error,
+                attempt=attempt,
+                of=_MT_FETCH_ATTEMPTS,
+                retry_in=delay,
+            )
+            time.sleep(delay)
+
+    if data is None:
+        logger.error(
+            "planner.fetch_mt_status.failed",
+            error=last_error,
+            attempts=_MT_FETCH_ATTEMPTS,
         )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as exc:
-        logger.warning("planner.fetch_mt_status.failed", error=str(exc))
-        return [], f"failed:{exc}"
+        return [], f"failed:{last_error}"
 
     targets = data.get("targets", [])
     if not targets:

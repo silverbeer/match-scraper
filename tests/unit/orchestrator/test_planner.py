@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import httpx
+
+from src.orchestrator import planner
 from src.orchestrator.planner import (
     _KICKOFF_LOOKAHEAD_DAYS,
     ScrapeAction,
@@ -494,3 +497,114 @@ class TestBackfillingANewTarget:
 
         assert plan.action == ScrapeAction.SCORE_SYNC
         assert plan.start_date > self.SEASON_START
+
+
+class TestFetchMtStatusRetry:
+    """MT's match-summary endpoint 500s on a cold Supabase gateway timeout and
+    succeeds on the call right behind it (SB-1055). The run halts fail-fast
+    without a plan, so one flaky response used to cost the whole run."""
+
+    URL = "https://api.example.test"
+    OK_BODY = {"targets": [{"age_group": "U14", "league": "Homegrown", "total": 3}]}
+
+    @staticmethod
+    def _response(status_code: int, json_body: dict | None = None) -> httpx.Response:
+        return httpx.Response(
+            status_code,
+            json=json_body if json_body is not None else {"detail": "boom"},
+            request=httpx.Request(
+                "GET", "https://api.example.test/api/agent/match-summary"
+            ),
+        )
+
+    def _call(self, monkeypatch, responses):
+        """Run fetch_mt_status against a scripted sequence of responses.
+
+        Each entry is either an httpx.Response to return or an Exception to
+        raise. Returns (result, attempt_count, recorded_sleeps).
+        """
+        remaining = list(responses)
+        sleeps: list[float] = []
+
+        def fake_get(*_args, **_kwargs):
+            item = remaining.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            if item.status_code >= 400:
+                raise httpx.HTTPStatusError(
+                    "error", request=item.request, response=item
+                )
+            return item
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        monkeypatch.setattr(planner.time, "sleep", lambda d: sleeps.append(d))
+
+        result = planner.fetch_mt_status(
+            self.URL, "token", "2026-2027", today=date(2026, 9, 12)
+        )
+        return result, len(responses) - len(remaining), sleeps
+
+    def test_a_cold_500_is_retried_and_the_run_survives(self, monkeypatch):
+        (targets, status), attempts, sleeps = self._call(
+            monkeypatch,
+            [self._response(500), self._response(200, self.OK_BODY)],
+        )
+
+        assert status == "ok"
+        assert len(targets) == 1
+        assert attempts == 2
+        assert sleeps == [2.0]
+
+    def test_a_transport_error_is_retried_too(self, monkeypatch):
+        (targets, status), attempts, _ = self._call(
+            monkeypatch,
+            [
+                httpx.ConnectTimeout("timed out"),
+                self._response(200, self.OK_BODY),
+            ],
+        )
+
+        assert status == "ok"
+        assert attempts == 2
+
+    def test_backoff_doubles_and_gives_up_after_four_attempts(self, monkeypatch):
+        (targets, status), attempts, sleeps = self._call(
+            monkeypatch, [self._response(500)] * planner._MT_FETCH_ATTEMPTS
+        )
+
+        assert targets == []
+        assert status.startswith("failed:")
+        assert attempts == planner._MT_FETCH_ATTEMPTS
+        # Three waits between four attempts, no wait after the last one.
+        assert sleeps == [2.0, 4.0, 8.0]
+
+    def test_a_4xx_is_not_retried(self, monkeypatch):
+        """A bad token or a bad query returns the same answer every time —
+        retrying only delays the failure the report needs to show."""
+        (targets, status), attempts, sleeps = self._call(
+            monkeypatch, [self._response(401)]
+        )
+
+        assert targets == []
+        assert status.startswith("failed:")
+        assert attempts == 1
+        assert sleeps == []
+
+    def test_a_first_attempt_success_does_not_sleep(self, monkeypatch):
+        (targets, status), attempts, sleeps = self._call(
+            monkeypatch, [self._response(200, self.OK_BODY)]
+        )
+
+        assert status == "ok"
+        assert attempts == 1
+        assert sleeps == []
+
+    def test_an_empty_target_list_is_still_reported_as_empty(self, monkeypatch):
+        """Retry must not turn 'MT answered, it has nothing' into a failure."""
+        (targets, status), attempts, _ = self._call(
+            monkeypatch, [self._response(200, {"targets": []})]
+        )
+
+        assert targets == []
+        assert status == "empty"
+        assert attempts == 1
