@@ -1,10 +1,30 @@
+# Hourly weekend cadence: 3pm Saturday through 8pm Sunday, America/New_York
+# (SB-1056). The window crosses midnight, so it takes two CronJobs — a single
+# cron expression cannot say "Sat 15:00 to Sun 20:00".
+#
+# The base CronJob (cronjob.yaml, 0 2,8,14,20 UTC) already covers four hours
+# inside this window — 22:00 Sat and 04:00/10:00/16:00 Sun while the US is on
+# EDT — and concurrencyPolicy: Forbid does not span CronJobs. Those four hours
+# are therefore excluded below, so two agents never scrape the same targets at
+# the same moment and double-publish to the matches-fanout exchange.
+#
+# DST: the exclusions assume EDT (UTC-4). When the clocks go back on
+# 2026-11-01 the base slots land on 21:00/03:00/09:00/15:00 ET and the
+# exclusions no longer line up. Revisit then, or move the base CronJob onto
+# America/New_York as well.
+#
+# Replaces the "0 5,11,17,23 * * 0,6" schedule that was committed in #70 and
+# never applied to the cluster.
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: match-scraper-agent-weekend
+  name: match-scraper-agent-weekend-sat
   namespace: match-scraper
 spec:
-  schedule: "0 5,11,17,23 * * 0,6"  # 4 extra slots Sat/Sun (05:00, 11:00, 17:00, 23:00 UTC)
+  # Sat 15:00-23:00 ET hourly, minus 22:00 which the base CronJob covers.
+  schedule: "0 15-21,23 * * 6"
+  timeZone: America/New_York
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -20,11 +40,17 @@ spec:
               image: ghcr.io/silverbeer/match-scraper:latest
               imagePullPolicy: Always
               args: ["run", "--env", "prod"]
+              env:
+                - name: ASSIST_FEED_CACHE_DIR
+                  value: /data/agent-state/assist-feeds
               envFrom:
                 - configMapRef:
                     name: match-scraper-agent-config
                 - secretRef:
                     name: match-scraper-agent-secret
+              volumeMounts:
+                - name: agent-state
+                  mountPath: /data/agent-state
               resources:
                 requests:
                   cpu: 200m
@@ -32,3 +58,58 @@ spec:
                 limits:
                   cpu: "1"
                   memory: 2Gi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-agent-weekend-sun
+  namespace: match-scraper
+spec:
+  # Sun 00:00-20:00 ET hourly, minus 04:00/10:00/16:00 which the base CronJob
+  # covers. The 20:00 slot is the first run of the weekend for which Sunday's
+  # own matches are visible to MT — needs_score only counts matches dated
+  # strictly before the server's UTC date, and 20:00 ET is when that rolls
+  # over (SB-1058).
+  schedule: "0 0-3,5-9,11-15,17-20 * * 0"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: agent
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              args: ["run", "--env", "prod"]
+              env:
+                - name: ASSIST_FEED_CACHE_DIR
+                  value: /data/agent-state/assist-feeds
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              volumeMounts:
+                - name: agent-state
+                  mountPath: /data/agent-state
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 1Gi
+                limits:
+                  cpu: "1"
+                  memory: 2Gi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state
