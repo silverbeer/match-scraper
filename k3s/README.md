@@ -12,6 +12,7 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 | `release-watch/cronjob.yaml` | `schedule-release-watch` | `*/30 * * * *` |
 | `match-scraper/cleanup-cronjob.yaml` | `cleanup-completed-jobs` | `0 2 * * *` |
 | `score-canary/cronjob.yaml` | `score-canary` | `0 12 * * 1` |
+| `watchdog/cronjob.yaml` | `match-scraper-watchdog` | `30 * * * *` (America/New_York) |
 | `agent/configmap.yaml` | `match-scraper-agent-config` | — |
 
 The canary answers a question fixture counts cannot: it probes the league, Flex
@@ -55,6 +56,30 @@ afternoon runs find nothing to do.
 
 Both scraper CronJobs run `ghcr.io/silverbeer/match-scraper:latest`, built by `.github/workflows/test-and-publish.yml` on every push to `main`, with `imagePullPolicy: Always`. **Merging to main is a deploy** on the next tick.
 
+## How you hear about a failure
+
+Three layers, because no single one can see every way this breaks (SB-1062).
+Before them there was only the run report, which is sent on success, so silence
+meant either "quiet weekend, nothing to scrape" or "dead since yesterday" — and
+on a day when every target correctly SKIPs, healthy looks like silence too. Four
+consecutive runs died unnoticed on 2026-09-11/12 because of it.
+
+| Layer | Catches | Misses |
+|---|---|---|
+| The run itself | anything that happens while it is alive — MT down, Playwright crash, broker unreachable | anything that stops it existing |
+| `match-scraper-watchdog` | a pod that never started, a suspended or deleted CronJob, a sleeping node | nothing, but it reports late by up to an hour |
+| `score-canary` | a feed that has quietly stopped carrying results | anything MT-side; on 2026-09-12 the feed was fine and MT was broken |
+
+The watchdog reads the run journal off the `agent-state` PVC. A successful run
+writes it and a failed one does not, so its age measures "when did this last
+work" rather than "when did a pod last exist". Hourly at :30, alerting past 8h —
+the widest gap in the base schedule is 6h, so 8h clears one missed slot without
+crying wolf.
+
+All three exit 10 for "this is the finding", never non-zero for a crash. A
+finding Kubernetes reads as a failed Job gets retried, and the signal disappears
+into a restart loop.
+
 ## What is NOT deployed, deliberately
 
 | Manifest | Why |
@@ -73,6 +98,7 @@ kubectl apply -f k3s/agent/configmap.yaml
 kubectl apply -f k3s/agent/cronjob.yaml
 kubectl apply -f k3s/agent/cronjob-weekend.yaml
 kubectl apply -f k3s/release-watch/cronjob.yaml
+kubectl apply -f k3s/watchdog/cronjob.yaml
 ```
 
 Check a change before applying it — `kubectl diff` is the difference between a config edit and an outage:

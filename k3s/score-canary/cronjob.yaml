@@ -50,10 +50,20 @@ spec:
                   uv run mls-scraper verify-scores --from "$from" --to "$to" \
                     --feed league --feed flex --feed academy
                   code=$?
+                  # The finding goes to Telegram, not just stdout. It echoed
+                  # into container logs and exited 0, where nobody would ever
+                  # read it — a watchdog nobody hears is not a watchdog
+                  # (SB-1062).
                   case "$code" in
                     0)  echo "canary: scores arriving, or nothing played" ;;
-                    10) echo "canary: FIXTURES PLAYED AND NONE SCORED — a feed is not delivering results" ;;
-                    20) echo "canary: a competition season has no feed" ;;
+                    10) echo "canary: FIXTURES PLAYED AND NONE SCORED — a feed is not delivering results"
+                        uv run match-scraper-agent notify --env prod \
+                          --icon "🔴" --title "Score canary" \
+                          --text "Fixtures were played last weekend and none came back scored. A feed is not delivering results." ;;
+                    20) echo "canary: a competition season has no feed"
+                        uv run match-scraper-agent notify --env prod \
+                          --icon "⚠️" --title "Score canary" \
+                          --text "A competition season has no feed configured, so part of what we scrape is going unwatched." ;;
                     *)  echo "canary: unexpected exit $code"; exit "$code" ;;
                   esac
               envFrom:

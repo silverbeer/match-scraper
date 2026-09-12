@@ -1,0 +1,76 @@
+# Alerts when no run has succeeded recently (SB-1062).
+#
+# The agent can now report its own failures, but only the failures it is alive
+# to see. This covers the ones where it never runs at all and so cannot speak:
+#
+#   * the pod could not start — ImagePullBackOff, OOMKilled, deadline exceeded
+#   * the CronJob was suspended or deleted
+#   * nothing fired, because the node was asleep — this cluster is a Mac
+#
+# It reads the run journal off the same PVC the agent writes it to. A successful
+# run writes the journal and a failed one does not, so journal age measures
+# "when did this last actually work" rather than "when did a pod last exist".
+#
+# Hourly, with an 8h staleness limit. The widest gap in the base schedule is 6h
+# (20:00 -> 02:00 ET), so 8h clears one missed slot without crying wolf, and
+# hourly checks mean the alert lands within an hour of the limit being crossed.
+#
+# Exit 10 is the finding, not a crash — same reasoning as the release watcher
+# and the score canary. Letting Kubernetes read it as a failed Job would retry
+# it and bury the signal in a restart loop.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-watchdog
+  namespace: match-scraper
+spec:
+  schedule: "30 * * * *"
+  # Named, not inherited — see k3s/agent/cronjob.yaml (SB-1060). Offset to :30
+  # so a check never lands in the same minute as the run it is judging.
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: watchdog
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  uv run match-scraper-agent watchdog --env prod --max-age-hours 8
+                  code=$?
+                  case "$code" in
+                    0)  echo "watchdog: healthy" ;;
+                    10) echo "watchdog: NO SUCCESSFUL RUN IN TOO LONG — alert sent" ;;
+                    *)  echo "watchdog: unexpected exit $code"; exit "$code" ;;
+                  esac
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              volumeMounts:
+                # Read-only: the watchdog judges the journal, it never writes one.
+                - name: agent-state
+                  mountPath: /data/agent-state
+                  readOnly: true
+              resources:
+                # Reads one small JSON file. No browser, no network scrape.
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: "250m"
+                  memory: 256Mi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state
