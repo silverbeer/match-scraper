@@ -4,7 +4,14 @@ metadata:
   name: match-scraper-agent
   namespace: match-scraper
 spec:
-  schedule: "0 2,8,14,20 * * *"  # 4x/day every day (02:00, 08:00, 14:00, 20:00 UTC) — see cronjob-weekend.yaml for the hourly Sat 15:00 → Sun 20:00 ET cadence layered on top
+  schedule: "0 2,8,14,20 * * *"  # 4x/day every day — see cronjob-weekend.yaml for the hourly Sat 15:00 → Sun 20:00 ET cadence layered on top
+  # Stated, not inherited (SB-1060). A schedule with no timeZone is read in
+  # the kube-controller-manager's local zone, which on rancher-desktop is
+  # America/New_York — so these have always been ET hours, and the comment
+  # that called them UTC was wrong for as long as it stood. Naming the zone
+  # changes no fire time; it stops the next reader doing the arithmetic in
+  # the wrong zone, which is exactly how SB-1060 happened.
+  timeZone: America/New_York
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
