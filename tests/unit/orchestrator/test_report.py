@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from src.orchestrator.planner import RunPlan, ScrapeAction, ScrapePlan
 from src.orchestrator.report import (
     _TELEGRAM_MAX_CHARS,
     _agent_awareness,
+    _clamp_detail,
     _format_delta,
     _is_last_weekend,
     _missing_kickoff_section,
     _next_scheduled_run,
     _weekend_scores_section,
+    build_failure_report,
     build_report,
+    build_watchdog_report,
 )
+
+_ET = ZoneInfo("America/New_York")
 
 
 def _match(
@@ -105,9 +111,10 @@ class TestBuildReport:
             now=now,
         )
         assert "Next run" in report
-        assert (
-            "1:00 PM EDT" in report
-        )  # Sun 14:02 UTC → next weekend slot 17:00 UTC = 1:00 PM EDT
+        # Sun 14:02 UTC is 10:02 AM EDT, and Sunday is hourly, so the next slot
+        # is 11:00 AM ET. It used to assert 1:00 PM, from reading the schedule
+        # hours as UTC when the CronJobs schedule in ET (SB-1060).
+        assert "11:00 AM EDT" in report
 
     def test_today_missing_scores_shown(self) -> None:
         now = datetime(2026, 3, 8, 14, 0, tzinfo=UTC)  # Saturday
@@ -248,42 +255,73 @@ class TestIsLastWeekend:
 
 
 class TestNextScheduledRun:
-    # Weekend schedule (Sat/Sun): 02:00, 05:00, 08:00, 11:00, 14:00, 17:00, 20:00, 23:00
-    def test_mid_morning_weekend(self) -> None:
-        now = datetime(2026, 3, 8, 10, 30, tzinfo=UTC)  # Sunday
-        next_run, _delta = _next_scheduled_run(now)
-        assert next_run.hour == 11
+    """The CronJobs schedule in America/New_York, so the answer is worked out
+    there. These hours are ET, not UTC (SB-1060).
 
-    def test_after_last_slot_weekend(self) -> None:
-        now = datetime(2026, 3, 8, 23, 30, tzinfo=UTC)  # Sunday after last slot
-        next_run, _delta = _next_scheduled_run(now)
-        assert next_run.hour == 2
-        assert next_run.day == 9  # Monday
+        weekdays   02, 08, 14, 20
+        Saturday   02, 08, 14, then hourly 15-23
+        Sunday     hourly 00-20
+    """
 
-    def test_before_first_slot_weekend(self) -> None:
-        now = datetime(2026, 3, 8, 1, 0, tzinfo=UTC)  # Sunday
-        next_run, _ = _next_scheduled_run(now)
-        assert next_run.hour == 2
-
-    def test_extra_slot_weekend(self) -> None:
-        now = datetime(
-            2026, 3, 8, 21, 0, tzinfo=UTC
-        )  # Sunday 21:00 — extra slot at 23:00
-        next_run, _ = _next_scheduled_run(now)
-        assert next_run.hour == 23
-        assert next_run.day == 8  # same day
-
-    # Weekday schedule (Mon-Fri): 02:00, 08:00, 14:00, 20:00
+    # --- weekdays -----------------------------------------------------------
     def test_mid_morning_weekday(self) -> None:
-        now = datetime(2026, 3, 9, 10, 30, tzinfo=UTC)  # Monday
+        now = datetime(2026, 3, 9, 10, 30, tzinfo=_ET)  # Monday
         next_run, _delta = _next_scheduled_run(now)
         assert next_run.hour == 14
 
     def test_after_last_slot_weekday(self) -> None:
-        now = datetime(2026, 3, 9, 21, 0, tzinfo=UTC)  # Monday after last slot
+        now = datetime(2026, 3, 9, 21, 0, tzinfo=_ET)  # Monday, past 20:00
         next_run, _delta = _next_scheduled_run(now)
         assert next_run.hour == 2
         assert next_run.day == 10  # Tuesday
+
+    # --- Saturday -----------------------------------------------------------
+    def test_saturday_morning_uses_the_base_schedule(self) -> None:
+        """Before 15:00 the hourly window has not opened yet."""
+        now = datetime(2026, 9, 12, 9, 0, tzinfo=_ET)
+        next_run, _ = _next_scheduled_run(now)
+        assert next_run.hour == 14
+
+    def test_saturday_hourly_window_opens_at_15(self) -> None:
+        now = datetime(2026, 9, 12, 14, 30, tzinfo=_ET)
+        next_run, _ = _next_scheduled_run(now)
+        assert next_run.hour == 15
+
+    def test_saturday_inside_the_hourly_window(self) -> None:
+        now = datetime(2026, 9, 12, 19, 30, tzinfo=_ET)
+        next_run, _ = _next_scheduled_run(now)
+        assert next_run.hour == 20
+        assert next_run.day == 12
+
+    def test_saturday_last_slot_wraps_into_sunday(self) -> None:
+        now = datetime(2026, 9, 12, 23, 30, tzinfo=_ET)
+        next_run, _ = _next_scheduled_run(now)
+        assert next_run.hour == 0
+        assert next_run.day == 13  # Sunday
+
+    # --- Sunday -------------------------------------------------------------
+    def test_sunday_is_hourly(self) -> None:
+        now = datetime(2026, 9, 13, 11, 15, tzinfo=_ET)
+        next_run, _ = _next_scheduled_run(now)
+        assert next_run.hour == 12
+
+    def test_sunday_window_closes_at_20(self) -> None:
+        """20:00 is the last slot of the weekend — the next is Monday 02:00."""
+        now = datetime(2026, 9, 13, 20, 30, tzinfo=_ET)
+        next_run, _ = _next_scheduled_run(now)
+        assert next_run.hour == 2
+        assert next_run.day == 14  # Monday
+
+    # --- the zone itself ----------------------------------------------------
+    def test_a_utc_now_is_converted_not_read_as_et(self) -> None:
+        """Regression for SB-1060. 23:00 UTC on Saturday is 19:00 EDT, so the
+        next run is 20:00 ET. Read as if it were already ET it would answer
+        Sunday 00:00 — a five-hour lie in the report footer."""
+        now = datetime(2026, 9, 12, 23, 0, tzinfo=UTC)
+        next_run, delta = _next_scheduled_run(now)
+        assert next_run.hour == 20
+        assert next_run.day == 12
+        assert delta.total_seconds() == 3600
 
 
 class TestWeekendScores:
@@ -713,3 +751,111 @@ class TestAHundredTargets:
 
         assert len(report) < 500
         assert "112 target\\(s\\) up to date" in report
+
+
+class TestBuildFailureReport:
+    """A run that dies must say so. Every failure path used to exit silently,
+    and silence was indistinguishable from a quiet weekend (SB-1062)."""
+
+    NOW = datetime(2026, 9, 12, 18, 0, tzinfo=UTC)  # Sat 14:00 ET
+
+    def _report(self, **kwargs) -> str:
+        args = {
+            "env": "prod",
+            "run_id": "03833fd59feb",
+            "reason": "missing-table did not answer, so no plan could be built",
+            "now": self.NOW,
+        }
+        args.update(kwargs)
+        return build_failure_report(**args)
+
+    def test_says_plainly_that_nothing_was_scraped(self) -> None:
+        """The old silence let a reader assume the quiet meant no work to do."""
+        assert "No matches were scraped" in self._report()
+
+    def test_names_the_environment_and_run(self) -> None:
+        report = self._report()
+        assert "prod" in report
+        assert "03833fd59feb" in report
+
+    def test_carries_the_reason_and_detail(self) -> None:
+        report = self._report(detail="Server error '500 Internal Server Error'")
+        assert "did not answer" in report
+        assert "500 Internal Server Error" in report
+
+    def test_names_the_phase_when_known(self) -> None:
+        assert "planning" in self._report(phase="planning")
+
+    def test_omits_optional_lines_when_absent(self) -> None:
+        report = self._report()
+        assert "Failed at:" not in report
+        assert "Target:" not in report
+        assert "Detail:" not in report
+
+    def test_includes_a_target_for_a_targeted_run(self) -> None:
+        # MarkdownV2 escaping: hyphens arrive backslashed.
+        assert r"u14\-hg\-florida" in self._report(target="u14-hg-florida")
+
+    def test_points_at_the_next_scheduled_run(self) -> None:
+        """Saturday 14:00 ET is inside the base schedule; next is 15:00."""
+        assert "3:00 PM EDT" in self._report()
+
+    def test_stays_inside_the_telegram_limit(self) -> None:
+        """A failure report that fails to send is the bug this change fixes."""
+        report = self._report(detail="boom " * 5000)
+        assert len(report) <= _TELEGRAM_MAX_CHARS
+
+
+class TestClampDetail:
+    def test_short_detail_is_untouched(self) -> None:
+        assert _clamp_detail("a 500 from PostgREST") == "a 500 from PostgREST"
+
+    def test_whitespace_is_collapsed(self) -> None:
+        """Tracebacks and PostgREST errors arrive full of newlines."""
+        assert _clamp_detail("line one\n\n  line two\t") == "line one line two"
+
+    def test_long_detail_is_truncated_with_an_ellipsis(self) -> None:
+        out = _clamp_detail("x" * 900, limit=100)
+        assert len(out) == 100
+        assert out.endswith("…")
+
+
+class TestBuildWatchdogReport:
+    NOW = datetime(2026, 9, 12, 18, 0, tzinfo=UTC)  # Sat 14:00 ET
+
+    def test_reports_a_stale_journal_with_its_age(self) -> None:
+        report = build_watchdog_report(
+            env="prod",
+            last_run_at="2026-09-11T18:00:29+00:00",
+            age_hours=20.0,
+            max_age_hours=8.0,
+            reason="The last successful run was 20.0h ago",
+            now=self.NOW,
+        )
+        assert "No successful run in too long" in report
+        assert r"20\.0h" in report  # MarkdownV2 escapes the decimal point
+        assert "8h limit" in report
+
+    def test_reports_a_missing_journal(self) -> None:
+        report = build_watchdog_report(
+            env="prod",
+            last_run_at=None,
+            age_hours=None,
+            max_age_hours=8.0,
+            reason="No run journal could be read",
+            now=self.NOW,
+        )
+        assert "No run journal found at all" in report
+
+    def test_explains_that_the_agent_probably_never_started(self) -> None:
+        """The distinguishing fact: the agent reports its own failures now, so
+        silence from it points at never having run."""
+        report = build_watchdog_report(
+            env="prod",
+            last_run_at=None,
+            age_hours=None,
+            max_age_hours=8.0,
+            reason="No run journal could be read",
+            now=self.NOW,
+        )
+        assert "never" in report and "started" in report

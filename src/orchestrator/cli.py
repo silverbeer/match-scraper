@@ -74,6 +74,46 @@ def _send_email_alert(settings: AgentSettings, subject: str, body: str) -> None:
         logger.error("email_alert.failed", error=str(exc))
 
 
+def _send_telegram_failure(
+    settings: AgentSettings,
+    *,
+    env: str,
+    run_id: str,
+    reason: str,
+    detail: str = "",
+    target: str | None = None,
+    phase: str = "",
+) -> None:
+    """Tell Telegram the run died.
+
+    Every failure path used to exit without sending anything, because
+    _send_telegram_report sits after the try/except and both handlers skip it.
+    A successful run always reported, so silence meant either "quiet weekend"
+    or "dead" — indistinguishable, and on a day when every target correctly
+    SKIPs the healthy signal is near-silence too. Four consecutive runs died
+    unnoticed on 2026-09-11/12 (SB-1062).
+
+    Never raises: a failure inside the failure notifier must not replace the
+    exit code the caller is on its way to returning.
+    """
+    from src.orchestrator.report import build_failure_report
+
+    try:
+        message = build_failure_report(
+            env=env,
+            run_id=run_id,
+            reason=reason,
+            detail=detail,
+            target=target,
+            phase=phase,
+        )
+        _send_telegram_message(
+            settings, message, subject="[match-scraper-agent] Run failed"
+        )
+    except Exception as exc:  # pragma: no cover — belt and braces
+        logger.warning("telegram.failure_report_failed", error=str(exc))
+
+
 def _send_telegram_report(
     settings: AgentSettings,
     result: Any,
@@ -248,6 +288,15 @@ def run(
                     mt_status=mt_status_str,
                     reason="Cannot plan without MT data — halting run",
                 )
+                _send_telegram_failure(
+                    settings,
+                    env=env,
+                    run_id=run_id,
+                    target=target,
+                    phase="planning",
+                    reason="missing-table did not answer, so no plan could be built",
+                    detail=mt_status_str.removeprefix("failed:"),
+                )
                 raise typer.Exit(code=1)
 
             # Scrape the current segment, not the whole remaining season: a
@@ -293,9 +342,20 @@ def run(
         result = asyncio.run(run_pipeline(plan, ctx, journal))
 
     except typer.Exit:
+        # Already reported at the point it was decided — the halt paths know
+        # which phase they are in and say so, which a handler here could not.
         raise
     except Exception as exc:
         logger.error("engine.failed", error=str(exc), exc_info=exc)
+        _send_telegram_failure(
+            settings,
+            env=env,
+            run_id=run_id,
+            target=target,
+            phase="pipeline",
+            reason=f"The run raised {type(exc).__name__}",
+            detail=str(exc),
+        )
         raise typer.Exit(code=1) from None
 
     logger.info(
@@ -908,6 +968,140 @@ def _send_telegram_message(
             subject=subject,
             body=f"Telegram notification failed: {exc}\n\n{message}",
         )
+
+
+@app.command()
+def watchdog(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    max_age_hours: Annotated[
+        float,
+        typer.Option(
+            "--max-age-hours",
+            help="Alert when the last successful run is older than this.",
+        ),
+    ] = 8.0,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report the finding but send nothing."),
+    ] = False,
+) -> None:
+    """
+    Alert when no run has succeeded recently.
+
+    Covers the failures nothing inside the agent can report, because in all of
+    them the agent never runs: a pod that could not start (ImagePullBackOff,
+    OOMKilled), a CronJob suspended or deleted, or a sleeping node — this
+    cluster is a Mac (SB-1062).
+
+    Reads the run journal, which a successful run writes and a failed one does
+    not, so journal age is a direct measure of "when did this last work".
+
+    Exit codes are outcomes, not crashes, matching the release watcher and the
+    score canary: 0 healthy, 10 stale or missing. A non-zero exit that
+    Kubernetes read as a failed Job would retry it and bury the signal.
+    """
+    from datetime import UTC, datetime
+
+    from src.orchestrator.journal import read_journal
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.report import build_watchdog_report
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(json_output=settings.json_logs)
+
+    journal = read_journal(
+        settings.journal_s3_bucket,
+        settings.journal_s3_key,
+        settings.journal_path,
+    )
+
+    now = datetime.now(tz=UTC)
+    last_run_at: str | None = None
+    age_hours: float | None = None
+
+    if journal is None:
+        reason = "No run journal could be read"
+    else:
+        last_run_at = journal.timestamp
+        try:
+            age_hours = (
+                now - datetime.fromisoformat(journal.timestamp)
+            ).total_seconds() / 3600
+        except ValueError:
+            reason = f"Run journal has an unreadable timestamp: {journal.timestamp}"
+            age_hours = None
+        else:
+            if age_hours <= max_age_hours:
+                logger.info(
+                    "watchdog.healthy",
+                    last_run_at=last_run_at,
+                    age_hours=round(age_hours, 2),
+                    max_age_hours=max_age_hours,
+                )
+                typer.echo(
+                    f"watchdog: last successful run {age_hours:.1f}h ago — healthy"
+                )
+                return
+            reason = f"The last successful run was {age_hours:.1f}h ago"
+
+    logger.error(
+        "watchdog.stale",
+        last_run_at=last_run_at,
+        age_hours=None if age_hours is None else round(age_hours, 2),
+        max_age_hours=max_age_hours,
+        reason=reason,
+    )
+    typer.echo(f"watchdog: STALE — {reason}")
+
+    if not dry_run:
+        _send_telegram_message(
+            settings,
+            build_watchdog_report(
+                env=env,
+                last_run_at=last_run_at,
+                age_hours=age_hours,
+                max_age_hours=max_age_hours,
+                reason=reason,
+                now=now,
+            ),
+            subject="[match-scraper-agent] No successful run in too long",
+        )
+
+    raise typer.Exit(code=10)
+
+
+@app.command()
+def notify(
+    text: Annotated[str, typer.Option("--text", help="Message body to send.")],
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    title: Annotated[
+        str, typer.Option("--title", help="Bold first line.")
+    ] = "match-scraper",
+    icon: Annotated[str, typer.Option("--icon", help="Leading emoji.")] = "⚠️",
+) -> None:
+    """
+    Send one plain Telegram message.
+
+    For manifests that reach a finding in shell and had nowhere to put it — the
+    score canary echoed "FIXTURES PLAYED AND NONE SCORED" to container stdout
+    and exited 0, where nobody would ever read it (SB-1062). Text is escaped
+    here so a caller does not have to know MarkdownV2.
+    """
+    from telegram_notify import escape
+
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(json_output=settings.json_logs)
+
+    message = "\n".join([f"{icon} *{escape(title)}*", "", escape(text)])
+    _send_telegram_message(settings, message, subject=f"[match-scraper-agent] {title}")
 
 
 @app.command(name="watch-release")

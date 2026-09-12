@@ -8,9 +8,15 @@ from zoneinfo import ZoneInfo
 
 from telegram_notify import escape
 
-# K3s CronJob schedule hours (UTC) — weekdays 4x, weekends 8x
+# K3s CronJob schedule hours, in America/New_York — the zone every CronJob in
+# k3s/agent now names (SB-1060). These were listed as UTC and compared against a
+# UTC `now`, which put every "next run" in the report four hours out; the weekend
+# list also described the `0 5,11,17,23` manifest that was committed and never
+# applied. Base runs 4x daily, and the weekend adds an hourly window from 15:00
+# Saturday to 20:00 Sunday.
 _CRON_HOURS_WEEKDAY = [2, 8, 14, 20]
-_CRON_HOURS_WEEKEND = [2, 5, 8, 11, 14, 17, 20, 23]
+_CRON_HOURS_SATURDAY = sorted({*_CRON_HOURS_WEEKDAY, *range(15, 24)})
+_CRON_HOURS_SUNDAY = sorted({*_CRON_HOURS_WEEKDAY, *range(0, 21)})
 
 # Display timezone for reports
 _DISPLAY_TZ = ZoneInfo("America/New_York")
@@ -417,24 +423,42 @@ def _missing_kickoff_section(matches: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _cron_hours_for(day: datetime) -> list[int]:
+    """The CronJob hours that fire on this weekday, in scheduling-zone terms."""
+    weekday = day.weekday()  # 0=Mon … 6=Sun
+    if weekday == 5:
+        return _CRON_HOURS_SATURDAY
+    if weekday == 6:
+        return _CRON_HOURS_SUNDAY
+    return _CRON_HOURS_WEEKDAY
+
+
 def _next_scheduled_run(now: datetime) -> tuple[datetime, timedelta]:
-    """Compute the next scheduled run time from the cron schedule."""
-    is_weekend = now.weekday() in (5, 6)  # 5=Sat, 6=Sun
-    hours = _CRON_HOURS_WEEKEND if is_weekend else _CRON_HOURS_WEEKDAY
+    """Compute the next scheduled run time from the cron schedule.
 
-    for hour in hours:
-        candidate = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-        if candidate > now:
-            return candidate, candidate - now
+    Evaluated in _DISPLAY_TZ because that is the zone the CronJobs schedule in.
+    Doing the arithmetic on a UTC `now` against hours that are really ET put the
+    answer four hours out all the way through EDT, and would have drifted by a
+    different amount after the November change (SB-1060).
+    """
+    local_now = now.astimezone(_DISPLAY_TZ)
 
-    # Wrap to first slot tomorrow
-    tomorrow = now + timedelta(days=1)
-    tomorrow_is_weekend = tomorrow.weekday() in (5, 6)
-    tomorrow_hours = _CRON_HOURS_WEEKEND if tomorrow_is_weekend else _CRON_HOURS_WEEKDAY
-    candidate = tomorrow.replace(
-        hour=tomorrow_hours[0], minute=0, second=0, microsecond=0
-    )
-    return candidate, candidate - now
+    for hour in _cron_hours_for(local_now):
+        candidate = local_now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if candidate > local_now:
+            return candidate, candidate - local_now
+
+    # Nothing left today — wrap to the first slot on the next day that has one.
+    day = local_now
+    for _ in range(7):
+        day = day + timedelta(days=1)
+        hours = _cron_hours_for(day)
+        if hours:
+            candidate = day.replace(hour=hours[0], minute=0, second=0, microsecond=0)
+            return candidate, candidate - local_now
+
+    # Unreachable while any day has a slot, but never return a wrong time.
+    raise ValueError("no scheduled run found within seven days")
 
 
 def _format_delta(delta: timedelta) -> str:
@@ -480,6 +504,125 @@ def build_release_report(
             "Next: verify a scrape before trusting it, then discover/enrich "
             "any division whose clubs are not yet in missing-table."
         ),
+    ]
+    return "\n".join(lines)
+
+
+def build_failure_report(
+    *,
+    env: str,
+    run_id: str,
+    reason: str,
+    detail: str = "",
+    target: str | None = None,
+    phase: str = "",
+    now: datetime | None = None,
+) -> str:
+    """Build the MarkdownV2 message for a run that died before reporting.
+
+    Sent from the failure paths in the CLI, which used to exit without saying
+    anything at all. A successful run always reported, so silence meant either
+    "quiet weekend, nothing to scrape" or "dead since yesterday" — and on a day
+    when every target correctly SKIPs, the healthy signal is near-silence too.
+    That ambiguity cost four consecutive runs on 2026-09-11/12 (SB-1062).
+
+    Says plainly that nothing was scraped, because the previous behaviour let a
+    reader assume the quiet meant there was nothing to do.
+    """
+    now = now or datetime.now(tz=UTC)
+    next_run, delta = _next_scheduled_run(now)
+    next_local = next_run.astimezone(_DISPLAY_TZ)
+    next_str = next_local.strftime(f"%-I:%M %p {next_local.strftime('%Z')}")
+
+    lines = [
+        "🔴 *Run failed — nothing was scraped*",
+        "",
+        f"Environment: {escape(env)}",
+    ]
+    if target:
+        lines.append(f"Target: {escape(target)}")
+    if phase:
+        lines.append(f"Failed at: {escape(phase)}")
+    lines += [
+        f"Run: `{escape(run_id)}`",
+        "",
+        f"*Reason:* {escape(reason)}",
+    ]
+    if detail:
+        lines += ["", f"Detail: {escape(_clamp_detail(detail))}"]
+    lines += [
+        "",
+        escape("No matches were scraped or published on this run."),
+        "",
+        f"*Next scheduled run:* {escape(next_str)} \\({escape(_format_delta(delta))}\\)",
+    ]
+    return "\n".join(lines)
+
+
+def _clamp_detail(detail: str, limit: int = 400) -> str:
+    """Keep an error string short enough that the message still sends.
+
+    Telegram rejects an over-long sendMessage outright, and a failure report
+    that fails to send is the bug this whole change exists to fix (SB-1015).
+    """
+    collapsed = " ".join(detail.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 1] + "…"
+
+
+def build_watchdog_report(
+    *,
+    env: str,
+    last_run_at: str | None,
+    age_hours: float | None,
+    max_age_hours: float,
+    reason: str,
+    now: datetime | None = None,
+) -> str:
+    """Build the MarkdownV2 message for the run watchdog.
+
+    The watchdog exists for the failures no in-process handler can report: a pod
+    that never started (ImagePullBackOff, OOMKilled), a CronJob suspended or
+    deleted, or a node that was asleep — this cluster is a Mac. In all of those
+    the agent never runs, so nothing inside it can speak up (SB-1062).
+    """
+    now = now or datetime.now(tz=UTC)
+    next_run, delta = _next_scheduled_run(now)
+    next_local = next_run.astimezone(_DISPLAY_TZ)
+    next_str = next_local.strftime(f"%-I:%M %p {next_local.strftime('%Z')}")
+
+    lines = [
+        "🔴 *No successful run in too long*",
+        "",
+        f"Environment: {escape(env)}",
+        f"*Reason:* {escape(reason)}",
+        "",
+    ]
+    if last_run_at and age_hours is not None:
+        local = datetime.fromisoformat(last_run_at).astimezone(_DISPLAY_TZ)
+        stamp = local.strftime(f"%a %-d %b %-I:%M %p {local.strftime('%Z')}")
+        lines.append(f"Last successful run: {escape(stamp)}")
+        lines.append(
+            escape(
+                f"That is {age_hours:.1f}h ago, against a {max_age_hours:.0f}h limit."
+            )
+        )
+    else:
+        lines.append(
+            escape(
+                f"No run journal found at all, against a {max_age_hours:.0f}h limit."
+            )
+        )
+    lines += [
+        "",
+        escape(
+            "The agent is not reporting failures either, so it most likely never "
+            "started: a pod that could not start, a suspended CronJob, or a "
+            "sleeping node."
+        ),
+        "",
+        f"*Next scheduled run:* {escape(next_str)} \\({escape(_format_delta(delta))}\\)",
     ]
     return "\n".join(lines)
 
