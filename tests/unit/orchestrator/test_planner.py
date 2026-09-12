@@ -56,36 +56,67 @@ def _mt_target(
 
 
 class TestMatchWeekendWindow:
-    def test_on_friday(self):
-        # Friday Mar 13 → last Fri Mar 6, this Mon Mar 16
-        fri, mon = _match_weekend_window(date(2026, 3, 13))
-        assert fri == date(2026, 3, 6)
-        assert mon == date(2026, 3, 16)
+    """Two modes (SB-1064). At the weekend, scrape only the weekend being
+    played; midweek, reconcile the one gone and look at the one coming.
 
+    March 2026 reference: Sat 14th and Sun 15th are the weekend, Fri 13th
+    precedes it, Mon 16th follows it. The next weekend is the 21st/22nd.
+    """
+
+    # --- the weekend in play: Friday .. Monday, four days -------------------
     def test_on_saturday(self):
-        # Saturday Mar 14 → last Fri Mar 13, this Mon Mar 23
-        # (this Friday is Mar 20)
-        fri, mon = _match_weekend_window(date(2026, 3, 14))
-        assert fri == date(2026, 3, 13)
-        assert mon == date(2026, 3, 23)
+        start, end = _match_weekend_window(date(2026, 3, 14))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 16))
 
-    def test_on_monday(self):
-        # Monday Mar 16 → last Fri Mar 13, this Mon Mar 23
-        fri, mon = _match_weekend_window(date(2026, 3, 16))
-        assert fri == date(2026, 3, 13)
-        assert mon == date(2026, 3, 23)
+    def test_on_sunday(self):
+        start, end = _match_weekend_window(date(2026, 3, 15))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 16))
+
+    def test_on_monday_still_the_weekend_just_gone(self):
+        """Sunday evening's scores post on Monday — under SB-1058 a Sunday
+        17:00 ET kick-off is not even due until 20:00 ET."""
+        start, end = _match_weekend_window(date(2026, 3, 16))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 16))
+
+    def test_the_weekend_window_is_four_days(self):
+        for day in (date(2026, 3, 14), date(2026, 3, 15), date(2026, 3, 16)):
+            start, end = _match_weekend_window(day)
+            assert (end - start).days + 1 == 4
+
+    def test_the_weekend_window_excludes_the_next_weekend(self):
+        """The whole point: next weekend's fixtures cannot have scores yet, and
+        scraping for them 25 times over a weekend is most of the work wasted."""
+        start, end = _match_weekend_window(date(2026, 3, 14))
+        assert end < date(2026, 3, 21)  # Saturday of the following weekend
+
+    # --- midweek reconciliation: last Friday .. next Monday, eleven days ----
+    def test_on_tuesday(self):
+        start, end = _match_weekend_window(date(2026, 3, 17))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 23))
 
     def test_on_wednesday(self):
-        # Wednesday Mar 18 → last Fri Mar 13, this Mon Mar 23
-        fri, mon = _match_weekend_window(date(2026, 3, 18))
-        assert fri == date(2026, 3, 13)
-        assert mon == date(2026, 3, 23)
+        start, end = _match_weekend_window(date(2026, 3, 18))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 23))
 
     def test_on_thursday(self):
-        # Thursday Mar 19 → last Fri Mar 13, this Mon Mar 23
-        fri, mon = _match_weekend_window(date(2026, 3, 19))
-        assert fri == date(2026, 3, 13)
-        assert mon == date(2026, 3, 23)
+        start, end = _match_weekend_window(date(2026, 3, 19))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 23))
+
+    def test_on_friday(self):
+        start, end = _match_weekend_window(date(2026, 3, 20))
+        assert (start, end) == (date(2026, 3, 13), date(2026, 3, 23))
+
+    def test_midweek_covers_both_the_weekend_gone_and_the_one_coming(self):
+        start, end = _match_weekend_window(date(2026, 3, 18))  # Wednesday
+        assert start <= date(2026, 3, 14) and date(2026, 3, 15) <= end  # gone
+        assert start <= date(2026, 3, 21) and date(2026, 3, 22) <= end  # coming
+
+    def test_every_day_of_the_week_is_covered(self):
+        """No day may fall through to an empty or inverted window."""
+        for i in range(7):
+            day = date(2026, 3, 16) + timedelta(days=i)
+            start, end = _match_weekend_window(day)
+            assert start < end
 
 
 class TestComputeScrapePlan:

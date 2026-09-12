@@ -57,30 +57,48 @@ def _target_label(cfg: dict[str, str]) -> str:
 
 
 def _match_weekend_window(today: date) -> tuple[date, date]:
-    """Return a window covering last weekend through this coming Monday.
+    """Return the window a SCORE_SYNC should scrape.
 
-    Covers two weekends:
-    - Last weekend (scores may still be posting)
-    - This weekend (check for schedule changes)
+    Two modes, because the weekend and the week after it are asking different
+    questions (SB-1064):
 
-    The window starts on the Friday *before* last weekend and ends on the
-    Monday *after* this weekend.
+    Saturday, Sunday, Monday — the weekend in play, Friday through Monday.
+    Four days. During the weekend the only thing worth scraping is the weekend
+    being played; next weekend's fixtures cannot have scores yet. Monday belongs
+    here because Sunday evening's scores post on Monday — under SB-1058 a Sunday
+    17:00 ET kick-off is not even due until 20:00 ET.
+
+    Tuesday to Friday — last Friday through next Monday. Eleven days. This is
+    the reconciliation pass: whatever the weekend missed, plus the forward look
+    that notices a fixture moved or added for the weekend coming. Cheap, because
+    by midweek needs_score is normally 0 and every target SKIPs, so the width
+    costs nothing until there is something to find.
+
+    The split matters now that the weekend runs hourly (SB-1056). Twenty-five
+    runs each scraping eleven days of date-picker range, to read scores from
+    four of them, is most of a weekend's work spent on fixtures nobody has
+    played.
 
     Examples (all dates 2026):
-        Friday  Mar 20 -> Mar 13 to Mar 23  (last Fri through this Mon)
-        Monday  Mar 16 -> Mar 13 to Mar 23
-        Wednesday Mar 18 -> Mar 13 to Mar 23
+        Saturday  Sep 12 -> Sep 11 to Sep 14   (the weekend being played)
+        Sunday    Sep 13 -> Sep 11 to Sep 14
+        Monday    Sep 14 -> Sep 11 to Sep 14   (the weekend just gone)
+        Wednesday Sep 16 -> Sep 11 to Sep 21   (reconcile, and look ahead)
 
     Returns:
-        (start_friday, end_monday) covering both weekends.
+        (start, end) — Friday to Monday of the weekend in play at the weekend,
+        last Friday to next Monday midweek.
     """
     weekday = today.weekday()  # 0=Mon … 6=Sun
-    # Find this week's Friday (upcoming or today)
+
+    if weekday in (5, 6, 0):  # Saturday, Sunday, Monday
+        sat, sun = _last_weekend(today)
+        return sat - timedelta(days=1), sun + timedelta(days=1)
+
+    # Tuesday-Friday: reconcile the weekend gone and look at the one coming.
     days_until_fri = (4 - weekday) % 7
     this_friday = today + timedelta(days=days_until_fri)
-    # Last Friday is 7 days before this Friday
     last_friday = this_friday - timedelta(days=7)
-    # Monday after this weekend
     this_monday = this_friday + timedelta(days=3)
     return last_friday, this_monday
 
