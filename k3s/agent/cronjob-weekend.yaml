@@ -2,16 +2,21 @@
 # (SB-1056). The window crosses midnight, so it takes two CronJobs — a single
 # cron expression cannot say "Sat 15:00 to Sun 20:00".
 #
-# The base CronJob (cronjob.yaml, 0 2,8,14,20 UTC) already covers four hours
-# inside this window — 22:00 Sat and 04:00/10:00/16:00 Sun while the US is on
-# EDT — and concurrencyPolicy: Forbid does not span CronJobs. Those four hours
-# are therefore excluded below, so two agents never scrape the same targets at
-# the same moment and double-publish to the matches-fanout exchange.
+# The base CronJob (cronjob.yaml, 0 2,8,14,20) covers five hours inside this
+# window — 20:00 Sat and 02:00/08:00/14:00/20:00 Sun — and
+# concurrencyPolicy: Forbid does not span CronJobs. Those hours are excluded
+# below, so two agents never scrape the same targets at the same moment and
+# double-publish to the matches-fanout exchange.
 #
-# DST: the exclusions assume EDT (UTC-4). When the clocks go back on
-# 2026-11-01 the base slots land on 21:00/03:00/09:00/15:00 ET and the
-# exclusions no longer line up. Revisit then, or move the base CronJob onto
-# America/New_York as well.
+# Those are ET hours because the base CronJob is on America/New_York too. It
+# was implicit until SB-1060: a schedule with no timeZone is interpreted in the
+# kube-controller-manager's local zone, which here is America/New_York, so
+# `0 2,8,14,20` had always fired at ET hours and never at UTC ones. SB-1056
+# excluded 22/04/10/16 on the assumption it was UTC, which both collided with
+# base five times and left four holes. Do not reintroduce a UTC assumption.
+#
+# Both CronJobs now name the same zone, so they track DST together and these
+# exclusions stay aligned across the November change.
 #
 # Replaces the "0 5,11,17,23 * * 0,6" schedule that was committed in #70 and
 # never applied to the cluster.
@@ -22,8 +27,8 @@ metadata:
   name: match-scraper-agent-weekend-sat
   namespace: match-scraper
 spec:
-  # Sat 15:00-23:00 ET hourly, minus 22:00 which the base CronJob covers.
-  schedule: "0 15-21,23 * * 6"
+  # Sat 15:00-23:00 ET hourly, minus 20:00 which the base CronJob covers.
+  schedule: "0 15-19,21-23 * * 6"
   timeZone: America/New_York
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
@@ -69,12 +74,9 @@ metadata:
   name: match-scraper-agent-weekend-sun
   namespace: match-scraper
 spec:
-  # Sun 00:00-20:00 ET hourly, minus 04:00/10:00/16:00 which the base CronJob
-  # covers. The 20:00 slot is the first run of the weekend for which Sunday's
-  # own matches are visible to MT — needs_score only counts matches dated
-  # strictly before the server's UTC date, and 20:00 ET is when that rolls
-  # over (SB-1058).
-  schedule: "0 0-3,5-9,11-15,17-20 * * 0"
+  # Sun 00:00-20:00 ET hourly, minus 02:00/08:00/14:00/20:00 which the base
+  # CronJob covers. 20:00 is a base slot, so the window still ends there.
+  schedule: "0 0-1,3-7,9-13,15-19 * * 0"
   timeZone: America/New_York
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3

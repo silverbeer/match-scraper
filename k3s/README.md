@@ -6,9 +6,9 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 
 | Manifest | Resource | Schedule |
 |---|---|---|
-| `agent/cronjob.yaml` | `match-scraper-agent` | `0 2,8,14,20 * * *` |
-| `agent/cronjob-weekend.yaml` | `match-scraper-agent-weekend-sat` | `0 15-21,23 * * 6` (America/New_York) |
-| `agent/cronjob-weekend.yaml` | `match-scraper-agent-weekend-sun` | `0 0-3,5-9,11-15,17-20 * * 0` (America/New_York) |
+| `agent/cronjob.yaml` | `match-scraper-agent` | `0 2,8,14,20 * * *` (America/New_York) |
+| `agent/cronjob-weekend.yaml` | `match-scraper-agent-weekend-sat` | `0 15-19,21-23 * * 6` (America/New_York) |
+| `agent/cronjob-weekend.yaml` | `match-scraper-agent-weekend-sun` | `0 0-1,3-7,9-13,15-19 * * 0` (America/New_York) |
 | `release-watch/cronjob.yaml` | `schedule-release-watch` | `*/30 * * * *` |
 | `match-scraper/cleanup-cronjob.yaml` | `cleanup-completed-jobs` | `0 2 * * *` |
 | `score-canary/cronjob.yaml` | `score-canary` | `0 12 * * 1` |
@@ -26,15 +26,27 @@ adds an hourly run from **15:00 Saturday to 20:00 Sunday, America/New_York**
 (SB-1056). The window crosses midnight, so it is two CronJobs — one cron
 expression cannot express it.
 
-Thirty slots in that window: 26 from the weekend CronJobs, 4 already covered by
-the base CronJob at 22:00 Sat and 04:00/10:00/16:00 Sun (EDT). Those four hours
-are excluded from the weekend schedules on purpose, because `concurrencyPolicy:
+Thirty slots in that window: 25 from the weekend CronJobs, 5 already covered by
+the base CronJob at 20:00 Sat and 02:00/08:00/14:00/20:00 Sun. Those hours are
+excluded from the weekend schedules on purpose, because `concurrencyPolicy:
 Forbid` does not span CronJobs and two agents scraping the same targets at the
 same moment would double-publish to the `matches-fanout` exchange.
 
-The exclusions assume EDT. When the clocks go back on 2026-11-01 the base slots
-move to 21:00/03:00/09:00/15:00 ET and stop lining up — either shift the
-exclusions or move the base CronJob onto `America/New_York` too.
+### Every schedule here is America/New_York
+
+Including the base CronJob, whose comment claimed UTC for months and was wrong.
+**A schedule with no `timeZone` is interpreted in the kube-controller-manager's
+local zone**, and on rancher-desktop that is `America/New_York`. So
+`0 2,8,14,20` had always fired at 02:00/08:00/14:00/20:00 ET — 06:00/12:00/
+18:00/00:00 UTC — and the cluster bore that out: `score-canary` (`0 12 * * 1`,
+no zone) fired Mondays at 16:00Z, while `cleanup-completed-jobs` (`0 2 * * *`,
+`timeZone: UTC`) fired at 02:00Z exactly as written.
+
+SB-1056 did the collision arithmetic in UTC and got five collisions and four
+holes for it (SB-1060). The zone is now named on every CronJob rather than
+inherited. Naming it changed no fire time — it stops the next reader repeating
+the mistake, and it means both jobs cross into EST together in November with
+the exclusions still aligned.
 
 Frequency alone does not buy fresher scores: MT counts a match toward
 `needs_score` only once its date is strictly before the server's UTC date, so
