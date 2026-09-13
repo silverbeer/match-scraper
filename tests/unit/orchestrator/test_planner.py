@@ -598,7 +598,7 @@ class TestFetchMtStatusRetry:
         assert status == "ok"
         assert attempts == 2
 
-    def test_backoff_doubles_and_gives_up_after_four_attempts(self, monkeypatch):
+    def test_backoff_doubles_and_gives_up_after_the_budget(self, monkeypatch):
         (targets, status), attempts, sleeps = self._call(
             monkeypatch, [self._response(500)] * planner._MT_FETCH_ATTEMPTS
         )
@@ -606,8 +606,29 @@ class TestFetchMtStatusRetry:
         assert targets == []
         assert status.startswith("failed:")
         assert attempts == planner._MT_FETCH_ATTEMPTS
-        # Three waits between four attempts, no wait after the last one.
-        assert sleeps == [2.0, 4.0, 8.0]
+        # One wait fewer than attempts — nothing is slept after the last try.
+        assert sleeps == [2.0, 4.0, 8.0, 16.0, 32.0]
+
+    def test_the_budget_outlasts_the_outage_that_beat_it(self, monkeypatch):
+        """On 2026-09-12 the endpoint stayed down through all four of the
+        original attempts — about 14s — and only a fresh pod a minute later got
+        through. The budget has to be worth more than that (SB-1065)."""
+        _, _, sleeps = self._call(
+            monkeypatch, [self._response(500)] * planner._MT_FETCH_ATTEMPTS
+        )
+
+        assert sum(sleeps) >= 60
+
+    def test_a_late_recovery_still_saves_the_run(self, monkeypatch):
+        """Five failures then success: the case the old four-attempt budget lost."""
+        (targets, status), attempts, _ = self._call(
+            monkeypatch,
+            [self._response(500)] * 5 + [self._response(200, self.OK_BODY)],
+        )
+
+        assert status == "ok"
+        assert len(targets) == 1
+        assert attempts == 6
 
     def test_a_4xx_is_not_retried(self, monkeypatch):
         """A bad token or a bad query returns the same answer every time —
