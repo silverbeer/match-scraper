@@ -15,9 +15,16 @@ logger = structlog.get_logger()
 # Kickoff-sync lookahead: check matches within this many days for missing kick-off times
 _KICKOFF_LOOKAHEAD_DAYS = 14
 
-# MT's match-summary endpoint intermittently 500s on a cold Supabase gateway
-# timeout; a retry seconds later succeeds. See fetch_mt_status.
-_MT_FETCH_ATTEMPTS = 4
+# MT's match-summary endpoint 500s on a cold Supabase gateway timeout, and the
+# window it stays down for is wider than it first looked. SB-1055 allowed four
+# attempts over ~14s; the 14:00 ET run on 2026-09-12 spent all four and still
+# failed, and was only saved by the Job's backoffLimit giving it a second pod a
+# minute later. Six attempts at 2/4/8/16/32s is ~62s, sized to that outage and
+# still far inside the job's 1800s activeDeadlineSeconds (SB-1065).
+#
+# A tourniquet, not the fix: SB-1057 removes the cliff by aggregating in the
+# database rather than fetching the whole season on every call.
+_MT_FETCH_ATTEMPTS = 6
 _MT_FETCH_BACKOFF_SECONDS = 2.0
 
 
@@ -147,10 +154,15 @@ def fetch_mt_status(
 
     Retries a server-side failure before giving up. The endpoint reads the whole
     season out of PostgREST, so the first caller after an idle gap can trip
-    Supabase's gateway timeout and come back 500 while the call right behind it
-    succeeds in under two seconds (SB-1055; MT-side fix is SB-1057). This agent
-    runs hours apart and is always that first caller, and because the run halts
-    fail-fast without a plan, one cold 504 used to cost the entire run.
+    Supabase's gateway timeout and come back 500 (SB-1055; MT-side fix is
+    SB-1057). This agent runs hours apart and is always that first caller, and
+    because the run halts fail-fast without a plan, one cold 504 used to cost the
+    entire run.
+
+    The budget is ~62s across six attempts rather than the ~14s it started with:
+    on 2026-09-12 the endpoint stayed down through all four of the original
+    attempts, and only a fresh pod a minute later got through (SB-1065). That
+    pod-level retry is the backstop behind this one, and it is a single spare.
 
     Returns:
         (targets_list, status_string) where status is "ok", "failed:<reason>", or "empty".
