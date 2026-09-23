@@ -20,8 +20,8 @@ class TestMatchQueueClientInit:
             client = MatchQueueClient()
 
             assert client.broker_url == "amqp://user:pass@localhost:5672//"
-            assert client.exchange_name == "matches-fanout"
-            assert client.queue_name is None
+            assert client.exchange_name is None
+            assert client.queue_name == "matches.prod"
             mock_celery.assert_called_once_with(
                 "match_scraper", broker="amqp://user:pass@localhost:5672//"
             )
@@ -43,15 +43,40 @@ class TestMatchQueueClientInit:
         assert "RabbitMQ connection URL is required" in str(exc_info.value)
         assert "RABBITMQ_URL environment variable" in str(exc_info.value)
 
-    def test_init_default_fanout_exchange(self, monkeypatch):
-        """Test that default routing uses fanout exchange."""
+    def test_init_defaults_to_the_one_consumed_queue(self, monkeypatch):
+        """Default routing is matches.prod, not the fanout (SB-854).
+
+        The fanout was bound to matches.local, which had no consumer, so every
+        default publish silently left a duplicate there. Defaulting to the one
+        queue a worker actually drains makes that impossible.
+        """
         monkeypatch.setenv("RABBITMQ_URL", "amqp://user:pass@localhost:5672//")
 
         with patch("src.celery.queue_client.Celery"):
             client = MatchQueueClient()
 
-            assert client.exchange_name == "matches-fanout"
-            assert client.queue_name is None
+            assert client.queue_name == "matches.prod"
+            assert client.exchange_name is None
+
+    def test_default_queue_matches_the_deployed_worker(self):
+        """DEFAULT_QUEUE must agree with what the worker and agent are configured for.
+
+        k3s/agent/configmap.yaml sets AGENT_QUEUE_NAME and
+        k3s/workers/prod-deployment.yaml sets --queues. If they drift, matches
+        are published somewhere nothing consumes — which is exactly how
+        matches.local accumulated 476 of them.
+        """
+        from pathlib import Path
+
+        from src.celery.queue_client import DEFAULT_QUEUE
+
+        repo = Path(__file__).resolve().parents[2]
+
+        agent_cm = (repo / "k3s/agent/configmap.yaml").read_text()
+        assert f'AGENT_QUEUE_NAME: "{DEFAULT_QUEUE}"' in agent_cm
+
+        worker = (repo / "k3s/workers/prod-deployment.yaml").read_text()
+        assert f'--queues={DEFAULT_QUEUE}"' in worker
 
     def test_init_with_custom_exchange(self, monkeypatch):
         """Test initialization with custom exchange name."""

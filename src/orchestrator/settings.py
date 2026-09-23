@@ -6,6 +6,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
+from src.celery.queue_client import DEFAULT_QUEUE
+
 ENVS_DIR = Path(__file__).resolve().parents[2] / "envs"
 
 
@@ -41,8 +43,12 @@ class AgentSettings(BaseSettings):
     academy_targets: bool = False
 
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
-    exchange_name: str = "matches-fanout"
-    queue_name: str = ""
+    # Publish to one named queue. The fanout default was removed in
+    # SB-854: it was bound to matches.local, which had no consumer, so
+    # every publish silently left a duplicate there. Set exchange_name
+    # only if you deliberately want a fan-out.
+    exchange_name: str = ""
+    queue_name: str = DEFAULT_QUEUE
     league: str = "Homegrown"
     age_group: str = "U14"
     division: str = "Northeast"
