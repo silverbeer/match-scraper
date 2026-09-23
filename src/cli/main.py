@@ -884,14 +884,14 @@ def scrape(
         Optional[str],
         typer.Option(
             "--exchange",
-            help="RabbitMQ exchange to publish to (fanout to multiple queues). Default: matches-fanout",
+            help="RabbitMQ exchange to fan out to. Default: none — publish to --queue instead.",
         ),
     ] = None,
     queue_name: Annotated[
         Optional[str],
         typer.Option(
             "--queue",
-            help="Specific queue to publish to (bypasses exchange). Use for targeting dev/prod directly",
+            help="Queue to publish to. Default: matches.prod, the only queue with a consumer.",
         ),
     ] = None,
 ) -> None:

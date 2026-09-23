@@ -20,6 +20,11 @@ from pydantic import ValidationError
 from celery import Celery
 from src.models.match_data import MatchData
 
+# The one queue with a consumer: missing-table-celery-worker-prod, which writes
+# to the cloud Supabase. Matches k3s/agent/configmap.yaml AGENT_QUEUE_NAME and
+# k3s/workers/prod-deployment.yaml --queues; change one and change the others.
+DEFAULT_QUEUE = "matches.prod"
+
 
 class MatchQueueClient:
     """
@@ -29,13 +34,21 @@ class MatchQueueClient:
     The "consumer" (Celery workers in missing-table) will process them.
 
     Supports two routing modes:
-    1. Fanout Exchange: Publish to exchange that routes to multiple queues (local + dev)
-    2. Direct Queue: Publish directly to a specific queue (for manual targeting)
+    1. Direct Queue (the default): publish to one named queue.
+    2. Fanout Exchange: publish to an exchange that routes to every bound queue.
 
-    Environment Setup (as of 2025-11-14):
-    - matches-fanout exchange routes to: matches.local + matches.dev
-    - Production (missingtable.com) now points to dev environment
-    - Local queue for local development/testing
+    Routing, as of SB-854:
+    - The default is the queue `matches.prod`, consumed by
+      `missing-table-celery-worker-prod`, which writes to the cloud Supabase.
+      That is the only consumer, and the cloud database is the system of record.
+    - The default used to be the `matches-fanout` exchange, which was bound to
+      `matches.local` as well. Nothing consumed `matches.local`, so every
+      publish silently left a duplicate there; 476 had accumulated, still
+      carrying `match_status="tbd"` for matches long since completed. The
+      binding is gone and the queue is drained.
+    - To get production data onto a local machine, restore a backup
+      (`setup-local-db.sh --from-prod`). The queue never targets a local
+      database — there is no local-database worker, and there never was.
     """
 
     def __init__(
@@ -50,25 +63,28 @@ class MatchQueueClient:
         Args:
             broker_url: RabbitMQ connection URL. Format: amqp://user:pass@host:port//
                        Defaults to RABBITMQ_URL env var. Required if not provided.
-            exchange_name: Name of fanout exchange to publish to (e.g., "matches-fanout").
-                          If set, messages go to exchange which routes to all bound queues.
-            queue_name: Name of specific queue to publish to (e.g., "matches.dev").
-                       If set, messages go directly to this queue only.
+            exchange_name: Name of a fanout exchange to publish to. If set,
+                          messages go to the exchange, which routes them to every
+                          bound queue. Prefer queue_name unless you specifically
+                          want the fan-out.
+            queue_name: Name of a specific queue to publish to (e.g. "matches.dev").
+                       Messages go to this queue only.
 
-        Note: If both exchange_name and queue_name are provided, exchange_name takes precedence.
-              If neither is provided, defaults to exchange_name="matches-fanout".
+        Note: If both exchange_name and queue_name are provided, exchange_name
+              takes precedence. If neither is provided, the default is
+              queue_name=DEFAULT_QUEUE ("matches.prod").
 
         Raises:
             ValueError: If broker_url is not provided and RABBITMQ_URL env var is not set
 
         Example:
-            # Fanout to local + dev (default)
+            # The live ingest path (default)
             client = MatchQueueClient()
 
-            # Target specific queue
+            # Target a specific queue
             client = MatchQueueClient(queue_name="matches.dev")
 
-            # Custom exchange
+            # Fan out to every bound queue
             client = MatchQueueClient(exchange_name="matches-testing")
         """
         self.broker_url = broker_url or os.getenv("RABBITMQ_URL")
@@ -80,9 +96,12 @@ class MatchQueueClient:
                 "Format: amqp://user:password@host:port//"
             )
 
-        # Configure routing: exchange takes precedence, fallback to default fanout
-        self.exchange_name = exchange_name or (None if queue_name else "matches-fanout")
-        self.queue_name = queue_name
+        # Configure routing: an explicit exchange wins; otherwise publish to a
+        # single named queue. The default is DEFAULT_QUEUE rather than the
+        # fanout, so a caller that passes nothing cannot silently seed a queue
+        # that has no consumer (SB-854).
+        self.exchange_name = exchange_name
+        self.queue_name = queue_name if (queue_name or exchange_name) else DEFAULT_QUEUE
 
         # Create Celery app (producer only, no tasks defined)
         self.app = Celery("match_scraper", broker=self.broker_url)
