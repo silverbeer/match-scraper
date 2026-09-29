@@ -84,6 +84,43 @@ class TestMatch:
         assert not match.has_score()
         assert match.get_score_string() is None
 
+    def test_postponed_match_status(self):
+        """A fixture on the placeholder date is postponed, not scheduled (SB-1136)."""
+        match = Match(
+            match_id="27379",
+            home_team="Team A",
+            away_team="Team B",
+            match_datetime=datetime.now() + timedelta(days=250),
+            postponed=True,
+        )
+
+        assert match.match_status == "postponed"
+        assert not match.is_played()
+
+    def test_a_score_outranks_the_postponed_flag(self):
+        match = Match(
+            match_id="27379",
+            home_team="Team A",
+            away_team="Team B",
+            match_datetime=datetime.now() - timedelta(days=1),
+            home_score=2,
+            away_score=1,
+            postponed=True,
+        )
+
+        assert match.match_status == "completed"
+
+    def test_postponed_is_valid_on_the_wire(self):
+        MatchData(
+            home_team="Team A",
+            away_team="Team B",
+            match_date=date(2027, 6, 8),
+            season="2026-2027",
+            age_group="U15",
+            match_type="League",
+            match_status="postponed",
+        )
+
     def test_tbd_mixed_scores(self):
         """Test match with one TBD score and one regular score."""
         past_date = datetime.now() - timedelta(days=1)

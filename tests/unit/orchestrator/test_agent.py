@@ -282,6 +282,21 @@ class TestFilterLiveScoredProtection:
         assert len(to_submit) == 1
         assert protected == []
 
+    def test_postponed_match_is_submitted(self) -> None:
+        """A postponement is the news a score sync is waiting for (SB-1136)."""
+        matches = [
+            {
+                "home_team": "FC Greater Boston Bolts",
+                "away_team": "IFA",
+                "home_score": None,
+                "away_score": None,
+                "match_status": "postponed",
+            },
+        ]
+        to_submit, protected = _filter_live_scored_protection(matches)
+        assert len(to_submit) == 1
+        assert protected == []
+
     def test_empty_input_returns_empty_lists(self) -> None:
         to_submit, protected = _filter_live_scored_protection([])
         assert to_submit == []

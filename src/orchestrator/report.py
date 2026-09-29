@@ -145,6 +145,7 @@ def build_report(
     completed = sum(1 for m in scraped_matches if m.get("match_status") == "completed")
     scheduled = sum(1 for m in scraped_matches if m.get("match_status") == "scheduled")
     tbd = sum(1 for m in scraped_matches if m.get("match_status") == "tbd")
+    postponed = sum(1 for m in scraped_matches if m.get("match_status") == "postponed")
     error_count = len(submission_errors)
 
     summary_parts = [
@@ -173,6 +174,8 @@ def build_report(
         status_parts.append(escape(f"{scheduled} scheduled"))
     if tbd:
         status_parts.append(escape(f"{tbd} tbd"))
+    if postponed:
+        status_parts.append(escape(f"{postponed} postponed"))
     if no_kickoff:
         status_parts.append(escape(f"{no_kickoff} no time"))
     if status_parts:

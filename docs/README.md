@@ -31,6 +31,7 @@ Welcome to the documentation for the MLS Match Scraper library. This library pro
 - [Async Message Queue Architecture](architecture/async-message-queue-architecture.md) - **⭐ Educational guide to the complete pipeline** (match-scraper → RabbitMQ → Celery → Supabase)
 - [RabbitMQ Fanout Pattern: Dev/Prod](architecture/rabbitmq-fanout-dev-prod.md) - **NEW** Fanout exchange pattern for environment separation
 - [Season Rollover](architecture/season-rollover.md) - **UPDATED** What breaks when MLS Next starts a new season — now led by the 2026-08 move off modular11 to the Kitman assist JSON feeds, and how conference structure is recovered from the standings feed
+- [Postponed Matches](architecture/postponed-matches.md) - **NEW** How the feed's placeholder date is recognised as a postponement, and what the MT worker does with it
 - [Fix Summary](architecture/fix-summary.md) - Summary of architectural fixes and improvements
 
 ### 📘 Guides

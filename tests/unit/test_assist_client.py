@@ -7,10 +7,12 @@ import pytest
 from freezegun import freeze_time
 
 from src.scraper.assist_client import (
+    PLACEHOLDER_MIN_FIXTURES,
     AssistClient,
     AssistEvent,
     AssistFeedError,
     AssistIndex,
+    AssistSchedule,
     feed_key,
     fetch_matches,
     league_feeds,
@@ -583,3 +585,130 @@ class TestShootout:
             away_penalty_shootout_score=None,
         ).to_match()
         assert (match.home_penalty_score, match.away_penalty_score) == (None, None)
+
+
+# ── postponements parked on the placeholder date (SB-1136) ───────────
+
+PLACEHOLDER = "2027-06-08"  # a Tuesday
+
+
+def _parked(i: int, **overrides) -> dict:
+    """A filler fixture from some other bracket, parked on the placeholder."""
+    event = {
+        "id": 9_000_000 + i,
+        "game_key": str(90_000 + i),
+        "start_time": f"{PLACEHOLDER}T14:00:00Z",
+        "local_timezone": "America/New_York",
+        "home_squad_id": 8000 + 2 * i,
+        "away_squad_id": 8001 + 2 * i,
+        "completed": False,
+        "home_organisation": {"id": 1, "name": f"Home {i}"},
+        "away_organisation": {"id": 2, "name": f"Away {i}"},
+    }
+    event.update(overrides)
+    return event
+
+
+def placeholder_schedule(
+    fillers: int = PLACEHOLDER_MIN_FIXTURES - 1, day: str = PLACEHOLDER
+) -> dict:
+    """SCHEDULE_PAYLOAD with Florida U14 fixture 26030 postponed onto ``day``."""
+    moved = dict(SCHEDULE_PAYLOAD["events"][0], start_time=f"{day}T13:00:00Z")
+    others = [_parked(i, start_time=f"{day}T14:00:00Z") for i in range(fillers)]
+    return dict(
+        SCHEDULE_PAYLOAD, events=[moved, *SCHEDULE_PAYLOAD["events"][1:], *others]
+    )
+
+
+def placeholder_handler(schedule: dict):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/data/standings/" in request.url.path:
+            return httpx.Response(200, json=STANDINGS_PAYLOAD)
+        if "/data/schedule/" in request.url.path:
+            return httpx.Response(200, json=schedule)
+        return httpx.Response(404)
+
+    return handler
+
+
+class TestPlaceholderDates:
+    def test_a_crowded_unplayed_tuesday_is_the_placeholder(self) -> None:
+        schedule = AssistSchedule.model_validate(placeholder_schedule())
+        assert schedule.placeholder_dates() == frozenset({date(2027, 6, 8)})
+
+    def test_below_the_threshold_is_just_a_midweek_date(self) -> None:
+        schedule = AssistSchedule.model_validate(
+            placeholder_schedule(fillers=PLACEHOLDER_MIN_FIXTURES - 2)
+        )
+        assert schedule.placeholder_dates() == frozenset()
+
+    def test_a_crowded_weekend_is_a_matchday(self) -> None:
+        schedule = AssistSchedule.model_validate(
+            placeholder_schedule(day="2027-06-05")  # a Saturday
+        )
+        assert schedule.placeholder_dates() == frozenset()
+
+    def test_a_result_parked_there_does_not_hide_the_placeholder(self) -> None:
+        """The live placeholder holds 13 scored fixtures among its 103."""
+        payload = placeholder_schedule()
+        payload["events"][-1] = dict(
+            payload["events"][-1], completed=True, home_score=2, away_score=0
+        )
+        schedule = AssistSchedule.model_validate(payload)
+        assert schedule.placeholder_dates() == frozenset({date(2027, 6, 8)})
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-09-28T12:00:00Z")
+class TestPostponedFixtures:
+    async def test_returned_outside_the_window_and_flagged(self) -> None:
+        async with make_client(placeholder_handler(placeholder_schedule())) as client:
+            matches = await client.get_matches(
+                division="Florida",
+                age_group="U14",
+                start_date=date(2026, 9, 25),
+                end_date=date(2026, 9, 28),
+            )
+        assert [(m.match_id, m.match_status) for m in matches] == [
+            ("26030", "postponed")
+        ]
+
+    async def test_other_brackets_on_the_placeholder_stay_out(self) -> None:
+        async with make_client(placeholder_handler(placeholder_schedule())) as client:
+            matches = await client.get_matches(division="Northeast", age_group="U14")
+        assert [m.match_id for m in matches] == ["27001"]
+
+    async def test_a_scored_fixture_on_the_placeholder_is_not_pulled_in(self) -> None:
+        payload = placeholder_schedule()
+        payload["events"][0] = dict(
+            payload["events"][0], completed=True, home_score=2, away_score=0
+        )
+        async with make_client(placeholder_handler(payload)) as client:
+            matches = await client.get_matches(
+                division="Florida",
+                age_group="U14",
+                start_date=date(2026, 9, 25),
+                end_date=date(2026, 9, 28),
+            )
+        assert matches == []
+
+    async def test_no_placeholder_changes_nothing(self) -> None:
+        async with make_client(feed_handler()) as client:
+            matches = await client.get_matches(
+                division="Florida",
+                age_group="U14",
+                start_date=date(2026, 9, 25),
+                end_date=date(2026, 9, 28),
+            )
+        assert matches == []
+
+    async def test_get_events_keeps_to_its_window(self) -> None:
+        """The release probe counts fixtures in a window; postponements are not."""
+        async with make_client(placeholder_handler(placeholder_schedule())) as client:
+            events = await client.get_events(
+                division="Florida",
+                age_group="U14",
+                start_date=date(2026, 9, 25),
+                end_date=date(2026, 9, 28),
+            )
+        assert events == []
