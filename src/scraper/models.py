@@ -52,17 +52,29 @@ class Match(BaseModel):
         description="Away penalty shootout score, when the match went to penalties",
     )
 
+    # The feed does not say "postponed"; it parks the fixture on a placeholder
+    # date, which the assist client recognises and flags here (SB-1136).
+    postponed: bool = Field(
+        False,
+        description="Parked on the feed's placeholder date — postponed, no new date yet",
+    )
+
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def match_status(self) -> Literal["scheduled", "completed", "tbd"]:
+    def match_status(self) -> Literal["scheduled", "completed", "tbd", "postponed"]:
         """Calculate match status based on datetime and scores.
 
         Rules:
+        - If flagged postponed and unscored: "postponed" — its date is a
+          placeholder, so the clock rules below would say "scheduled"
         - If match_datetime is in the future: "scheduled"
         - If match_datetime is today or in the past:
           - If both scores are integers (not TBD): "completed"
           - If scores are TBD or None: "tbd" (match played, score pending)
         """
+        if self.postponed and not self.has_score():
+            return "postponed"
+
         now = (
             datetime.now(self.match_datetime.tzinfo)
             if self.match_datetime.tzinfo

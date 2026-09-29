@@ -87,6 +87,22 @@ DEFAULT_HEADERS = {
     "Accept": "application/json",
 }
 
+# How MLS NEXT marks a postponement. The feed has no status field; a postponed
+# fixture is moved to one placeholder date instead. On 2026-09-28, after a
+# weekend of weather postponements, Tuesday 8 June 2027 held 103 fixtures (64
+# league, 39 Flex), none played, while no other June date held more than six.
+#
+# Recognised by shape rather than pinned, so the next season's placeholder is
+# found without a code change: a Tuesday-Thursday with at least this many
+# fixtures in one feed. League and Flex play weekends; a real midweek date
+# carries a handful of fixtures, not dozens.
+#
+# Not every fixture parked there is a postponement. 13 of the 103 carry a
+# result (2-0 and 3-0 among them, which reads as forfeits), so only an
+# unscored fixture on the placeholder is treated as postponed.
+PLACEHOLDER_MIN_FIXTURES = 20
+PLACEHOLDER_WEEKDAYS = frozenset({1, 2, 3})  # Tue, Wed, Thu
+
 
 class AssistFeedError(Exception):
     """Raised when a feed cannot be fetched or parsed."""
@@ -205,8 +221,13 @@ class AssistEvent(BaseModel):
                 )
         return aware.replace(tzinfo=None)
 
-    def to_match(self) -> Match:
-        """Convert to the scraper's :class:`Match` model."""
+    def to_match(self, *, postponed: bool = False) -> Match:
+        """Convert to the scraper's :class:`Match` model.
+
+        ``postponed`` is decided by the caller, which can see the whole feed:
+        whether this fixture's date is the placeholder is a fact about the
+        schedule, not about the event.
+        """
         home = self.home_organisation.name if self.home_organisation else None
         away = self.away_organisation.name if self.away_organisation else None
         if not home or not away:
@@ -226,6 +247,7 @@ class AssistEvent(BaseModel):
             away_score=self.away_score,
             home_penalty_score=home_pens,
             away_penalty_score=away_pens,
+            postponed=postponed,
         )
 
     def shootout(self) -> tuple[int | None, int | None]:
@@ -262,6 +284,18 @@ class AssistSchedule(BaseModel):
     synced_at: datetime | None = Field(
         None, description="When the platform last refreshed this feed"
     )
+
+    def placeholder_dates(self) -> frozenset[date]:
+        """Dates the feed parks postponed fixtures on (see PLACEHOLDER_MIN_FIXTURES)."""
+        counts: dict[date, int] = {}
+        for event in self.events:
+            day = event.local_datetime.date()
+            counts[day] = counts.get(day, 0) + 1
+        return frozenset(
+            day
+            for day, n in counts.items()
+            if n >= PLACEHOLDER_MIN_FIXTURES and day.weekday() in PLACEHOLDER_WEEKDAYS
+        )
 
 
 class AssistIndex(BaseModel):
@@ -432,6 +466,7 @@ class AssistClient:
         self.cache = cache if cache is not None else FeedCache()
         self._client = client
         self._owns_client = client is None
+        self._placeholders: dict[str, frozenset[date]] = {}
         self._schedules: dict[str, AssistSchedule] = {}
         self._indexes: dict[str, AssistIndex] = {}
         self._locks: dict[str, asyncio.Lock] = {}
@@ -567,13 +602,15 @@ class AssistClient:
         end_date: date | None = None,
         league: str = "Homegrown",
         feeds: Sequence[str] | None = None,
+        also_on: frozenset[date] = frozenset(),
     ) -> list[AssistEvent]:
         """
         Return the fixtures for one division/age group, newest last.
 
         ``start_date``/``end_date`` are inclusive and compared against the
         venue's local date, matching how the site displays a fixture. Omitting
-        both returns the whole season.
+        both returns the whole season. Unscored fixtures dated on any of
+        ``also_on`` are returned whatever the window.
         """
         names = tuple(feeds) if feeds is not None else league_feeds(league)
         collected: dict[int, AssistEvent] = {}
@@ -600,6 +637,7 @@ class AssistClient:
             event
             for event in collected.values()
             if _within(event.local_datetime.date(), start_date, end_date)
+            or (event.local_datetime.date() in also_on and event.home_score is None)
         ]
         events.sort(key=lambda e: (e.start_time, e.game_key))
 
@@ -628,20 +666,33 @@ class AssistClient:
         league: str = "Homegrown",
         feeds: Sequence[str] | None = None,
     ) -> list[Match]:
-        """Return :class:`Match` models for one division/age group."""
+        """Return :class:`Match` models for one division/age group.
+
+        Postponed fixtures come back whatever the window, flagged postponed
+        (SB-1136). The feed moves them out of the weekend they were due on and
+        onto a placeholder date months away, so without this a postponement
+        simply vanishes from every scrape and MT waits on a score forever.
+        """
+        names = tuple(feeds) if feeds is not None else league_feeds(league)
+        placeholders = await self.placeholder_dates(names)
         events = await self.get_events(
             division=division,
             age_group=age_group,
             start_date=start_date,
             end_date=end_date,
             league=league,
-            feeds=feeds,
+            feeds=names,
+            also_on=placeholders,
         )
         matches: list[Match] = []
         skipped = 0
         for event in events:
             try:
-                matches.append(event.to_match())
+                matches.append(
+                    event.to_match(
+                        postponed=event.local_datetime.date() in placeholders
+                    )
+                )
             except (AssistFeedError, ValueError) as exc:
                 # A single malformed fixture must not sink a whole target.
                 skipped += 1
@@ -655,6 +706,24 @@ class AssistClient:
                 extra={"skipped": skipped, "kept": len(matches)},
             )
         return matches
+
+    async def placeholder_dates(self, feeds: Sequence[str]) -> frozenset[date]:
+        """Postponement placeholder dates across ``feeds`` (cached per feed)."""
+        dates: set[date] = set()
+        for feed in feeds:
+            if feed not in self._placeholders:
+                found = (await self.schedule(feed)).placeholder_dates()
+                self._placeholders[feed] = found
+                if found:
+                    logger.info(
+                        "Postponement placeholder dates in assist feed",
+                        extra={
+                            "feed": feed,
+                            "dates": sorted(d.isoformat() for d in found),
+                        },
+                    )
+            dates |= self._placeholders[feed]
+        return frozenset(dates)
 
     async def divisions(self, feed: str) -> list[str]:
         """Division/conference names published for one feed."""

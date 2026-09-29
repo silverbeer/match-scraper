@@ -76,13 +76,17 @@ def _filter_live_scored_protection(
     information for a score sync and could overwrite live-scored MT records that
     haven't been posted on mlssoccer.com yet.
 
+    A postponement is the exception: it is exactly the news a score sync is
+    looking for — why the weekend's score never came — and a match the feed
+    has moved to its placeholder date was not live-scored (SB-1136).
+
     Returns:
         (to_submit, protected) — match dicts ready to submit, and those held back.
     """
     to_submit = []
     protected = []
     for m in matches:
-        if m.get("home_score") is not None:
+        if m.get("home_score") is not None or m.get("match_status") == "postponed":
             to_submit.append(m)
         else:
             protected.append(m)
