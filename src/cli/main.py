@@ -658,6 +658,9 @@ def build_match_dict(match: Match, config: ScrapingConfig) -> dict:
         if match.match_datetime
         and (match.match_datetime.hour or match.match_datetime.minute)
         else None,
+        # The feed's exact instant; missing-table prefers it to match_time,
+        # which carries no zone (SB-1203).
+        "scheduled_kickoff": match.scheduled_kickoff(),
         # Derived from the match date, not the wall clock: a match played in
         # September belongs to the season starting that August even if it is
         # re-scraped the following spring.

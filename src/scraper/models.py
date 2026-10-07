@@ -3,7 +3,7 @@
 Contains Pydantic models for match data, metrics, and validation methods.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
@@ -57,6 +57,14 @@ class Match(BaseModel):
     postponed: bool = Field(
         False,
         description="Parked on the feed's placeholder date — postponed, no new date yet",
+    )
+
+    # match_datetime is the venue's wall-clock time with no zone. The feed's
+    # exact instant travels alongside it so missing-table never has to guess
+    # the zone (SB-1202, SB-1203). None for sources that don't give one.
+    kickoff_utc: Optional[datetime] = Field(
+        None,
+        description="Exact kick-off instant from the feed (timezone-aware)",
     )
 
     @computed_field  # type: ignore[prop-decorator]
@@ -117,6 +125,22 @@ class Match(BaseModel):
         if self.home_team.strip().lower() == self.away_team.strip().lower():
             raise ValueError("home_team and away_team cannot be the same")
         return self
+
+    def scheduled_kickoff(self) -> Optional[str]:
+        """The exact kick-off as an ISO 8601 UTC string, or None when unknown.
+
+        None when the source gave no instant, when the local time is midnight
+        (the feed's "time not set", the same rule that omits match_time), and
+        for a postponed fixture, whose date is a placeholder.
+        """
+        if self.kickoff_utc is None or self.postponed:
+            return None
+        if not (self.match_datetime.hour or self.match_datetime.minute):
+            return None
+        aware = self.kickoff_utc
+        if aware.tzinfo is None:
+            aware = aware.replace(tzinfo=timezone.utc)
+        return aware.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def has_score(self) -> bool:
         """Check if the match has score information.

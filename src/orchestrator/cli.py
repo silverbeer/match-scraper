@@ -565,6 +565,9 @@ def scrape(
                 if m.match_datetime.hour or m.match_datetime.minute
                 else {}
             ),
+            # The feed's exact instant; missing-table prefers it to
+            # match_time, which carries no zone (SB-1203).
+            "scheduled_kickoff": m.scheduled_kickoff(),
             "season": _current_season(),
             "age_group": config.age_group,
             "match_type": "League",

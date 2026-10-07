@@ -124,6 +124,9 @@ async def run_one_team_audit(
                 if m.match_datetime.hour or m.match_datetime.minute
                 else {}
             ),
+            # The feed's exact instant; missing-table prefers it to
+            # match_time, which carries no zone (SB-1203).
+            "scheduled_kickoff": m.scheduled_kickoff(),
             "season": season,
             "age_group": age_group,
             "match_type": "League",
