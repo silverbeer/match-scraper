@@ -10,6 +10,7 @@ via the JSON schema and contract tests, not shared Python code.
 """
 
 from datetime import date as DateType
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -39,6 +40,11 @@ class MatchData(BaseModel):
         None,
         pattern=r"^\d{2}:\d{2}$",
         description="Match kick-off time HH:MM (24h)",
+    )
+    # The feed's exact kick-off instant. match_time is the venue's wall clock
+    # with no zone; missing-table prefers this when present (SB-1202/1203).
+    scheduled_kickoff: datetime | None = Field(
+        None, description="Exact kick-off, ISO 8601 with a UTC offset"
     )
     division: str | None = Field(None, description="Division name")
     division_id: int | None = Field(None, ge=1, description="Division ID")
@@ -96,6 +102,14 @@ class MatchData(BaseModel):
                 f"but the score was {self.home_score}-{self.away_score}"
             )
         return self
+
+    @field_validator("scheduled_kickoff")
+    @classmethod
+    def kickoff_has_offset(cls, value: datetime | None) -> datetime | None:
+        """A kick-off without a UTC offset is the ambiguity this field ends."""
+        if value is not None and value.tzinfo is None:
+            raise ValueError("scheduled_kickoff must carry a UTC offset")
+        return value
 
     @field_validator("league")
     @classmethod

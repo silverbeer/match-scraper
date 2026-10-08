@@ -347,6 +347,23 @@ class TestAssistEvent:
         with pytest.raises(AssistFeedError, match="missing a club name"):
             AssistEvent.model_validate(raw).to_match()
 
+    def test_to_match_carries_the_utc_kickoff(self) -> None:
+        """SB-1203: San Diego FC home, 9am PDT is 16:00 UTC."""
+        raw = dict(
+            SCHEDULE_PAYLOAD["events"][0],
+            start_time="2026-10-03T16:00:00Z",
+            local_timezone="America/Los_Angeles",
+        )
+        match = AssistEvent.model_validate(raw).to_match()
+        assert match.match_datetime == datetime(2026, 10, 3, 9, 0)
+        assert match.scheduled_kickoff() == "2026-10-03T16:00:00Z"
+
+    def test_postponed_fixture_sends_no_kickoff(self) -> None:
+        match = AssistEvent.model_validate(SCHEDULE_PAYLOAD["events"][0]).to_match(
+            postponed=True
+        )
+        assert match.scheduled_kickoff() is None
+
     def test_unknown_upstream_fields_are_ignored(self) -> None:
         raw = dict(SCHEDULE_PAYLOAD["events"][0], broadcast_partner="Apple TV")
         assert AssistEvent.model_validate(raw).game_key == "26030"

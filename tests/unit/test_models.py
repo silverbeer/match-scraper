@@ -1,6 +1,6 @@
 """Unit tests for data models."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -444,3 +444,65 @@ class TestShootoutOnTheWire:
             )
         ).model_dump()
         assert published["home_penalty_score"] is None
+
+
+class TestScheduledKickoff:
+    """The feed's exact instant, sent so missing-table never guesses a zone (SB-1203)."""
+
+    @staticmethod
+    def _match(**overrides) -> Match:
+        fields = {
+            "match_id": "28458",
+            "home_team": "San Diego FC",
+            "away_team": "LA Galaxy",
+            "match_datetime": datetime(2026, 10, 3, 9, 0),
+            "kickoff_utc": datetime(2026, 10, 3, 16, 0, tzinfo=timezone.utc),
+        }
+        fields.update(overrides)
+        return Match(**fields)
+
+    def test_is_utc_iso(self):
+        assert self._match().scheduled_kickoff() == "2026-10-03T16:00:00Z"
+
+    def test_naive_instant_is_read_as_utc(self):
+        match = self._match(kickoff_utc=datetime(2026, 10, 3, 16, 0))
+        assert match.scheduled_kickoff() == "2026-10-03T16:00:00Z"
+
+    def test_none_without_an_instant(self):
+        assert self._match(kickoff_utc=None).scheduled_kickoff() is None
+
+    def test_none_when_the_time_is_not_set(self):
+        """Local midnight is the feed's "no time", the rule match_time uses."""
+        match = self._match(match_datetime=datetime(2026, 10, 3, 0, 0))
+        assert match.scheduled_kickoff() is None
+
+    def test_none_when_postponed(self):
+        assert self._match(postponed=True).scheduled_kickoff() is None
+
+
+class TestMatchDataScheduledKickoff:
+    @staticmethod
+    def _data(**overrides) -> dict:
+        data = {
+            "home_team": "San Diego FC",
+            "away_team": "LA Galaxy",
+            "match_date": "2026-10-03",
+            "season": "2026-27",
+            "age_group": "U13",
+            "match_type": "League",
+        }
+        data.update(overrides)
+        return data
+
+    def test_survives_to_the_wire_as_utc(self):
+        model = MatchData(**self._data(scheduled_kickoff="2026-10-03T16:00:00Z"))
+        assert (
+            model.model_dump(mode="json")["scheduled_kickoff"] == "2026-10-03T16:00:00Z"
+        )
+
+    def test_optional(self):
+        assert MatchData(**self._data()).scheduled_kickoff is None
+
+    def test_rejects_a_value_without_an_offset(self):
+        with pytest.raises(ValidationError, match="UTC offset"):
+            MatchData(**self._data(scheduled_kickoff="2026-10-03T16:00:00"))

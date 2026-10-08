@@ -162,3 +162,21 @@ def test_every_payload_key_survives_the_wire_contract(module_name):
     assert not unknown, (
         f"{module_name} sends keys MatchData will drop: {sorted(unknown)}"
     )
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    [
+        "src.cli.main",
+        "src.orchestrator.tools",
+        "src.orchestrator.cli",
+        "src.orchestrator.audit.runner",
+    ],
+)
+def test_every_submit_path_sends_the_utc_kickoff(module_name):
+    """match_time is the venue's wall clock with no zone; missing-table read it
+    as Eastern and stored Pacific kickoffs 3 h early (SB-1202). Every sender
+    must carry the feed's exact instant alongside it (SB-1203).
+    """
+    keys = _payload_keys(module_name, "external_match_id")
+    assert "scheduled_kickoff" in keys

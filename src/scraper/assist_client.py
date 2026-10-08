@@ -239,6 +239,11 @@ class AssistEvent(BaseModel):
         return Match(
             match_id=self.game_key,
             match_datetime=self.local_datetime,
+            kickoff_utc=(
+                self.start_time
+                if self.start_time.tzinfo
+                else self.start_time.replace(tzinfo=timezone.utc)
+            ),
             location=self.event_location.name if self.event_location else None,
             competition=self.competition.name if self.competition else None,
             home_team=home,
