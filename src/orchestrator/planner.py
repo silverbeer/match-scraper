@@ -32,6 +32,7 @@ class ScrapeAction(StrEnum):
     FULL_SYNC = "full_sync"
     SCORE_SYNC = "score_sync"
     KICKOFF_SYNC = "kickoff_sync"
+    RECONCILE = "reconcile"
     SKIP = "skip"
 
 
@@ -76,10 +77,10 @@ def _match_weekend_window(today: date) -> tuple[date, date]:
     17:00 ET kick-off is not even due until 20:00 ET.
 
     Tuesday to Friday — last Friday through next Monday. Eleven days. This is
-    the reconciliation pass: whatever the weekend missed, plus the forward look
-    that notices a fixture moved or added for the weekend coming. Cheap, because
-    by midweek needs_score is normally 0 and every target SKIPs, so the width
-    costs nothing until there is something to find.
+    the reconciliation pass: whatever the weekend missed, midweek fixtures, plus
+    the forward look that notices a fixture moved or added for the weekend
+    coming. Every target is read over it midweek, scored or not (RECONCILE,
+    SB-1348); the feed is cached HTTP, so the width costs a filter.
 
     The split matters now that the weekend runs hourly (SB-1056). Twenty-five
     runs each scraping eleven days of date-picker range, to read scores from
@@ -108,6 +109,27 @@ def _match_weekend_window(today: date) -> tuple[date, date]:
     last_friday = this_friday - timedelta(days=7)
     this_monday = this_friday + timedelta(days=3)
     return last_friday, this_monday
+
+
+def _score_window(today: date) -> tuple[date, date]:
+    """Return the window MT should count ``needs_score`` over.
+
+    The window a SCORE_SYNC scrapes, so that what MT is asked about and what
+    gets scraped are the same days. It used to be Saturday and Sunday of the
+    last weekend, which left every Friday-night and midweek fixture invisible:
+    two played on Wednesday 2026-10-14 reported ``needs_score: 0`` all week and
+    were never scored (SB-1348).
+
+    The end is capped at today. MT only counts a match once its date has
+    passed, so the days after today could add nothing.
+    """
+    start, end = _match_weekend_window(today)
+    return start, min(end, today)
+
+
+def _is_midweek(today: date) -> bool:
+    """Tuesday to Friday — the days a quiet target is reconciled (SB-1348)."""
+    return today.weekday() in (1, 2, 3, 4)
 
 
 def _mt_key(age_group: str, league: str, division: str) -> tuple[str, str, str]:
@@ -149,8 +171,8 @@ def fetch_mt_status(
 ) -> tuple[list[dict[str, Any]], str]:
     """Call MT match-summary API synchronously.
 
-    Passes last weekend's date range as score_from/score_to so that
-    needs_score only reflects matches from last weekend.
+    Passes the score-sync window (``_score_window``) as score_from/score_to,
+    so needs_score counts exactly the fixtures a SCORE_SYNC would scrape.
 
     Retries a server-side failure before giving up. The endpoint reads the whole
     season out of PostgREST, so the first caller after an idle gap can trip
@@ -172,16 +194,20 @@ def fetch_mt_status(
     if today is None:
         today = date.today()
 
-    sat, sun = _last_weekend(today)
+    score_from, score_to = _score_window(today)
     url = f"{api_url}/api/agent/match-summary"
     logger.info(
-        "planner.fetch_mt_status", url=url, season=season, score_from=sat, score_to=sun
+        "planner.fetch_mt_status",
+        url=url,
+        season=season,
+        score_from=score_from,
+        score_to=score_to,
     )
 
     params = {
         "season": season,
-        "score_from": sat.isoformat(),
-        "score_to": sun.isoformat(),
+        "score_from": score_from.isoformat(),
+        "score_to": score_to.isoformat(),
     }
     headers = {"Authorization": f"Bearer {api_key}"}
 
@@ -344,9 +370,28 @@ def compute_scrape_plan(
             )
             continue
 
-        # Fully up to date
+        # Fully up to date, as far as MT can tell. MT cannot tell that a
+        # fixture has moved: the U15 Flex game it had on Saturday 2026-10-17
+        # was played on the Wednesday before, and nothing asked (SB-1348). So
+        # midweek a quiet target is read from the feed anyway — the feed is
+        # cached HTTP, so the pass costs a filter, not a browser.
         total = mt_data.get("total", 0)
         last_played = mt_data.get("last_played_date", "none")
+        if _is_midweek(today):
+            rec_start, rec_end = _clamp(*_match_weekend_window(today), season_start)
+            plans.append(
+                ScrapePlan(
+                    target_key=target_key,
+                    target_label=label,
+                    action=ScrapeAction.RECONCILE,
+                    start_date=rec_start,
+                    end_date=rec_end,
+                    reason=f"Midweek reconcile ({total} matches in MT)",
+                    scraper_params=cfg,
+                )
+            )
+            continue
+
         plans.append(
             ScrapePlan(
                 target_key=target_key,

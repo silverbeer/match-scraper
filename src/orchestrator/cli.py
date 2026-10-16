@@ -318,6 +318,7 @@ def run(
                 mt_status=mt_status_str,
                 full_sync=sum(1 for p in plan.plans if p.action.value == "full_sync"),
                 score_sync=sum(1 for p in plan.plans if p.action.value == "score_sync"),
+                reconcile=sum(1 for p in plan.plans if p.action.value == "reconcile"),
                 skip=sum(1 for p in plan.plans if p.action.value == "skip"),
             )
 

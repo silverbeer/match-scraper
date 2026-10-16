@@ -59,5 +59,7 @@ driving SCORE_SYNC runs.
 
 MLS NEXT gives the fixture a real date and it leaves the placeholder. The next
 scrape whose window covers that date sends it as `scheduled`, and the worker
-reschedules it. The midweek window looks ahead to the coming Monday, so a new
-date is picked up at most about a week and a half before the match.
+reschedules it. The midweek window looks ahead to the coming Monday, and every
+target is reconciled over it Tuesday to Friday ([midweek
+reconcile](midweek-reconcile.md)), so a new date is picked up at most about a
+week and a half before the match.
