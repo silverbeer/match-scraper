@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.orchestrator.deps import RunContext
 from src.orchestrator.engine import (
     _filter_live_scored_protection,
+    _filter_reconcile,
     all_scored_skip,
     apply_modifiers,
     error_retry,
@@ -526,3 +527,71 @@ def _completed(value):
         return value
 
     return _coro()
+
+
+class TestReconcileProtection:
+    """RECONCILE lets future fixtures through so a moved date reaches MT, and
+    holds back unscored ones that may have been live-scored (SB-1348)."""
+
+    TODAY = date(2026, 10, 15)
+
+    @staticmethod
+    def _m(match_date: str, home_score: int | None, status: str = "scheduled"):
+        return {
+            "home_team": f"{match_date}-{home_score}",
+            "match_date": match_date,
+            "home_score": home_score,
+            "away_score": home_score,
+            "match_status": status,
+        }
+
+    def test_a_played_fixture_is_submitted(self) -> None:
+        submit, held = _filter_reconcile([self._m("2026-10-14", 1)], self.TODAY)
+        assert len(submit) == 1 and held == []
+
+    def test_an_upcoming_fixture_is_submitted_so_its_new_date_lands(self) -> None:
+        submit, held = _filter_reconcile([self._m("2026-10-17", None)], self.TODAY)
+        assert len(submit) == 1 and held == []
+
+    def test_an_unscored_past_fixture_is_held(self) -> None:
+        submit, held = _filter_reconcile([self._m("2026-10-14", None)], self.TODAY)
+        assert submit == [] and len(held) == 1
+
+    def test_an_unscored_fixture_today_is_held(self) -> None:
+        """It may be being live-scored in MT right now."""
+        submit, held = _filter_reconcile([self._m("2026-10-15", None)], self.TODAY)
+        assert submit == [] and len(held) == 1
+
+    def test_a_postponement_is_submitted(self) -> None:
+        submit, _ = _filter_reconcile(
+            [self._m("2027-06-08", None, "postponed")], self.TODAY
+        )
+        assert len(submit) == 1
+
+    def test_reconcile_runs_the_filter_in_execute_plan(self) -> None:
+        ctx = _make_ctx()
+        plan = RunPlan(plans=[_make_plan(action=ScrapeAction.RECONCILE)])
+        mock_submit = AsyncMock(return_value="Submitted 2 matches")
+
+        async def scrape_side_effect(ctx_arg, **kwargs):
+            ctx_arg._scraped_matches = [
+                self._m("2000-01-01", None),  # past, unscored: held
+                self._m("2000-01-01", 3),  # past, scored: sent
+                self._m("2999-01-01", None),  # future: sent
+            ]
+            return "Found 3 matches"
+
+        with (
+            patch(
+                "src.orchestrator.engine.scrape_matches", side_effect=scrape_side_effect
+            ),
+            patch("src.orchestrator.engine.submit_matches", mock_submit),
+        ):
+            asyncio.run(execute_plan(plan, ctx))
+
+        assert [m["match_date"] for m in ctx._scraped_matches] == [
+            "2000-01-01",
+            "2999-01-01",
+        ]
+        assert len(ctx._protected_matches) == 1
+        mock_submit.assert_awaited_once()

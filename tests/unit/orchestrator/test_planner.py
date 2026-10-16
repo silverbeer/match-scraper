@@ -143,7 +143,7 @@ class TestComputeScrapePlan:
         plan = compute_scrape_plan(
             mt_targets,
             SAMPLE_CONFIGS,
-            date(2026, 3, 12),
+            date(2026, 3, 14),  # a Saturday: midweek reconciles (SB-1348)
             SEASON_END,
             SEASON_START,
         )
@@ -252,7 +252,7 @@ class TestComputeScrapePlan:
         plan = compute_scrape_plan(
             mt_targets,
             SAMPLE_CONFIGS,
-            date(2026, 3, 12),
+            date(2026, 3, 14),  # a Saturday: midweek reconciles (SB-1348)
             SEASON_END,
             SEASON_START,
         )
@@ -348,7 +348,7 @@ class TestComputeScrapePlan:
         plan = compute_scrape_plan(
             mt_targets,
             SAMPLE_CONFIGS,
-            date(2026, 3, 12),
+            date(2026, 3, 14),  # a Saturday: midweek reconciles (SB-1348)
             SEASON_END,
             SEASON_START,
         )
@@ -660,3 +660,81 @@ class TestFetchMtStatusRetry:
         assert targets == []
         assert status == "empty"
         assert attempts == 1
+
+
+class TestMidweekFixtures:
+    """Two fixtures played on Wednesday 2026-10-14 never reached MT (SB-1348):
+    needs_score was counted over Saturday and Sunday only, and nothing ever
+    re-read a target MT thought was up to date."""
+
+    SEASON_START = date(2026, 8, 1)
+    SEASON_END = date(2027, 6, 30)
+
+    def _plan(self, today: date):
+        mt_targets = [
+            _mt_target("U13", "Homegrown", "Northeast", total=40),
+            _mt_target("U14", "Homegrown", "Northeast", total=40),
+            _mt_target("U14", "Academy", "New England", total=40),
+        ]
+        return compute_scrape_plan(
+            mt_targets, SAMPLE_CONFIGS, today, self.SEASON_END, self.SEASON_START
+        )
+
+    def test_the_score_window_covers_a_wednesday_fixture(self):
+        """On the Thursday after, the Wednesday game must count as needing a score."""
+        start, end = planner._score_window(date(2026, 10, 15))
+        assert start <= date(2026, 10, 14) <= end
+
+    def test_the_score_window_covers_friday_night(self):
+        start, end = planner._score_window(date(2026, 10, 11))  # Sunday
+        assert start == date(2026, 10, 9)
+
+    def test_the_score_window_never_reaches_past_today(self):
+        for offset in range(7):
+            today = date(2026, 10, 12) + timedelta(days=offset)
+            assert planner._score_window(today)[1] <= today
+
+    def test_mt_is_asked_about_the_score_window(self, monkeypatch):
+        seen: dict = {}
+
+        def fake_get(url, params, **_kwargs):
+            seen.update(params)
+            return httpx.Response(
+                200, json={"targets": []}, request=httpx.Request("GET", url)
+            )
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        planner.fetch_mt_status("https://x.test", "t", "2026-2027", date(2026, 10, 15))
+
+        assert seen["score_from"] == "2026-10-09"
+        assert seen["score_to"] == "2026-10-15"
+
+    def test_a_quiet_target_is_reconciled_midweek(self):
+        plan = self._plan(date(2026, 10, 15))  # Thursday
+        for p in plan.plans:
+            assert p.action == ScrapeAction.RECONCILE
+            # The rescheduled U15 Flex game: MT had it on 10-17, played 10-14.
+            assert p.start_date <= date(2026, 10, 14)
+            assert p.end_date >= date(2026, 10, 17)
+
+    def test_every_weekday_tuesday_to_friday_reconciles(self):
+        for day in range(13, 17):  # Tue 10-13 .. Fri 10-16
+            plan = self._plan(date(2026, 10, day))
+            assert {p.action for p in plan.plans} == {ScrapeAction.RECONCILE}
+
+    def test_a_quiet_target_still_skips_at_the_weekend(self):
+        for day in (17, 18, 19):  # Sat, Sun, Mon
+            plan = self._plan(date(2026, 10, day))
+            assert {p.action for p in plan.plans} == {ScrapeAction.SKIP}
+
+    def test_a_target_awaiting_scores_is_still_a_score_sync_midweek(self):
+        mt_targets = [_mt_target("U13", "Homegrown", "Northeast", needs_score=1)]
+        plan = compute_scrape_plan(
+            mt_targets,
+            SAMPLE_CONFIGS,
+            date(2026, 10, 15),
+            self.SEASON_END,
+            self.SEASON_START,
+        )
+        u13 = next(p for p in plan.plans if p.target_key == "u13-hg")
+        assert u13.action == ScrapeAction.SCORE_SYNC

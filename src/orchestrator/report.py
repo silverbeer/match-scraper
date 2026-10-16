@@ -92,9 +92,11 @@ def build_report(
         # There are 70-odd of them on a quiet run, each saying the same
         # "up to date" — listing them is most of what pushed the message past
         # Telegram's limit, and none of it is news.
+        # Midweek reconciles are the same: every quiet target gets one, so
+        # they are a count too (SB-1348).
         plan_parts = []
         for p in scrape_plan.plans:
-            if p.action.value == "skip":
+            if p.action.value in ("skip", "reconcile"):
                 continue
             icon = {
                 "full_sync": "🔄",
@@ -108,6 +110,11 @@ def build_report(
             skipped = sum(1 for p in scrape_plan.plans if p.action.value == "skip")
             active = len(scrape_plan.plans) - skipped
             lines.append(escape(f"📡 Smart scrape: {active} active, {skipped} skipped"))
+            reconciled = sum(
+                1 for p in scrape_plan.plans if p.action.value == "reconcile"
+            )
+            if reconciled:
+                lines.append(escape(f"  🔁 {reconciled} reconciled midweek"))
         for part in plan_parts:
             lines.append(part)
     elif mt_status.startswith("failed:"):

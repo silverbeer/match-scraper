@@ -93,6 +93,31 @@ def _filter_live_scored_protection(
     return to_submit, protected
 
 
+def _filter_reconcile(
+    matches: list[dict[str, Any]],
+    today: date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separate scraped matches into submit vs. protected groups for RECONCILE.
+
+    A reconcile is looking for two things MT cannot ask about: a score it never
+    counted as due, and a fixture the feed has moved (SB-1348). So it submits
+    what SCORE_SYNC does, plus every unscored fixture still in the future — that
+    is how a new date or kick-off reaches MT, and nothing can have been
+    live-scored before it kicks off.
+
+    An unscored fixture dated today or earlier is withheld, for the same reason
+    SCORE_SYNC withholds it: MT may hold a live score the feed has not caught up
+    with.
+
+    Returns:
+        (to_submit, protected) — match dicts ready to submit, and those held back.
+    """
+    to_submit, protected = _filter_live_scored_protection(matches)
+    upcoming = [m for m in protected if m.get("match_date", "") > today.isoformat()]
+    held = [m for m in protected if m.get("match_date", "") <= today.isoformat()]
+    return to_submit + upcoming, held
+
+
 # ---------------------------------------------------------------------------
 # Plan modification
 # ---------------------------------------------------------------------------
@@ -178,13 +203,16 @@ async def execute_plan(plan: RunPlan, ctx: RunContext) -> AgentResult:
             )
         )
 
-        # For SCORE_SYNC: withhold unscored matches to protect live-scored MT records.
+        # SCORE_SYNC and RECONCILE: withhold unscored matches to protect live-scored
+        # MT records (RECONCILE lets future fixtures through — see _filter_reconcile).
         # mlssoccer.com may not yet reflect a score that was entered live in MT —
         # submitting "scheduled" would overwrite the completed/scored MT record.
-        if rule.action == ScrapeAction.SCORE_SYNC and ctx._scraped_matches:
-            ctx._scraped_matches, newly_protected = _filter_live_scored_protection(
-                ctx._scraped_matches
-            )
+        protect = {
+            ScrapeAction.SCORE_SYNC: _filter_live_scored_protection,
+            ScrapeAction.RECONCILE: lambda ms: _filter_reconcile(ms, date.today()),
+        }.get(rule.action)
+        if protect and ctx._scraped_matches:
+            ctx._scraped_matches, newly_protected = protect(ctx._scraped_matches)
             ctx._protected_matches.extend(newly_protected)
             found = len(ctx._scraped_matches)
             if newly_protected:
