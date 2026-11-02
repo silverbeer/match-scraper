@@ -19,7 +19,7 @@ https://mls-assist.theintelligenceplatform.com/data/standings/<key>.json
 | Key | Competition | Events (2026-2027) |
 |-----|-------------|--------------------|
 | `mls-next-league-26-27` | Homegrown — League + Pro Player Pathway | 7,763 |
-| `mls-next-flex-26-27` | MLS NEXT Flex | 3,160 |
+| `mls-next-flex-26-27` | MLS NEXT Flex — gone since v2, now a stage of the league key | 3,160 |
 | `mls-next-2-academy-division-26-27` | Academy Division | 13,705 |
 
 The 2026-2027 season is published **only** there — modular11 answers `No data
@@ -39,6 +39,30 @@ exact and needs no name matching:
 standings.competition_brackets[].standings[].team.squad_id
     -> schedule.events[].home_squad_id / away_squad_id
 ```
+
+### v2 standings format (2026-11-01, SB-1492)
+
+The platform changed shape mid-season, without notice:
+
+- `standings/mls-next-league-26-27.json` became `version: 2`. Brackets moved to
+  `competition_season_stages[].competition_brackets` (stages `League` and
+  `Flex`), the age group is named by `age_group_id` against
+  `competition_season.age_groups`, and `squad_id` sits directly on each
+  standings row.
+- The same document now carries `events` with live scores, joined by ID to
+  `organisations`, `event_locations` and `competitions`.
+- `schedule/mls-next-league-26-27.json` stopped refreshing — `synced_at` froze
+  at 2026-10-29T17:20Z, scores null.
+- `mls-next-flex-26-27` and `mls-next-2-academy-division-26-27` answer with the
+  SPA shell. Flex is now the `Flex` stage of the league document; Academy's new
+  location is unknown.
+
+`AssistClient` reads both layouts. `FEED_STAGES` maps a feed to its v2 stage,
+and fixtures come from the standings document whenever it is v2, falling back
+to the schedule feed only for a v1 document. League and Flex fixtures are split
+by bracket (or, for a bracketless event, by competition), because the same
+squads play both. A run whose feeds declare no targets now exits 1 and alerts
+instead of reporting a successful run of nothing.
 
 `AssistIndex` in `src/scraper/assist_client.py` does this. Membership is asked
 per bracket rather than resolved per squad, because a club can sit in two

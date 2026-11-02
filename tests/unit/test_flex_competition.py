@@ -14,7 +14,12 @@ academies' League records.
 import pytest
 
 from src.models.match_data import VALID_LEAGUES, MatchData
-from src.scraper.assist_client import AssistFeedError, feed_key, league_feeds
+from src.scraper.assist_client import (
+    FEED_STAGES,
+    AssistFeedError,
+    feed_key,
+    league_feeds,
+)
 
 
 class TestLeagueValidator:
@@ -69,10 +74,12 @@ class TestFlexFeed:
     def test_flex_maps_to_its_own_feed(self):
         assert league_feeds("Flex") == ("flex",)
 
-    def test_flex_is_a_separate_competition_season_from_league(self):
-        # Different key entirely — Flex is not a slice of the league feed.
-        assert feed_key("flex", 2026) == "mls-next-flex-26-27"
-        assert feed_key("league", 2026) == "mls-next-league-26-27"
+    def test_flex_is_a_stage_of_the_league_document(self):
+        # Since the v2 standings format (SB-1492) Flex is a stage of the
+        # league document; the old flex key answers with the SPA shell.
+        assert feed_key("flex", 2026) == "mls-next-league-26-27"
+        assert FEED_STAGES["flex"] == "Flex"
+        assert FEED_STAGES["league"] == "League"
 
     def test_an_unknown_league_names_the_known_ones(self):
         with pytest.raises(AssistFeedError, match="Unknown league"):

@@ -218,6 +218,26 @@ def run(
         queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
 
         target_configs = _target_config(settings)
+        if not target_configs:
+            # The feeds declared nothing to scrape. That is never a quiet day:
+            # it means every standings feed failed to parse. Fail the run so
+            # the journal is not refreshed and the watchdog goes stale too —
+            # days of "0 targets scraped" went out as healthy runs while
+            # the platform's v2 format went unread (SB-1492).
+            logger.error(
+                "engine.no_targets",
+                reason="No standings feed declared any bracket — halting run",
+            )
+            _send_telegram_failure(
+                settings,
+                env=env,
+                run_id=run_id,
+                target=target,
+                phase="targets",
+                reason="the standings feeds declared no targets, so nothing can be scraped",
+                detail="see targets.index_failed in the run log",
+            )
+            raise typer.Exit(code=1)
         if target and target not in target_configs:
             valid = ", ".join(sorted(target_configs))
             typer.echo(f"Unknown target '{target}'. Valid targets: {valid}", err=True)

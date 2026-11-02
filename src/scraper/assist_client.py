@@ -59,10 +59,22 @@ STANDINGS_URL = BASE_URL + "/data/standings/{key}.json"
 # Competition-season key templates. ``{season}`` is the two-digit season label
 # ("26-27"). Verified live on 2026-08-24; no prior-season keys exist on this
 # platform — it went live with 2026-2027.
+#
+# Flex shares the league's key since the platform's v2 standings format (first
+# seen 2026-11-01, SB-1492): the league standings document now carries both
+# competitions as stages, and ``mls-next-flex-26-27`` answers with the SPA
+# shell. FEED_STAGES says which stage of the shared document a feed reads.
 FEED_KEY_TEMPLATES: dict[str, str] = {
     "league": "mls-next-league-{season}",
-    "flex": "mls-next-flex-{season}",
+    "flex": "mls-next-league-{season}",
     "academy": "mls-next-2-academy-division-{season}",
+}
+
+# Stage of a v2 standings document each feed reads. A feed with no entry reads
+# every stage; a v1 document has no stages and ignores this.
+FEED_STAGES: dict[str, str] = {
+    "league": "League",
+    "flex": "Flex",
 }
 
 # Which feeds make up each league as the CLI/orchestrator names them. Flex is a
@@ -302,6 +314,80 @@ class AssistSchedule(BaseModel):
             if n >= PLACEHOLDER_MIN_FIXTURES and day.weekday() in PLACEHOLDER_WEEKDAYS
         )
 
+    @classmethod
+    def from_standings(
+        cls, payload: dict, stage: str | None = None
+    ) -> AssistSchedule | None:
+        """Build a schedule from a v2 standings document, or None if it is v1.
+
+        Since 2026-11-01 the standings document carries the season's fixtures
+        with live scores, and the separate schedule feed stopped refreshing
+        (its ``synced_at`` froze at 2026-10-29T17:20Z, SB-1492). v2 events
+        refer to clubs, venues and competitions by ID; they are joined back to
+        the nested shape :class:`AssistEvent` reads.
+
+        ``stage`` keeps one competition's fixtures out of another's: the same
+        squads play League and Flex, so filtering by squad alone would merge
+        them. An event is in the stage if its bracket is, or — for the few
+        bracketless events — if its competition is one the stage's bracketed
+        events belong to.
+        """
+        season = payload.get("competition_season") or {}
+        raw_events = season.get("events")
+        if raw_events is None or "competition_season_stages" not in season:
+            return None
+
+        brackets = {
+            bracket.get("id")
+            for st in _stages(season, stage)
+            for bracket in st.get("competition_brackets") or []
+        }
+        competitions = {
+            event.get("competition_id")
+            for event in raw_events
+            if event.get("competition_bracket_id") in brackets
+        }
+        orgs = {
+            org.get("id"): {
+                "id": org.get("id"),
+                "name": org.get("name"),
+                "logo_full_path": org.get("logo_url"),
+            }
+            for org in season.get("organisations") or []
+        }
+        locations = {loc.get("id"): loc for loc in season.get("event_locations") or []}
+        comps = {comp.get("id"): comp for comp in season.get("competitions") or []}
+
+        events = []
+        for raw in raw_events:
+            bracket_id = raw.get("competition_bracket_id")
+            if bracket_id is not None:
+                if bracket_id not in brackets:
+                    continue
+            elif raw.get("competition_id") not in competitions:
+                continue
+            events.append(
+                {
+                    **raw,
+                    "competition": comps.get(raw.get("competition_id")),
+                    "home_organisation": orgs.get(raw.get("home_organisation_id")),
+                    "away_organisation": orgs.get(raw.get("away_organisation_id")),
+                    "event_location": locations.get(raw.get("event_location_id")),
+                }
+            )
+        return cls.model_validate(
+            {"events": events, "synced_at": payload.get("synced_at")}
+        )
+
+
+def _stages(season: dict, stage: str | None) -> list[dict]:
+    """The v2 stages a feed reads: the named one, or all of them."""
+    return [
+        st
+        for st in season.get("competition_season_stages") or []
+        if stage is None or st.get("name") == stage
+    ]
+
 
 class AssistIndex(BaseModel):
     """
@@ -322,22 +408,47 @@ class AssistIndex(BaseModel):
     )
 
     @classmethod
-    def from_standings(cls, key: str, payload: dict) -> AssistIndex:
-        """Build an index from a raw standings document."""
+    def from_standings(
+        cls, key: str, payload: dict, stage: str | None = None
+    ) -> AssistIndex:
+        """Build an index from a raw standings document.
+
+        Reads both layouts. v1 lists ``competition_brackets`` on the season,
+        each with an ``age_group`` object and squads under ``standings[].team``.
+        v2 (since 2026-11-01, SB-1492) nests brackets under
+        ``competition_season_stages``, names the age group by ``age_group_id``
+        against the season's ``age_groups``, and puts ``squad_id`` on the
+        standings row itself. ``stage`` picks one v2 stage; v1 ignores it.
+        """
         season = payload.get("competition_season") or {}
+        if "competition_season_stages" in season:
+            raw = [
+                bracket
+                for st in _stages(season, stage)
+                for bracket in st.get("competition_brackets") or []
+            ]
+        else:
+            raw = season.get("competition_brackets") or []
+        age_names = {
+            age.get("id"): age.get("name") for age in season.get("age_groups") or []
+        }
+
         brackets: dict[tuple[str, str], frozenset[int]] = {}
-        for bracket in season.get("competition_brackets") or []:
+        for bracket in raw:
             name = bracket.get("name")
-            age_group = (bracket.get("age_group") or {}).get("name")
+            age_group = (bracket.get("age_group") or {}).get("name") or age_names.get(
+                bracket.get("age_group_id")
+            )
             if not name or not age_group:
                 continue
             squads = {
-                (row.get("team") or {}).get("squad_id")
+                row.get("squad_id") or (row.get("team") or {}).get("squad_id")
                 for row in bracket.get("standings") or []
             }
             brackets[(name, age_group)] = frozenset(s for s in squads if s is not None)
         if not brackets:
-            raise AssistFeedError(f"Standings feed {key} declared no brackets")
+            where = f" (stage {stage!r})" if stage else ""
+            raise AssistFeedError(f"Standings feed {key}{where} declared no brackets")
         return cls(key=key, brackets=brackets)
 
     def squads(self, division: str, age_group: str) -> frozenset[int]:
@@ -474,6 +585,7 @@ class AssistClient:
         self._placeholders: dict[str, frozenset[date]] = {}
         self._schedules: dict[str, AssistSchedule] = {}
         self._indexes: dict[str, AssistIndex] = {}
+        self._standings: dict[str, dict] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def __aenter__(self) -> AssistClient:
@@ -554,16 +666,37 @@ class AssistClient:
             f"GET {url} failed after {self.MAX_RETRIES} attempts: {last_exc}"
         ) from last_exc
 
+    async def _standings_doc(self, key: str) -> dict:
+        """Fetch (and cache) one raw standings document, shared by its feeds."""
+        async with self._lock(f"standings:{key}"):
+            cached = self._standings.get(key)
+            if cached is None:
+                cached = await self._fetch_json(STANDINGS_URL.format(key=key))
+                self._standings[key] = cached
+            return cached
+
     async def schedule(self, feed: str) -> AssistSchedule:
-        """Fetch (and cache) the schedule feed for one competition season."""
+        """Fetch (and cache) the fixtures for one feed.
+
+        Read from the v2 standings document when the platform publishes one;
+        the separate schedule feed stopped refreshing when v2 arrived
+        (SB-1492). A v1 standings document carries no fixtures, so the
+        schedule feed is still the source for those.
+        """
         key = feed_key(feed, self.season_year)
-        async with self._lock(f"schedule:{key}"):
-            cached = self._schedules.get(key)
+        stage = FEED_STAGES.get(feed)
+        cache_key = f"{key}:{stage}"
+        async with self._lock(f"schedule:{cache_key}"):
+            cached = self._schedules.get(cache_key)
             if cached is not None:
                 return cached
-            payload = await self._fetch_json(SCHEDULE_URL.format(key=key))
-            schedule = AssistSchedule.model_validate(payload)
-            self._schedules[key] = schedule
+            schedule = AssistSchedule.from_standings(
+                await self._standings_doc(key), stage
+            )
+            if schedule is None:
+                payload = await self._fetch_json(SCHEDULE_URL.format(key=key))
+                schedule = AssistSchedule.model_validate(payload)
+            self._schedules[cache_key] = schedule
             logger.info(
                 "Fetched assist schedule feed",
                 extra={
@@ -580,13 +713,15 @@ class AssistClient:
     async def index(self, feed: str) -> AssistIndex:
         """Fetch (and cache) the conference index for one competition season."""
         key = feed_key(feed, self.season_year)
-        async with self._lock(f"index:{key}"):
-            cached = self._indexes.get(key)
+        stage = FEED_STAGES.get(feed)
+        cache_key = f"{key}:{stage}"
+        async with self._lock(f"index:{cache_key}"):
+            cached = self._indexes.get(cache_key)
             if cached is not None:
                 return cached
-            payload = await self._fetch_json(STANDINGS_URL.format(key=key))
-            index = AssistIndex.from_standings(key, payload)
-            self._indexes[key] = index
+            payload = await self._standings_doc(key)
+            index = AssistIndex.from_standings(key, payload, stage)
+            self._indexes[cache_key] = index
             logger.info(
                 "Built assist conference index",
                 extra={
