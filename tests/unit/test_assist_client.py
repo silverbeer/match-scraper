@@ -210,7 +210,8 @@ class TestSeasonKeys:
 
     def test_feed_keys_match_live_platform(self) -> None:
         assert feed_key("league", 2026) == "mls-next-league-26-27"
-        assert feed_key("flex", 2026) == "mls-next-flex-26-27"
+        # Flex is a stage of the league document since v2 (SB-1492).
+        assert feed_key("flex", 2026) == "mls-next-league-26-27"
         assert feed_key("academy", 2026) == "mls-next-2-academy-division-26-27"
 
     def test_unknown_feed_rejected(self) -> None:
@@ -447,9 +448,9 @@ class TestAssistClient:
         calls: list[str] = []
         async with make_client(feed_handler(calls)) as client:
             await client.get_matches(
-                division="Florida", age_group="U14", feeds=["league", "flex"]
+                division="Florida", age_group="U14", league="Academy", feeds=["league"]
             )
-        assert any("mls-next-flex-26-27" in path for path in calls), calls
+        assert all("mls-next-league-26-27" in path for path in calls), calls
 
     async def test_synced_at_exposed_for_release_detection(self) -> None:
         async with make_client(feed_handler()) as client:
@@ -729,3 +730,226 @@ class TestPostponedFixtures:
                 end_date=date(2026, 9, 28),
             )
         assert events == []
+
+
+# ---------------------------------------------------------------------------
+# v2 standings document (SB-1492)
+#
+# Since 2026-11-01 the league standings document carries League and Flex as
+# stages, names age groups by ID, and holds the fixtures with live scores. The
+# schedule feed froze at 2026-10-29T17:20Z and the flex key answers with the
+# SPA shell. Shapes below are trimmed copies of the live payload.
+# ---------------------------------------------------------------------------
+
+V2_STANDINGS = {
+    "version": 2,
+    "synced_at": "2026-11-02T01:20:09.134334Z",
+    "competition_season": {
+        "name": "League 26/27",
+        "key": "mls-next-league-26-27",
+        "competitions": [
+            {"id": 1605, "name": "League"},
+            {"id": 1606, "name": "League (Pro Player Pathway)"},
+            {"id": 1607, "name": "MLS NEXT Flex"},
+        ],
+        "age_groups": [{"id": 44, "name": "U15"}, {"id": 43, "name": "U14"}],
+        "organisations": [
+            {"id": 10, "name": "FA Euro New York", "logo_url": "https://x/euro.png"},
+            {"id": 11, "name": "TSF Academy", "logo_url": None},
+        ],
+        "event_locations": [{"id": 95, "name": "New Utrecht High School"}],
+        "competition_season_stages": [
+            {
+                "id": 1,
+                "name": "League",
+                "competition_brackets": [
+                    {
+                        "id": 41,
+                        "name": "Northeast",
+                        "age_group_id": 44,
+                        "standings": [
+                            {"position": 1, "squad_id": 100, "organisation_id": 10},
+                            {"position": 2, "squad_id": 101, "organisation_id": 11},
+                        ],
+                    }
+                ],
+            },
+            {
+                "id": 2,
+                "name": "Flex",
+                "competition_brackets": [
+                    {
+                        "id": 184,
+                        "name": "Empire",
+                        "age_group_id": 44,
+                        "competition_ids": [1607],
+                        "standings": [{"squad_id": 100}, {"squad_id": 101}],
+                    }
+                ],
+            },
+        ],
+        "events": [
+            {
+                "id": 1,
+                "game_key": "29278",
+                "start_time": "2026-10-31T21:30:00Z",
+                "local_timezone": "America/New_York",
+                "home_squad_id": 100,
+                "away_squad_id": 101,
+                "home_squad_name": "U15",
+                "away_squad_name": "U15",
+                "competition_id": 1605,
+                "competition_bracket_id": 41,
+                "completed": True,
+                "home_organisation_id": 10,
+                "away_organisation_id": 11,
+                "home_score": 3,
+                "away_score": 3,
+                "home_penalty_shootout_score": 0,
+                "away_penalty_shootout_score": 0,
+                "event_location_id": 95,
+            },
+            {
+                # Same squads, Flex competition: must stay out of League.
+                "id": 2,
+                "game_key": "26207",
+                "start_time": "2026-10-31T12:00:00Z",
+                "local_timezone": "America/New_York",
+                "home_squad_id": 101,
+                "away_squad_id": 100,
+                "competition_id": 1607,
+                "competition_bracket_id": 184,
+                "completed": True,
+                "home_organisation_id": 11,
+                "away_organisation_id": 10,
+                "home_score": 1,
+                "away_score": 1,
+                "home_penalty_shootout_score": 4,
+                "away_penalty_shootout_score": 3,
+                "event_location_id": 95,
+            },
+            {
+                # Bracketless League fixture: placed by its competition.
+                "id": 3,
+                "game_key": "29999",
+                "start_time": "2026-11-07T15:00:00Z",
+                "local_timezone": "America/New_York",
+                "home_squad_id": 100,
+                "away_squad_id": 101,
+                "competition_id": 1605,
+                "completed": False,
+                "home_organisation_id": 10,
+                "away_organisation_id": 11,
+                "event_location_id": None,
+            },
+        ],
+    },
+}
+
+# What the frozen v1 schedule feed still serves: stale, unscored.
+STALE_SCHEDULE = {
+    "synced_at": "2026-10-29T17:20:07Z",
+    "events": [
+        dict(
+            SCHEDULE_PAYLOAD["events"][3],
+            game_key="29278",
+            home_squad_id=100,
+            away_squad_id=101,
+        )
+    ],
+}
+
+
+def v2_handler(calls: list[str] | None = None):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if calls is not None:
+            calls.append(request.url.path)
+        path = request.url.path
+        if path.endswith("/standings/mls-next-league-26-27.json"):
+            return httpx.Response(200, json=V2_STANDINGS)
+        if path.endswith("/schedule/mls-next-league-26-27.json"):
+            return httpx.Response(200, json=STALE_SCHEDULE)
+        return httpx.Response(200, text=SPA_SHELL)
+
+    return handler
+
+
+class TestV2Index:
+    def test_league_stage_brackets(self) -> None:
+        index = AssistIndex.from_standings("k", V2_STANDINGS, "League")
+        assert index.squads("Northeast", "U15") == frozenset({100, 101})
+        assert index.divisions() == ["Northeast"]
+
+    def test_flex_stage_brackets(self) -> None:
+        index = AssistIndex.from_standings("k", V2_STANDINGS, "Flex")
+        assert index.divisions() == ["Empire"]
+        assert index.age_groups() == ["U15"]
+
+    def test_no_stage_reads_every_stage(self) -> None:
+        index = AssistIndex.from_standings("k", V2_STANDINGS)
+        assert index.divisions() == ["Empire", "Northeast"]
+
+    def test_unknown_stage_rejected(self) -> None:
+        with pytest.raises(AssistFeedError, match="stage 'Cup'"):
+            AssistIndex.from_standings("k", V2_STANDINGS, "Cup")
+
+
+class TestV2Schedule:
+    def test_v1_document_yields_none(self) -> None:
+        assert AssistSchedule.from_standings(STANDINGS_PAYLOAD, "League") is None
+
+    def test_league_stage_excludes_flex_fixtures(self) -> None:
+        schedule = AssistSchedule.from_standings(V2_STANDINGS, "League")
+        assert [e.game_key for e in schedule.events] == ["29278", "29999"]
+
+    def test_flex_stage_excludes_league_fixtures(self) -> None:
+        schedule = AssistSchedule.from_standings(V2_STANDINGS, "Flex")
+        assert [e.game_key for e in schedule.events] == ["26207"]
+
+    def test_ids_joined_back_to_names(self) -> None:
+        schedule = AssistSchedule.from_standings(V2_STANDINGS, "League")
+        match = schedule.events[0].to_match()
+        assert match.home_team == "FA Euro New York"
+        assert match.away_team == "TSF Academy"
+        assert (match.home_score, match.away_score) == (3, 3)
+        assert match.location == "New Utrecht High School"
+        assert match.competition == "League"
+        assert schedule.synced_at == datetime(
+            2026, 11, 2, 1, 20, 9, 134334, tzinfo=timezone.utc
+        )
+
+    def test_flex_shootout_carried(self) -> None:
+        schedule = AssistSchedule.from_standings(V2_STANDINGS, "Flex")
+        match = schedule.events[0].to_match()
+        assert (match.home_penalty_score, match.away_penalty_score) == (4, 3)
+        assert match.competition == "MLS NEXT Flex"
+
+
+class TestV2Client:
+    async def test_scores_come_from_standings_not_the_frozen_schedule(self) -> None:
+        calls: list[str] = []
+        async with make_client(v2_handler(calls)) as client:
+            matches = await client.get_matches(
+                division="Northeast",
+                age_group="U15",
+                start_date=date(2026, 10, 31),
+                end_date=date(2026, 10, 31),
+            )
+        assert [(m.match_id, m.home_score, m.away_score) for m in matches] == [
+            ("29278", 3, 3)
+        ]
+        assert not any("/schedule/" in path for path in calls), calls
+
+    async def test_league_and_flex_share_one_download(self) -> None:
+        calls: list[str] = []
+        async with make_client(v2_handler(calls)) as client:
+            await client.get_matches(division="Northeast", age_group="U15")
+            flex = await client.get_matches(
+                division="Empire", age_group="U15", league="Flex"
+            )
+        assert [m.match_id for m in flex] == ["26207"]
+        assert calls == ["/data/standings/mls-next-league-26-27.json"], calls
+
+    async def test_synced_at_reads_the_live_document(self) -> None:
+        async with make_client(v2_handler()) as client:
+            assert (await client.synced_at("flex")).date() == date(2026, 11, 2)
