@@ -519,6 +519,67 @@ class TestTargetConfigSelection:
 
         assert load.call_args.kwargs["leagues"] == ["Homegrown", "Flex", "Academy"]
 
+    def test_named_conferences_bring_in_only_those_academy_targets(self):
+        from unittest.mock import patch
+
+        from src.orchestrator import cli
+
+        declared = {
+            "u14-hg": {
+                "league": "Homegrown",
+                "division": "Northeast",
+                "age_group": "U14",
+            },
+            "u13-academy": {
+                "league": "Academy",
+                "conference": "New England",
+                "age_group": "U13",
+            },
+            "u19-academy": {
+                "league": "Academy",
+                "conference": "New England",
+                "age_group": "U19",
+            },
+            "u13-academy-south": {
+                "league": "Academy",
+                "conference": "South",
+                "age_group": "U13",
+            },
+        }
+        with patch.object(cli, "load_targets") as load:
+            load.return_value = declared  # AsyncMock: load_targets is async
+            targets = cli._target_config(
+                self._settings(academy_conferences=" New England , ")
+            )
+
+        assert load.call_args.kwargs["leagues"] == ["Homegrown", "Flex", "Academy"]
+        assert sorted(targets) == ["u13-academy", "u14-hg", "u19-academy"]
+
+    def test_academy_targets_still_takes_every_conference(self):
+        from unittest.mock import patch
+
+        from src.orchestrator import cli
+
+        declared = {
+            "u13-academy": {
+                "league": "Academy",
+                "conference": "New England",
+                "age_group": "U13",
+            },
+            "u13-academy-south": {
+                "league": "Academy",
+                "conference": "South",
+                "age_group": "U13",
+            },
+        }
+        with patch.object(cli, "load_targets") as load:
+            load.return_value = declared  # AsyncMock: load_targets is async
+            targets = cli._target_config(
+                self._settings(academy_targets=True, academy_conferences="New England")
+            )
+
+        assert sorted(targets) == ["u13-academy", "u13-academy-south"]
+
 
 def _completed(value):
     """A coroutine already holding its result, for asyncio.run to unwrap."""
