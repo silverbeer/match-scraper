@@ -23,3 +23,8 @@ data:
   AGENT_DRY_RUN: "false"
   AGENT_JSON_LOGS: "true"
   AGENT_AUDIT_SEASON_START: "2026-02-01"
+  # Academy conferences to scrape, comma-separated (SB-1653). Add a
+  # conference only once its clubs have Academy-scoped team aliases in MT —
+  # otherwise its fixtures land on the clubs' Homegrown teams (SB-1652,
+  # SB-1654 tracks the rest).
+  AGENT_ACADEMY_CONFERENCES: "New England"

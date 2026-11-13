@@ -116,6 +116,12 @@ Both CronJobs mount the `agent-state` PVC at `/data/agent-state`:
 
 Setting `AGENT_JOURNAL_S3_BUCKET` switches both to S3 instead. The cluster has no AWS credentials, so the PVC is the live path.
 
+## Academy conferences
+
+Academy Division is opt-in, one conference at a time, via `AGENT_ACADEMY_CONFERENCES` in `agent/configmap.yaml` (comma-separated, e.g. `New England,Mountain`). `AGENT_ACADEMY_TARGETS=true` takes every conference at once.
+
+Before adding a conference, check that missing-table files its clubs on **Academy** team rows. Most clubs' Homegrown team carries the bare club name the Academy feed sends, so without an Academy-scoped alias the fixtures land on the Homegrown team (SB-1652). SB-1654 lists the clubs that need one, conference by conference.
+
 ## The other directories
 
 `rabbitmq/` and `workers/` predate the agent and describe a broker (`rabbitmq-0`) that the Celery workers do **not** consume from — they use `messaging-rabbitmq`, from the messaging-platform Helm release. Treat them as historical until someone verifies otherwise.

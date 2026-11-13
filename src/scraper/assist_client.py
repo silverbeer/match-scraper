@@ -44,7 +44,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..utils.logger import get_logger
 from .models import Match
@@ -301,6 +301,36 @@ class AssistSchedule(BaseModel):
     synced_at: datetime | None = Field(
         None, description="When the platform last refreshed this feed"
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_unkeyed_events(cls, data: object) -> object:
+        """Skip fixtures the platform has not given a match ID yet.
+
+        On 2026-11-13 the Academy document held six future U19 fixtures with
+        no ``game_key`` (venue TBD). One such row failed validation for the
+        whole feed, so every Academy target and the score canary failed with
+        it (SB-1653). Without a match ID a fixture cannot be filed anyway; it
+        is picked up once the platform assigns one.
+        """
+        if not isinstance(data, dict) or not isinstance(data.get("events"), list):
+            return data
+        events = data["events"]
+        kept = [e for e in events if not isinstance(e, dict) or e.get("game_key")]
+        if len(kept) != len(events):
+            logger.warning(
+                "Skipping assist fixtures with no match ID",
+                extra={
+                    "skipped": len(events) - len(kept),
+                    "event_ids": [
+                        e.get("id")
+                        for e in events
+                        if isinstance(e, dict) and not e.get("game_key")
+                    ][:20],
+                },
+            )
+            data = {**data, "events": kept}
+        return data
 
     def placeholder_dates(self) -> frozenset[date]:
         """Dates the feed parks postponed fixtures on (see PLACEHOLDER_MIN_FIXTURES)."""

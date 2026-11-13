@@ -924,6 +924,27 @@ class TestV2Schedule:
         assert (match.home_penalty_score, match.away_penalty_score) == (4, 3)
         assert match.competition == "MLS NEXT Flex"
 
+    def test_fixture_without_match_id_is_skipped_not_fatal(self) -> None:
+        # SB-1653: six future Academy U19 fixtures had no game_key yet, and
+        # one such row used to fail validation for the whole feed.
+        import copy
+
+        doc = copy.deepcopy(V2_STANDINGS)
+        events = doc["competition_season"]["events"]
+        keyless = copy.deepcopy(events[0])
+        keyless.pop("game_key")
+        keyless["id"] = keyless["id"] + 1_000_000
+        events.append(keyless)
+
+        schedule = AssistSchedule.from_standings(doc, "League")
+        assert [e.game_key for e in schedule.events] == ["29278", "29999"]
+
+    def test_v1_feed_skips_fixture_without_match_id(self) -> None:
+        schedule = AssistSchedule.model_validate(
+            {"events": [{"id": 1, "start_time": "2026-11-08T14:00:00Z"}]}
+        )
+        assert schedule.events == []
+
 
 class TestV2Client:
     async def test_scores_come_from_standings_not_the_frozen_schedule(self) -> None:

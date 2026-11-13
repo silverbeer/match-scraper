@@ -28,17 +28,26 @@ logger = structlog.get_logger()
 def _target_config(settings: AgentSettings) -> dict[str, dict[str, str]]:
     """The targets the feeds declare, for this run.
 
-    Academy is opt-in (``AGENT_ACADEMY_TARGETS``): its feed lists 120 brackets
-    whose clubs missing-table mostly does not have yet, and a target whose
-    teams cannot be resolved drops its matches and files a name failure for
-    each one (SB-1018).
+    Academy is opt-in: ``AGENT_ACADEMY_TARGETS`` takes every conference,
+    ``AGENT_ACADEMY_CONFERENCES`` only the ones named. Most Academy clubs
+    share their bare name with the club's Homegrown team in missing-table, so
+    a conference is only safe to scrape once its clubs have Academy-scoped
+    aliases (SB-1652); until then its fixtures land on Homegrown rows.
     """
     import asyncio
 
+    conferences = settings.academy_conference_set()
     leagues = ["Homegrown", "Flex"]
-    if settings.academy_targets:
+    if settings.academy_targets or conferences:
         leagues.append("Academy")
-    return asyncio.run(load_targets(leagues=leagues))
+    targets = asyncio.run(load_targets(leagues=leagues))
+    if settings.academy_targets or not conferences:
+        return targets
+    return {
+        key: cfg
+        for key, cfg in targets.items()
+        if cfg.get("league") != "Academy" or cfg.get("conference") in conferences
+    }
 
 
 def _queue_client_kwargs(settings: AgentSettings) -> dict[str, str]:

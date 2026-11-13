@@ -41,6 +41,17 @@ class AgentSettings(BaseSettings):
     # target whose teams cannot be resolved drops its matches and files a name
     # failure for each one, so this waits on the club onboarding (SB-1018).
     academy_targets: bool = False
+    # Or name the Academy conferences to scrape, comma-separated, e.g.
+    # "New England". Lets Academy roll out one conference at a time as its
+    # clubs get Academy team rows in missing-table (SB-1653, SB-1654). Empty
+    # means none, unless academy_targets turns on every conference.
+    academy_conferences: str = ""
+
+    def academy_conference_set(self) -> frozenset[str]:
+        """The Academy conferences named in academy_conferences."""
+        return frozenset(
+            c.strip() for c in self.academy_conferences.split(",") if c.strip()
+        )
 
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
     # Publish to one named queue. The fanout default was removed in
