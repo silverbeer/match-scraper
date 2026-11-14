@@ -57,18 +57,6 @@ coverage.xml
 ehthumbs.db
 Thumbs.db
 
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-.terraform.lock.hcl
-*.tfplan
-*.tfvars.backup
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-
 # AWS
 .aws/
 

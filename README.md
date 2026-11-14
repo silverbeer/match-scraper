@@ -43,7 +43,7 @@ Quick links:
 - **[Audit System Guide](docs/guides/audit-system.md)** - Match processing audit trail and validation
 - **[K3s Deployment](docs/deployment/k3s-deployment.md)** - Kubernetes deployment guide
 - **[Testing Guide](docs/development/testing.md)** - Unit, integration, and E2E tests
-- **[Observability Setup](docs/observability/grafana-cloud-setup.md)** - Metrics and logging with Grafana Cloud
+- **[Observability](docs/observability/README.md)** - Telegram alerts; metrics not yet exported
 
 Browse all documentation in the **[docs/](docs/)** folder, organized by topic.
 

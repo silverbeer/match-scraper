@@ -22,10 +22,7 @@ Welcome to the documentation for the MLS Match Scraper library. This library pro
 - [Supabase Credentials Guide](deployment/supabase-credentials.md) - How to get Supabase credentials for production
 
 ### 📊 Observability
-- [Grafana Cloud Setup](observability/grafana-cloud-setup.md) - Metrics and logs with Grafana Cloud
-- [Fix Loki Auth](observability/fix-loki-auth.md) - Troubleshooting Loki authentication
-- [Observability Review](observability/observability-review.md) - Observability implementation review
-- [Observability Success](observability/observability-success.md) - Successful observability setup
+- [Observability](observability/README.md) - What is actually running: Telegram alerts only; metrics are not exported (OBS epic, SB-1698)
 
 ### 🏗️ Architecture
 - [Async Message Queue Architecture](architecture/async-message-queue-architecture.md) - **⭐ Educational guide to the complete pipeline** (match-scraper → RabbitMQ → Celery → Supabase)
@@ -59,10 +56,7 @@ docs/
 │   ├── k3s-deployment.md       # K3s local deployment
 │   └── supabase-credentials.md # Getting Supabase credentials
 ├── observability/               # Monitoring and logging
-│   ├── grafana-cloud-setup.md  # Grafana Cloud integration
-│   ├── fix-loki-auth.md        # Loki troubleshooting
-│   ├── observability-review.md # Implementation review
-│   └── observability-success.md # Success metrics
+│   └── README.md               # Current reality: Telegram alerts, metrics not exported
 └── architecture/                # Architecture decisions
     ├── async-message-queue-architecture.md  # Complete pipeline guide
     ├── rabbitmq-fanout-dev-prod.md         # Dev/prod environment separation
@@ -81,7 +75,7 @@ docs/
 ### I'm a DevOps Engineer
 1. For deployment: See [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) (owns CronJobs and K3s manifests)
 2. Historical reference: [K3s Deployment Guide](deployment/k3s-deployment.md)
-3. Set up [Grafana Cloud Setup](observability/grafana-cloud-setup.md)
+3. Alerts and monitoring: [Observability](observability/README.md)
 
 ### I'm New to the Project
 1. Start with the [Main README](../README.md)
@@ -92,7 +86,7 @@ docs/
 
 ### I'm Troubleshooting Issues
 1. Check [Database Fix Guide](guides/database-fix.md)
-2. Review [Fix Loki Auth](observability/fix-loki-auth.md)
+2. Review [Observability](observability/README.md) for what alerts exist
 3. [RabbitMQ Password Change](guides/rabbitmq-password-change.md) for security warnings or password updates
 
 ## 🔍 Finding Documentation
@@ -104,13 +98,13 @@ docs/
 - **CLI & Tools**: [`guides/cli-usage.md`](guides/cli-usage.md)
 - **Testing**: [`development/testing.md`](development/testing.md), [`development/e2e-testing.md`](development/e2e-testing.md)
 - **Deployment**: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md)
-- **Monitoring**: [`observability/grafana-cloud-setup.md`](observability/grafana-cloud-setup.md)
+- **Monitoring**: [`observability/README.md`](observability/README.md)
 
 ### By Task
 - **Understanding the Pipeline**: [`architecture/async-message-queue-architecture.md`](architecture/async-message-queue-architecture.md) ⭐
 - **Running Tests**: [`development/testing.md`](development/testing.md)
 - **Deploying Locally (k3s)**: See [match-scraper-agent](https://github.com/silverbeer/match-scraper-agent) (historical ref: [`deployment/k3s-deployment.md`](deployment/k3s-deployment.md))
-- **Setting up Monitoring**: [`observability/grafana-cloud-setup.md`](observability/grafana-cloud-setup.md)
+- **Monitoring**: [`observability/README.md`](observability/README.md)
 - **Using the CLI**: [`guides/cli-usage.md`](guides/cli-usage.md)
 - **Changing RabbitMQ Password**: [`guides/rabbitmq-password-change.md`](guides/rabbitmq-password-change.md)
 - **Fixing Issues**: [`guides/database-fix.md`](guides/database-fix.md)
@@ -131,7 +125,6 @@ See [CLAUDE.md](../CLAUDE.md) for AI assistant guidelines on maintaining documen
 
 - [Project Repository](https://github.com/silverbeer/match-scraper)
 - [Test Reports & Coverage](https://silverbeer.github.io/match-scraper/)
-- [Grafana Cloud](https://grafana.com/)
 ## 📧 Getting Help
 
 - Check documentation in this folder first
