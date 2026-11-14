@@ -90,9 +90,13 @@ class AgentSettings(BaseSettings):
     # against someone else's server is noise, not news.
     release_watch_failure_threshold: int = 3
 
-    # Telegram notifications (run summary report)
+    # Telegram notifications (run alerts and the daily digest)
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # Names already alerted today, so an unresolved team name is reported once
+    # a day rather than on every run until someone fixes it (SB-1679). On the
+    # agent-state PVC, which every agent CronJob mounts read-write.
+    alert_state_path: str = "/data/agent-state/alerts-sent.json"
 
     # Resend email fallback (used when Telegram fails)
     resend_api_key: str = ""
