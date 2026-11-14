@@ -115,7 +115,7 @@ docs/
 
 4. **Deployment Changes**: Update infrastructure docs
    - K8s manifest changes → Update `docs/deployment/k3s-deployment.md`
-   - Observability changes → Update `docs/observability/grafana-cloud-setup.md`
+   - Observability changes → Update `docs/observability/README.md`
 
 5. **Architecture Decisions**: Document in `docs/architecture/`
    - Major refactoring → Add or update architecture docs

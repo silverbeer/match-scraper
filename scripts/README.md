@@ -14,12 +14,6 @@ Utility scripts for the MLS Match Scraper project.
 ./scripts/deploy-k3s.sh --scraper-only     # Deploy only match-scraper
 ```
 
-**`deploy-grafana-dashboards.sh`** - Deploy Grafana dashboards
-
-```bash
-./scripts/deploy-grafana-dashboards.sh
-```
-
 ## Testing
 
 **`trigger-scrape.sh`** - Manually trigger a scrape job
