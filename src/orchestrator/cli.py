@@ -130,24 +130,44 @@ def _send_telegram_report(
     env: str,
     target: str | None,
 ) -> None:
-    """Build and send the run summary report to Telegram."""
+    """Send the run report to Telegram — only when it needs a person (SB-1679)."""
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
         logger.debug("telegram.skipped", reason="not configured")
         return
 
+    from datetime import date
+
     from telegram_notify import TelegramClient
 
+    from src.orchestrator.alert_state import mark_alerted, unalerted
     from src.orchestrator.ingest_failures import fetch_ingest_failures
-    from src.orchestrator.report import build_report
+    from src.orchestrator.report import build_report, needs_attention
 
     # Asked after the work is done: publishing to the queue says nothing about
     # whether missing-table could resolve the names, and that gap is how a run
     # that landed nothing still reported as green (SB-831).
-    ingest_failures = fetch_ingest_failures(
+    all_failures = fetch_ingest_failures(
         api_url=ctx.missing_table_api_url,
         api_key=ctx.missing_table_api_key,
         since=ctx._started_at,
     )
+    # A name stays rejected on every run until someone adds an alias; say so
+    # once a day, not every run.
+    today = date.today()
+    ingest_failures = unalerted(all_failures, settings.alert_state_path, today)
+
+    if not needs_attention(
+        submission_errors=ctx._submission_errors,
+        ingest_failures=ingest_failures,
+        protected_matches=ctx._protected_matches,
+        mt_status=ctx._mt_status,
+    ):
+        logger.info(
+            "telegram.quiet",
+            reason="nothing needs attention",
+            repeat_failures=len(all_failures),
+        )
+        return
 
     report = build_report(
         result_summary=result.summary,
@@ -172,6 +192,8 @@ def _send_telegram_report(
         )
         client.send(report)
         logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
+        if not ctx.dry_run:
+            mark_alerted(ingest_failures, settings.alert_state_path, today)
     except Exception as exc:
         logger.warning("telegram.failed", error=str(exc))
         _send_email_alert(
@@ -655,37 +677,6 @@ def scrape(
         typer.echo(f"\nSubmitted {submitted} matches to queue ({errors} errors).")
 
 
-def _send_telegram_audit_report(
-    settings: AgentSettings,
-    result: Any,
-    env: str,
-) -> None:
-    """Send audit findings report to Telegram. Silently skips if not configured."""
-    if not settings.telegram_bot_token or not settings.telegram_chat_id:
-        logger.debug("telegram.skipped", reason="not configured")
-        return
-
-    from telegram_notify import TelegramClient
-
-    from src.orchestrator.audit.report import build_audit_report
-
-    report = build_audit_report(result=result, env=env)
-    try:
-        client = TelegramClient(
-            bot_token=settings.telegram_bot_token,
-            chat_id=settings.telegram_chat_id,
-        )
-        client.send(report)
-        logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
-    except Exception as exc:
-        logger.warning("telegram.failed", error=str(exc))
-        _send_email_alert(
-            settings,
-            subject="[match-scraper-agent] Telegram failed — audit report",
-            body=f"Telegram notification failed: {exc}\n\n{report}",
-        )
-
-
 def _send_telegram_processor_report(
     settings: AgentSettings,
     result: Any,
@@ -815,8 +806,8 @@ def audit(
             f"{result.scraped_count} scraped, {result.mt_count} in MT, "
             f"{len(result.findings)} findings"
         )
-        if result.findings:
-            _send_telegram_audit_report(settings=settings, result=result, env=env)
+        # Findings are not sent to Telegram: audit-process corrects them half
+        # an hour later, and only what it cannot correct needs a person (SB-1679).
 
     if audited > 1:
         logger.info("audit.batch_done", audited=audited)
@@ -874,7 +865,9 @@ def audit_process(
         errors=result.errors,
     )
 
-    if result.matches_resubmitted or result.extra_in_mt_skipped:
+    # Corrections are routine. Only a match in MT that the feed no longer has
+    # needs a person to look before anything is cancelled (SB-1679).
+    if result.extra_in_mt_skipped:
         _send_telegram_processor_report(settings=settings, result=result, env=env)
 
     structlog.contextvars.unbind_contextvars("run_id", "env")
@@ -1104,6 +1097,70 @@ def watchdog(
         )
 
     raise typer.Exit(code=10)
+
+
+@app.command()
+def digest(
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Print the digest but send nothing."),
+    ] = False,
+) -> None:
+    """
+    Send the daily scores digest: today's matches scored, and matches played
+    but still waiting for a score (SB-1679).
+
+    The one scheduled message left. Run reports only go out when something
+    needs a person, so this is where "are the scores coming in" gets answered.
+    """
+    from datetime import UTC, datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from telegram_notify import escape
+
+    from src.orchestrator.digest import (
+        LOOKBACK_DAYS,
+        build_digest_report,
+        fetch_recent_matches,
+        summarize,
+    )
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(json_output=settings.json_logs)
+
+    now = datetime.now(tz=UTC)
+    today = now.astimezone(ZoneInfo("America/New_York")).date()
+    try:
+        matches = fetch_recent_matches(
+            settings.missing_table_api_url,
+            settings.missing_table_api_key,
+            start=today - timedelta(days=LOOKBACK_DAYS),
+            end=today,
+        )
+    except Exception as exc:
+        logger.error("digest.fetch_failed", error=str(exc))
+        if not dry_run:
+            _send_telegram_message(
+                settings,
+                escape(f"⚠️ Scores digest failed: could not read missing-table ({exc})"),
+                subject="[match-scraper-agent] Scores digest failed",
+            )
+        raise typer.Exit(code=1) from None
+
+    summary = summarize(matches, now)
+    logger.info("digest.summary", **summary.model_dump(mode="json"))
+    message = build_digest_report(summary)
+    typer.echo(message)
+
+    if not dry_run:
+        _send_telegram_message(
+            settings, message, subject="[match-scraper-agent] Scores digest"
+        )
 
 
 @app.command()

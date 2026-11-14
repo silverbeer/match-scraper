@@ -26,6 +26,29 @@ _DISPLAY_TZ = ZoneInfo("America/New_York")
 _TELEGRAM_MAX_CHARS = 4096
 
 
+def needs_attention(
+    *,
+    submission_errors: list[dict[str, str]],
+    ingest_failures: list[dict[str, Any]] | None,
+    protected_matches: list[dict[str, Any]] | None,
+    mt_status: str,
+) -> bool:
+    """Whether a run's report is worth a Telegram message (SB-1679).
+
+    The report used to go out after every run — about fifty a week — and nearly
+    all of them said "up to date". The few that needed someone looked the same,
+    so the channel was ignored, alerts included. A run now speaks only when a
+    person has something to do; "are the scores coming in" is the daily
+    digest's job (src/orchestrator/digest.py).
+    """
+    return bool(
+        submission_errors
+        or ingest_failures
+        or protected_matches
+        or mt_status.startswith("failed:")
+    )
+
+
 def build_report(
     *,
     result_summary: str,
@@ -81,10 +104,6 @@ def build_report(
         header_parts.append("DRY RUN")
     lines.append(f"_{' · '.join(header_parts)}_")
     lines.append("")
-
-    # --- Agent Awareness ---
-    awareness = _agent_awareness(now, scraped_matches)
-    lines.append(awareness)
 
     # --- Scrape Plan ---
     if scrape_plan and hasattr(scrape_plan, "plans"):
@@ -237,24 +256,6 @@ def build_report(
             lines.append(f"  • {md} {home} vs {away} \\[{status}\\]")
         lines.append("")
 
-    # --- Weekend Scores ---
-    scored_lines = _weekend_scores_section(now, scraped_matches)
-    if scored_lines:
-        lines.extend(scored_lines)
-        lines.append("")
-
-    # --- Missing Scores ---
-    missing_lines = _missing_scores_section(now, scraped_matches)
-    if missing_lines:
-        lines.extend(missing_lines)
-        lines.append("")
-
-    # --- Missing Kick-off Times ---
-    kickoff_lines = _missing_kickoff_section(scraped_matches)
-    if kickoff_lines:
-        lines.extend(kickoff_lines)
-        lines.append("")
-
     # --- Next Run ---
     next_run, delta = _next_scheduled_run(now)
     next_local = next_run.astimezone(_DISPLAY_TZ)
@@ -290,147 +291,6 @@ def _clamp_to_telegram_limit(body: list[str], footer: str) -> list[str]:
             return [*kept, marker, footer]
 
     return [escape("… report too long to send — see the pod logs"), footer]
-
-
-def _agent_awareness(now: datetime, matches: list[dict[str, Any]]) -> str:
-    """Generate context-aware message based on day of week and match data."""
-    day = now.weekday()  # 0=Mon, 5=Sat, 6=Sun
-
-    if day in (5, 6):  # Sat/Sun
-        return escape("🧠 Active match day — scores may still be posting")
-
-    if day in (0, 1, 2):  # Mon/Tue/Wed
-        # Check for unscored weekend matches
-        weekend_unscored = [
-            m
-            for m in matches
-            if _is_last_weekend(m.get("match_date", ""), now)
-            and m.get("match_status") != "completed"
-        ]
-        if weekend_unscored:
-            n = len(weekend_unscored)
-            return escape(f"🧠 Mid-week — {n} weekend match(es) still awaiting scores")
-        # Check if there were any weekend matches at all
-        weekend_all = [
-            m for m in matches if _is_last_weekend(m.get("match_date", ""), now)
-        ]
-        if weekend_all:
-            return escape("🧠 Mid-week — all weekend scores are posted ✓")
-        return escape("🧠 Mid-week — no recent weekend matches found")
-
-    # Thu/Fri
-    return escape("🧠 No recent match activity — routine schedule sync")
-
-
-def _is_last_weekend(match_date: str, now: datetime) -> bool:
-    """Check if a match date falls on the most recent Saturday or Sunday."""
-    try:
-        md = datetime.strptime(match_date, "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return False
-
-    today = now.date()
-    day = today.weekday()  # 0=Mon
-
-    # Find last Saturday and Sunday
-    days_since_sunday = (day + 1) % 7
-    last_sunday = today - timedelta(days=days_since_sunday)
-    last_saturday = last_sunday - timedelta(days=1)
-
-    return md in (last_saturday, last_sunday)
-
-
-def _weekend_scores_section(now: datetime, matches: list[dict[str, Any]]) -> list[str]:
-    """Show completed weekend match scores (Mon-Wed only)."""
-    day = now.weekday()
-    if day not in (0, 1, 2):  # Only Mon/Tue/Wed
-        return []
-
-    scored = [
-        m
-        for m in matches
-        if _is_last_weekend(m.get("match_date", ""), now)
-        and m.get("match_status") == "completed"
-    ]
-    if not scored:
-        return []
-
-    lines: list[str] = []
-    n = len(scored)
-    lines.append(f"*Weekend Scores \\({escape(str(n))}\\):*")
-    for m in sorted(scored, key=lambda x: x.get("match_date", "")):
-        home = escape(m.get("home_team", "?"))
-        away = escape(m.get("away_team", "?"))
-        hs = m.get("home_score", "?")
-        aws = m.get("away_score", "?")
-        md = escape(m.get("match_date", "?"))
-        lines.append(f"  • {md} {home} {hs}\\-{aws} {away}")
-    return lines
-
-
-def _missing_scores_section(now: datetime, matches: list[dict[str, Any]]) -> list[str]:
-    """Build the missing scores section if there are unscored matches to highlight."""
-    today_str = now.strftime("%Y-%m-%d")
-    day = now.weekday()
-    lines: list[str] = []
-
-    # Today's unscored matches (Sat/Sun primarily, but show any day)
-    today_unscored = [
-        m
-        for m in matches
-        if m.get("match_date") == today_str and m.get("match_status") != "completed"
-    ]
-    if today_unscored:
-        n = len(today_unscored)
-        lines.append(f"*Today's Matches Awaiting Scores \\({escape(str(n))}\\):*")
-        for m in today_unscored:
-            home = escape(m.get("home_team", "?"))
-            away = escape(m.get("away_team", "?"))
-            status = escape(m.get("match_status", "?"))
-            lines.append(f"  • {home} vs {away} — {status}")
-
-    # Mon-Wed: also show unscored weekend matches
-    if day in (0, 1, 2):
-        weekend_unscored = [
-            m
-            for m in matches
-            if _is_last_weekend(m.get("match_date", ""), now)
-            and m.get("match_status") != "completed"
-        ]
-        if weekend_unscored:
-            n = len(weekend_unscored)
-            if lines:
-                lines.append("")
-            lines.append(f"*Weekend Matches Awaiting Scores \\({escape(str(n))}\\):*")
-            for m in weekend_unscored:
-                home = escape(m.get("home_team", "?"))
-                away = escape(m.get("away_team", "?"))
-                status = escape(m.get("match_status", "?"))
-                md = escape(m.get("match_date", "?"))
-                lines.append(f"  • {md} {home} vs {away} — {status}")
-
-    return lines
-
-
-def _missing_kickoff_section(matches: list[dict[str, Any]]) -> list[str]:
-    """Build the missing kick-off times section."""
-    missing = [
-        m
-        for m in matches
-        if m.get("match_time") is None and m.get("match_status") in ("scheduled", "tbd")
-    ]
-    if not missing:
-        return []
-
-    lines: list[str] = []
-    n = len(missing)
-    lines.append(f"*Missing Kick\\-off Times \\({escape(str(n))}\\):*")
-    for m in sorted(missing, key=lambda x: x.get("match_date", "")):
-        md = escape(m.get("match_date", "?"))
-        home = escape(m.get("home_team", "?"))
-        away = escape(m.get("away_team", "?"))
-        lines.append(f"  • {md} {home} vs {away}")
-    return lines
 
 
 def _cron_hours_for(day: datetime) -> list[int]:

@@ -1,0 +1,50 @@
+# Daily scores digest (SB-1679).
+#
+# The one scheduled Telegram message. Run reports only go out when something
+# needs a person, so this answers "are the scores coming in" once a day:
+#
+#   * how many of today's matches came back scored
+#   * how many matches were played but still have no score (today, and
+#     earlier in the last 7 days)
+#
+# Counts come from missing-table, scraped matches only.
+#
+# 23:30 ET: after the last agent run of every day, including the hourly
+# Saturday window that ends at 23:00.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-digest
+  namespace: match-scraper
+spec:
+  schedule: "30 23 * * *"
+  # Named, not inherited — see k3s/agent/cronjob.yaml (SB-1060).
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: digest
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["uv", "run", "match-scraper-agent", "digest", "--env", "prod"]
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              resources:
+                # One HTTP read of a week of matches. No browser.
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: "250m"
+                  memory: 256Mi

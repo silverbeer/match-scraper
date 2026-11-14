@@ -8,16 +8,13 @@ from zoneinfo import ZoneInfo
 from src.orchestrator.planner import RunPlan, ScrapeAction, ScrapePlan
 from src.orchestrator.report import (
     _TELEGRAM_MAX_CHARS,
-    _agent_awareness,
     _clamp_detail,
     _format_delta,
-    _is_last_weekend,
-    _missing_kickoff_section,
     _next_scheduled_run,
-    _weekend_scores_section,
     build_failure_report,
     build_report,
     build_watchdog_report,
+    needs_attention,
 )
 
 _ET = ZoneInfo("America/New_York")
@@ -116,75 +113,6 @@ class TestBuildReport:
         # hours as UTC when the CronJobs schedule in ET (SB-1060).
         assert "11:00 AM EDT" in report
 
-    def test_today_missing_scores_shown(self) -> None:
-        now = datetime(2026, 3, 8, 14, 0, tzinfo=UTC)  # Saturday
-        matches = [
-            _match(status="completed"),
-            _match(
-                home="NYCFC",
-                away="Red Bulls",
-                status="scheduled",
-                home_score=None,
-                away_score=None,
-            ),
-        ]
-        report = build_report(
-            result_summary="",
-            actions=[],
-            matches_found=2,
-            matches_submitted=2,
-            scraped_matches=matches,
-            submission_errors=[],
-            env="prod",
-            target=None,
-            dry_run=False,
-            now=now,
-        )
-        assert "Awaiting Scores" in report
-        assert "NYCFC" in report
-
-    def test_weekend_scores_shown_on_monday(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        matches = [
-            _match(
-                match_date="2026-03-07", status="completed", home_score=3, away_score=1
-            ),
-            _match(
-                home="NYCFC",
-                away="Red Bulls",
-                match_date="2026-03-08",
-                status="completed",
-                home_score=2,
-                away_score=0,
-            ),
-            _match(
-                home="Galaxy",
-                away="LAFC",
-                match_date="2026-03-08",
-                status="scheduled",
-                home_score=None,
-                away_score=None,
-            ),
-        ]
-        report = build_report(
-            result_summary="",
-            actions=[],
-            matches_found=3,
-            matches_submitted=3,
-            scraped_matches=matches,
-            submission_errors=[],
-            env="prod",
-            target=None,
-            dry_run=False,
-            now=now,
-        )
-        assert "Weekend Scores" in report
-        assert "IFA" in report
-        assert "NYCFC" in report
-        # Missing match should be in Awaiting Scores, not Weekend Scores
-        assert "Awaiting Scores" in report
-        assert "Galaxy" in report
-
     def test_header_shows_edt(self) -> None:
         now = datetime(2026, 3, 8, 18, 10, tzinfo=UTC)  # March = EDT
         report = build_report(
@@ -200,58 +128,6 @@ class TestBuildReport:
             now=now,
         )
         assert "2:10 PM EDT" in report  # 18:10 UTC = 2:10 PM EDT
-
-
-class TestAgentAwareness:
-    def test_saturday(self) -> None:
-        now = datetime(2026, 3, 7, 14, 0, tzinfo=UTC)  # Saturday
-        result = _agent_awareness(now, [])
-        assert "Active match day" in result
-
-    def test_sunday(self) -> None:
-        now = datetime(2026, 3, 8, 14, 0, tzinfo=UTC)  # Sunday
-        result = _agent_awareness(now, [])
-        assert "Active match day" in result
-
-    def test_wednesday_all_scored(self) -> None:
-        now = datetime(2026, 3, 11, 14, 0, tzinfo=UTC)  # Wednesday
-        matches = [
-            _match(match_date="2026-03-07", status="completed"),
-            _match(match_date="2026-03-08", status="completed"),
-        ]
-        result = _agent_awareness(now, matches)
-        assert "all weekend scores are posted" in result
-
-    def test_monday_unscored(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        matches = [
-            _match(match_date="2026-03-07", status="scheduled"),
-        ]
-        result = _agent_awareness(now, matches)
-        assert "still awaiting scores" in result
-
-    def test_thursday(self) -> None:
-        now = datetime(2026, 3, 12, 14, 0, tzinfo=UTC)  # Thursday
-        result = _agent_awareness(now, [])
-        assert "routine schedule sync" in result
-
-
-class TestIsLastWeekend:
-    def test_last_saturday(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        assert _is_last_weekend("2026-03-07", now) is True  # Saturday
-
-    def test_last_sunday(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        assert _is_last_weekend("2026-03-08", now) is True  # Sunday
-
-    def test_older_weekend(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        assert _is_last_weekend("2026-02-28", now) is False  # Previous Sat
-
-    def test_weekday(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)
-        assert _is_last_weekend("2026-03-06", now) is False  # Friday
 
 
 class TestNextScheduledRun:
@@ -324,42 +200,6 @@ class TestNextScheduledRun:
         assert delta.total_seconds() == 3600
 
 
-class TestWeekendScores:
-    def test_shows_scores_on_monday(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        matches = [
-            _match(
-                match_date="2026-03-07", status="completed", home_score=3, away_score=1
-            ),
-        ]
-        lines = _weekend_scores_section(now, matches)
-        assert len(lines) == 2
-        assert "Weekend Scores" in lines[0]
-        assert "3" in lines[1]
-        assert "1" in lines[1]
-
-    def test_hidden_on_thursday(self) -> None:
-        now = datetime(2026, 3, 12, 14, 0, tzinfo=UTC)  # Thursday
-        matches = [
-            _match(match_date="2026-03-07", status="completed"),
-        ]
-        lines = _weekend_scores_section(now, matches)
-        assert lines == []
-
-    def test_excludes_unscored(self) -> None:
-        now = datetime(2026, 3, 9, 14, 0, tzinfo=UTC)  # Monday
-        matches = [
-            _match(
-                match_date="2026-03-07",
-                status="scheduled",
-                home_score=None,
-                away_score=None,
-            ),
-        ]
-        lines = _weekend_scores_section(now, matches)
-        assert lines == []
-
-
 class TestFormatDelta:
     def test_hours_and_minutes(self) -> None:
         from datetime import timedelta
@@ -370,97 +210,6 @@ class TestFormatDelta:
         from datetime import timedelta
 
         assert _format_delta(timedelta(minutes=45)) == "45m"
-
-
-class TestMissingKickoff:
-    def test_missing_kickoff_shown(self) -> None:
-        matches = [
-            _match(
-                status="scheduled", home_score=None, away_score=None, match_time=None
-            ),
-            _match(
-                home="NYCFC",
-                away="Red Bulls",
-                status="scheduled",
-                home_score=None,
-                away_score=None,
-                match_time=None,
-            ),
-            _match(status="completed", match_time="15:00"),
-        ]
-        lines = _missing_kickoff_section(matches)
-        assert any("Missing Kick\\-off Times" in line for line in lines)
-        assert len(lines) == 3  # header + 2 matches
-
-    def test_no_kickoff_section_when_all_have_times(self) -> None:
-        matches = [
-            _match(
-                status="scheduled", home_score=None, away_score=None, match_time="15:00"
-            ),
-            _match(status="completed", match_time="17:00"),
-        ]
-        lines = _missing_kickoff_section(matches)
-        assert lines == []
-
-    def test_no_kickoff_count_in_summary(self) -> None:
-        now = datetime(2026, 3, 8, 14, 0, tzinfo=UTC)
-        matches = [
-            _match(
-                status="scheduled", home_score=None, away_score=None, match_time=None
-            ),
-            _match(status="tbd", home_score=None, away_score=None, match_time=None),
-            _match(status="completed", match_time="15:00"),
-        ]
-        report = build_report(
-            result_summary="",
-            actions=[],
-            matches_found=3,
-            matches_submitted=3,
-            scraped_matches=matches,
-            submission_errors=[],
-            env="prod",
-            target=None,
-            dry_run=False,
-            now=now,
-        )
-        assert "no time" in report
-
-    def test_kickoff_plan_icon(self) -> None:
-        from datetime import date
-
-        from src.orchestrator.planner import RunPlan, ScrapeAction, ScrapePlan
-
-        now = datetime(2026, 3, 12, 14, 0, tzinfo=UTC)
-        plan = RunPlan(
-            plans=[
-                ScrapePlan(
-                    target_key="u14-hg",
-                    target_label="U14 Homegrown Northeast",
-                    action=ScrapeAction.KICKOFF_SYNC,
-                    start_date=date(2026, 3, 12),
-                    end_date=date(2026, 3, 26),
-                    reason="3 missing kick-off times",
-                    scraper_params={},
-                ),
-            ]
-        )
-        report = build_report(
-            result_summary="",
-            actions=[],
-            matches_found=0,
-            matches_submitted=0,
-            scraped_matches=[],
-            submission_errors=[],
-            env="prod",
-            target=None,
-            dry_run=False,
-            scrape_plan=plan,
-            now=now,
-        )
-        assert "⏰" in report
-
-
-# ── Ingest failures: the gap between "submitted" and "landed" (SB-831) ──
 
 
 def _failure(
@@ -621,7 +370,7 @@ class TestTelegramLimit:
                     "detail": f"U15 Flex Bracket{i}: scraped 12 matches",
                     "dry_run": False,
                 }
-                for i in range(71)
+                for i in range(150)
             ],
             matches_found=400,
             matches_submitted=400,
@@ -859,3 +608,26 @@ class TestBuildWatchdogReport:
             now=self.NOW,
         )
         assert "never" in report and "started" in report
+
+
+class TestNeedsAttention:
+    """SB-1679 — a run only messages when a person has something to do."""
+
+    def _call(self, **overrides) -> bool:
+        kwargs = {
+            "submission_errors": [],
+            "ingest_failures": [],
+            "protected_matches": [],
+            "mt_status": "ok",
+        }
+        kwargs.update(overrides)
+        return needs_attention(**kwargs)
+
+    def test_quiet_run_is_silent(self) -> None:
+        assert self._call() is False
+
+    def test_each_problem_needs_attention(self) -> None:
+        assert self._call(submission_errors=[{"match": "a", "error": "b"}])
+        assert self._call(ingest_failures=[{"raw_name": "X"}])
+        assert self._call(protected_matches=[{"home_team": "A"}])
+        assert self._call(mt_status="failed: 504")

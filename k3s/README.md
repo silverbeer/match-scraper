@@ -13,6 +13,7 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 | `match-scraper/cleanup-cronjob.yaml` | `cleanup-completed-jobs` | `0 2 * * *` |
 | `score-canary/cronjob.yaml` | `score-canary` | `0 12 * * 1` |
 | `watchdog/cronjob.yaml` | `match-scraper-watchdog` | `30 * * * *` (America/New_York) |
+| `digest/cronjob.yaml` | `match-scraper-digest` | `30 23 * * *` (America/New_York) |
 | `agent/configmap.yaml` | `match-scraper-agent-config` | — |
 
 The canary answers a question fixture counts cannot: it probes the league, Flex
@@ -80,6 +81,25 @@ All three exit 10 for "this is the finding", never non-zero for a crash. A
 finding Kubernetes reads as a failed Job gets retried, and the signal disappears
 into a restart loop.
 
+## What reaches Telegram
+
+Only what needs a person, plus one daily digest (SB-1679). The run report used
+to go out after every run, about fifty a week, nearly all saying "up to date",
+and the alerts that mattered were ignored along with it.
+
+| Message | Sent when |
+|---|---|
+| Scores digest (`match-scraper-digest`) | daily 23:30 ET: today's matches scored, and matches played but still unscored (today, and the last 7 days) |
+| Run report | only when a run has a problem: names missing-table rejected, publish errors, MT status failed, live scores withheld. A rejected name is reported once a day (`AGENT_ALERT_STATE_PATH` on the PVC), not on every run |
+| Run failed | the agent crashed |
+| Watchdog | no successful run in 8h |
+| Score canary | Monday: games played and none scored, or a feed is missing |
+| Release watch | a new season's schedule is published |
+| Audit processor | a match is in MT but no longer in the feed (manual review). Per-team audit findings are not sent |
+
+A quiet run sends nothing. Silence is safe to read as healthy because the
+watchdog speaks when runs stop.
+
 ## What is NOT deployed, deliberately
 
 | Manifest | Why |
@@ -99,6 +119,7 @@ kubectl apply -f k3s/agent/cronjob.yaml
 kubectl apply -f k3s/agent/cronjob-weekend.yaml
 kubectl apply -f k3s/release-watch/cronjob.yaml
 kubectl apply -f k3s/watchdog/cronjob.yaml
+kubectl apply -f k3s/digest/cronjob.yaml
 ```
 
 Check a change before applying it — `kubectl diff` is the difference between a config edit and an outage:
