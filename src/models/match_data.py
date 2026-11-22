@@ -13,10 +13,27 @@ from datetime import date as DateType
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 # Competitions missing-table has a `leagues` row for.
 VALID_LEAGUES = ("Homegrown", "Academy", "Flex")
+
+# Present only on a tournament message (SB-1746). missing-table reads a
+# message as a tournament message by its tournament_id.
+TOURNAMENT_FIELDS = (
+    "tournament_id",
+    "competition",
+    "tournament_group",
+    "tournament_round",
+    "tournament_round_order",
+)
 
 
 class MatchData(BaseModel):
@@ -77,6 +94,71 @@ class MatchData(BaseModel):
     source: str | None = Field(
         None, description="Data source (e.g., 'match-scraper', 'manual')"
     )
+    # Tournament matches (SB-1746). tournament_id is what makes a message a
+    # tournament message: missing-table files the match on the tournament
+    # instead of in a league division. competition and tournament_group are
+    # the feed's own values, sent raw — missing-table composes the stored
+    # group from them.
+    tournament_id: int | None = Field(
+        None, ge=1, description="missing-table tournaments.id"
+    )
+    competition: str | None = Field(
+        None, description="The feed's competition name, e.g. 'HD Group Play'"
+    )
+    tournament_group: str | None = Field(
+        None, description="The feed's group label, e.g. 'A'"
+    )
+    tournament_round: str | None = Field(
+        None,
+        pattern=r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+        max_length=40,
+        description="Round key, e.g. 'group_stage', 'round_of_16'",
+    )
+    tournament_round_order: int | None = Field(
+        None, ge=0, description="Position within the round"
+    )
+
+    @model_validator(mode="after")
+    def validate_tournament(self) -> "MatchData":
+        """The rules missing-table drops a tournament message for.
+
+        Checked here for the same reason as the shootout: a message that
+        would be recorded as `invalid` on the far side of the queue is
+        refused at the sender instead, where it can still be named.
+        """
+        if self.tournament_id is None:
+            sent = [
+                name for name in TOURNAMENT_FIELDS if getattr(self, name) is not None
+            ]
+            if sent:
+                raise ValueError(f"{', '.join(sent)} requires tournament_id")
+            return self
+        if not self.external_match_id:
+            raise ValueError("A tournament match requires external_match_id")
+        if self.match_type.lower() != "tournament":
+            raise ValueError(
+                "A tournament match must have match_type 'Tournament', "
+                f"not {self.match_type!r}"
+            )
+        if self.division is not None:
+            raise ValueError("A tournament match must not carry a division")
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_tournament_fields_on_league_messages(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        """Keep a league message byte-for-byte what it was before SB-1746.
+
+        The tournament keys are emitted only on a tournament message, so
+        nothing new reaches the league path of a consumer that has not been
+        told about them.
+        """
+        data: dict[str, object] = handler(self)
+        if self.tournament_id is None:
+            for name in TOURNAMENT_FIELDS:
+                data.pop(name, None)
+        return data
 
     @model_validator(mode="after")
     def validate_shootout(self) -> "MatchData":

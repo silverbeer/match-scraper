@@ -28,3 +28,15 @@ data:
   # otherwise its fixtures land on the clubs' Homegrown teams (SB-1652,
   # SB-1654 tracks the rest).
   AGENT_ACADEMY_CONFERENCES: "New England"
+  # Tournament event scrape (scrape-event, SB-1746) — read by the k3s/fest
+  # CronJobs. SOURCE is "modular11" (an event page) or "assist" (the Kitman
+  # feeds); EVENT_ID is the modular11 event id or the assist feed key, blank
+  # until the 2026 schedule is published (SB-1745). MLS NEXT Fest 2025 was
+  # modular11 event 75.
+  AGENT_EVENT_SOURCE: "modular11"
+  AGENT_EVENT_ID: ""
+  AGENT_EVENT_TIMEZONE: "America/Phoenix"
+  # missing-table's tournaments.id for the event, which differs per
+  # environment. Unset until the 2026 tournament row exists; scrape-event
+  # refuses to --submit without it.
+  # AGENT_EVENT_TOURNAMENT_ID: ""

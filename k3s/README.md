@@ -14,12 +14,41 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 | `score-canary/cronjob.yaml` | `score-canary` | `0 12 * * 1` |
 | `watchdog/cronjob.yaml` | `match-scraper-watchdog` | `30 * * * *` (America/New_York) |
 | `digest/cronjob.yaml` | `match-scraper-digest` | `30 23 * * *` (America/New_York) |
+| `fest/cronjob.yaml` | `fest-scores` | `15,45 8-22 2-13 12 *` (America/Phoenix) — **suspended** |
+| `fest/cronjob.yaml` | `fest-sweep` | `0 3 1-15 12 *` (America/Phoenix) — **suspended** |
 | `agent/configmap.yaml` | `match-scraper-agent-config` | — |
 
 The canary answers a question fixture counts cannot: it probes the league, Flex
 and Academy feeds for the weekend just gone and exits 10 if fixtures were played
 and none came back scored. A feed that quietly stops carrying results looks
 exactly like a quiet week otherwise.
+
+### MLS NEXT Fest
+
+`fest/cronjob.yaml` scrapes a whole tournament event — every age group — and
+sends it to missing-table as tournament matches (SB-1746): `fest-scores` twice
+an hour during play for yesterday through tomorrow, `fest-sweep` nightly for
+the whole event. Both exit 10 for "ran, with findings"; only the sweep sends
+that to Telegram. An outage — nothing fetched, broker unreachable, nothing
+published — exits 1 and fails the Job.
+
+**One source per event.** Never change `AGENT_EVENT_SOURCE` after the first
+`--submit`: the two sources give a match different ids, so switching files the
+whole tournament a second time.
+
+**Both ship with `suspend: true` and stay that way until the event.** They
+publish nothing unless the manifest has been applied, `AGENT_EVENT_ID` and
+`AGENT_EVENT_TOURNAMENT_ID` are set in `agent/configmap.yaml` (blank today —
+`scrape-event --submit` exits 1 without them), and the CronJob has been
+un-suspended:
+
+```bash
+kubectl -n match-scraper patch cronjob fest-scores -p '{"spec":{"suspend":false}}'
+kubectl -n match-scraper patch cronjob fest-sweep  -p '{"spec":{"suspend":false}}'
+```
+
+Suspend them again afterwards. The full checklist is in
+[docs/guides/tournament-events.md](../docs/guides/tournament-events.md).
 
 ### The weekend cadence
 
