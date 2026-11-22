@@ -251,6 +251,57 @@ treated as "nothing seen yet" — the poller keeps working rather than crashing.
 Note that `Fixtures` is a lower bound: the endpoint paginates at 25 rows, so the
 count answers "are there fixtures?", not "how many?".
 
+### `scrape-event` - A whole tournament, every age group
+
+Part of the `match-scraper-agent` CLI, not `mls-scraper`. Reads every match of
+a tournament event (MLS NEXT Fest) for all six age groups and sends each to
+missing-table as a tournament match, with its competition, group, round and
+penalty score. Without `--submit` it is a dry run.
+
+```bash
+# Dry run: MLS NEXT Fest 2025 (modular11 event 75)
+uv run match-scraper-agent scrape-event --event 75 --from 2025-12-01 --to 2025-12-31
+
+# One age group, as JSON
+uv run match-scraper-agent scrape-event --event 75 -a U15 \
+  --from 2025-12-01 --to 2025-12-31 --json
+
+# The same event from the assist feeds instead
+uv run match-scraper-agent scrape-event --source assist --event <feed key>
+
+# Publish (needs missing-table's tournament id)
+uv run match-scraper-agent scrape-event --env prod --event <id> --tournament-id <id> --submit
+```
+
+Expected output (dry run, abridged):
+
+```
+Event 75 via modular11, 2025-12-01 to 2025-12-31 — DRY RUN, nothing is published
+
+Matches: 2452
+  U13     356
+  ...
+Rounds:
+  showcase            1568
+  group_stage          556
+  ...
+Decided on penalties: 154
+Distinct team names: 271
+Unmapped values: none
+skipped: opponent not decided: 6
+```
+
+Exit `0` clean, `10` ran with findings (some age groups failed, some matches
+could not be sent, or a feed value the mapping does not know), `1` could not
+run — including an outage: nothing fetched, broker unreachable, or nothing
+published. `--env` only selects an env file; the queue is `AGENT_QUEUE_NAME`,
+default `matches.prod`, and `--submit` prints the broker host and queue first.
+Re-running is safe: match ids are stable, so missing-table updates scores and
+creates nothing twice.
+
+Full reference — options, the round mapping, the two sources, deployment:
+[Tournament Events](tournament-events.md).
+
 ## 🎯 Available Options
 
 ### Age Groups

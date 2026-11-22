@@ -1,0 +1,160 @@
+# MLS NEXT Fest: every match of the event, all six age groups, sent to
+# missing-table as tournament matches (SB-1746). Fest 2026 is 2-13 December
+# in Mesa, Arizona.
+#
+# BOTH CRONJOBS SHIP SUSPENDED, and three things have to be true before
+# either publishes anything:
+#
+#   1. this file has been applied by hand (nothing applies k3s/ on merge);
+#   2. AGENT_EVENT_ID and AGENT_EVENT_TOURNAMENT_ID are set in
+#      agent/configmap.yaml — with either blank, scrape-event refuses to run
+#      and exits 1 without a request or a message;
+#   3. the CronJob has been un-suspended:
+#        kubectl -n match-scraper patch cronjob fest-scores -p '{"spec":{"suspend":false}}'
+#        kubectl -n match-scraper patch cronjob fest-sweep  -p '{"spec":{"suspend":false}}'
+#
+# ONE SOURCE PER EVENT. Pick modular11 or assist before the first --submit and
+# never change AGENT_EVENT_SOURCE afterwards: the two give a match different
+# ids (m11-<event>-<id> against the bare assist game_key), and missing-table
+# only adopts a row that has no source id — so switching mid-event files the
+# whole tournament a second time.
+#
+# Before un-suspending, run the dry run from docs/guides/tournament-events.md
+# against the real event and read its summary. Suspend both again after the
+# event: the schedules below would otherwise fire next December against
+# whatever the ConfigMap still names.
+#
+# Schedules are America/Phoenix, named explicitly — a schedule with no
+# timeZone runs in the controller's zone, which on this cluster is
+# America/New_York (see k3s/README.md). Arizona keeps no daylight time.
+#
+# The two never overlap (03:00 against 08:15-22:45), which matters because
+# concurrencyPolicy: Forbid does not span CronJobs. A sweep is about a hundred
+# requests a second apart: four minutes.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fest-scores
+  namespace: match-scraper
+spec:
+  # During play: twice an hour, 08:15 to 22:45, 2-13 December. Reads only
+  # yesterday through tomorrow, so a run is a handful of pages per age group.
+  schedule: "15,45 8-22 2-13 12 *"
+  timeZone: America/Phoenix
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      # No retry: the next run is at most half an hour away, and a retry
+      # doubles the requests against someone else's server.
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: fest-scores
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  # The venue's dates, not the pod's. Python's zoneinfo
+                  # rather than `TZ=... date`, which silently answers in UTC
+                  # on an image with no system zone database.
+                  window=$(uv run python -c "
+                  from datetime import datetime, timedelta
+                  from zoneinfo import ZoneInfo
+                  today = datetime.now(ZoneInfo('America/Phoenix')).date()
+                  print(today - timedelta(days=1), today + timedelta(days=1))")
+                  set -- $window
+                  # Without both dates the command would fall back to the
+                  # whole season — with --submit. Stop instead.
+                  if [ -z "${1:-}" ] || [ -z "${2:-}" ]; then
+                    echo "fest: could not work out the date window"; exit 1
+                  fi
+                  code=0
+                  uv run match-scraper-agent scrape-event --env prod --submit \
+                    --from "$1" --to "$2" || code=$?
+                  # 10 is "ran, with findings" — an outcome, not a crash, the
+                  # same convention as the score canary. The nightly sweep is
+                  # the one that reports findings; twice an hour would be
+                  # noise. An outage is not 10: nothing fetched, a broker that
+                  # is down or nothing published exits 1 and fails the Job.
+                  case "$code" in
+                    0)  echo "fest: scores sent" ;;
+                    10) echo "fest: ran with findings (see the summary above)" ;;
+                    *)  echo "fest: unexpected exit $code"; exit "$code" ;;
+                  esac
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              resources:
+                # HTML over HTTP, no browser.
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                limits:
+                  cpu: "250m"
+                  memory: 512Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fest-sweep
+  namespace: match-scraper
+spec:
+  # Nightly, the whole event: 03:00 from the day before it starts to two days
+  # after it ends. Catches a result corrected days later and a fixture moved
+  # outside the scores job's three-day window.
+  schedule: "0 3 1-15 12 *"
+  timeZone: America/Phoenix
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: fest-sweep
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  code=0
+                  uv run match-scraper-agent scrape-event --env prod --submit || code=$?
+                  case "$code" in
+                    0)  echo "fest sweep: clean" ;;
+                    10) echo "fest sweep: ran with findings"
+                        uv run match-scraper-agent notify --env prod \
+                          --icon "⚠️" --title "Fest scrape" \
+                          --text "The nightly Fest sweep ran with findings: an age group failed, a match could not be sent, or the feed has a competition, division or round the mapping does not know. See the fest-sweep job log." ;;
+                    *)  echo "fest sweep: unexpected exit $code"; exit "$code" ;;
+                  esac
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                limits:
+                  cpu: "250m"
+                  memory: 512Mi

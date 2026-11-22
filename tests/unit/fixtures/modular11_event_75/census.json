@@ -1,0 +1,897 @@
+{
+ "about": "modular11 event 75 (MLS NEXT Fest 2025), captured 2026-11-22: every combination of age group, competition, division and cleaned round label, with the number of matches carrying it. Written by scripts/capture_event_fixtures.py.",
+ "event": "75",
+ "matches": 2458,
+ "matches_by_age_group": {
+  "U13": 356,
+  "U14": 376,
+  "U15": 371,
+  "U16": 417,
+  "U17": 464,
+  "U19": 474
+ },
+ "combinations": [
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "A",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "B",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "C",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "D",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "E",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "F",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "G",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "H",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "I",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "J",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "K",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "L",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "M",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "N",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "O",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "P",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "Playoffs",
+   "label": "Consolation",
+   "matches": 36
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "Playoffs",
+   "label": "Final",
+   "matches": 12
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "Q",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "R",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "S",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "T",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "U",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "V",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "W",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "AD Group Play",
+   "division": "X",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "A",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "B",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "C",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "D",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "E",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "F",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "G",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "H",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "I",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "J",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "K",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "L",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "M",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "N",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "O",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "P",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "Playoffs",
+   "label": "Consolation",
+   "matches": 31
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "Playoffs",
+   "label": "Final",
+   "matches": 10
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "Q",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "R",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "S",
+   "label": "Group Play",
+   "matches": 8
+  },
+  {
+   "age_group": "U13",
+   "competition": "HD Group Play",
+   "division": "T",
+   "label": "Group Play",
+   "matches": 7
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "A",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "B",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "C",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "D",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "E",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "F",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "G",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "H",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "I",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "J",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "K",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "L",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "M",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "N",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "O",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "P",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "Playoffs",
+   "label": "Consolation",
+   "matches": 40
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "Playoffs",
+   "label": "Final",
+   "matches": 13
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "Q",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "R",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "S",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "T",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "U",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "V",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "W",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "X",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "Y",
+   "label": "Group Play",
+   "matches": 9
+  },
+  {
+   "age_group": "U14",
+   "competition": "AD Group Play",
+   "division": "Z",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "A",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "B",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "C",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "D",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "E",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "F",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "G",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "H",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "I",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "J",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "K",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "L",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "M",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "N",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "O",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "P",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "Playoffs",
+   "label": "Consolation",
+   "matches": 31
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "Playoffs",
+   "label": "Final",
+   "matches": 10
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "Q",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "R",
+   "label": "Group Play",
+   "matches": 6
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "S",
+   "label": "Group Play",
+   "matches": 8
+  },
+  {
+   "age_group": "U14",
+   "competition": "HD Group Play",
+   "division": "T",
+   "label": "Group Play",
+   "matches": 7
+  },
+  {
+   "age_group": "U15",
+   "competition": "AD Showcase",
+   "division": "FEST",
+   "label": "",
+   "matches": 3
+  },
+  {
+   "age_group": "U15",
+   "competition": "AD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 180
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Consolation",
+   "label": "Consolation",
+   "matches": 41
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Finals",
+   "label": "Final (Child Group of NEXT Pro)",
+   "matches": 1
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "NEXT Pro",
+   "label": "Group Play",
+   "matches": 7
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Final",
+   "matches": 1
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "QuarterFinal",
+   "matches": 4
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Round of 16",
+   "matches": 8
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Round of 32",
+   "matches": 16
+  },
+  {
+   "age_group": "U15",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Semi-Final",
+   "matches": 2
+  },
+  {
+   "age_group": "U15",
+   "competition": "HD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 108
+  },
+  {
+   "age_group": "U16",
+   "competition": "AD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 198
+  },
+  {
+   "age_group": "U16",
+   "competition": "GA Cup Qualifier",
+   "division": "Consolation",
+   "label": "Consolation",
+   "matches": 41
+  },
+  {
+   "age_group": "U16",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Final",
+   "matches": 1
+  },
+  {
+   "age_group": "U16",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "QuarterFinal",
+   "matches": 4
+  },
+  {
+   "age_group": "U16",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Round of 16",
+   "matches": 8
+  },
+  {
+   "age_group": "U16",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Round of 32",
+   "matches": 16
+  },
+  {
+   "age_group": "U16",
+   "competition": "GA Cup Qualifier",
+   "division": "Playoff",
+   "label": "Semi-Final",
+   "matches": 2
+  },
+  {
+   "age_group": "U16",
+   "competition": "HD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 147
+  },
+  {
+   "age_group": "U17",
+   "competition": "AD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 243
+  },
+  {
+   "age_group": "U17",
+   "competition": "Best Of",
+   "division": "FEST",
+   "label": "Best Of",
+   "matches": 2
+  },
+  {
+   "age_group": "U17",
+   "competition": "HD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 174
+  },
+  {
+   "age_group": "U17",
+   "competition": "Pro Player Pathway",
+   "division": "FEST",
+   "label": "League (Pro Player Pathway)",
+   "matches": 45
+  },
+  {
+   "age_group": "U19",
+   "competition": "AD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 249
+  },
+  {
+   "age_group": "U19",
+   "competition": "Best Of",
+   "division": "FEST",
+   "label": "Best Of",
+   "matches": 4
+  },
+  {
+   "age_group": "U19",
+   "competition": "HD Showcase",
+   "division": "FEST",
+   "label": "",
+   "matches": 5
+  },
+  {
+   "age_group": "U19",
+   "competition": "HD Showcase",
+   "division": "FEST",
+   "label": "Showcase",
+   "matches": 171
+  },
+  {
+   "age_group": "U19",
+   "competition": "Pro Player Pathway",
+   "division": "FEST",
+   "label": "League (Pro Player Pathway)",
+   "matches": 45
+  }
+ ]
+}

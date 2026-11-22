@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import structlog
@@ -13,7 +14,10 @@ from src.orchestrator.targets import TEAM_FILTER_TARGETS as _TARGET_TEAM_FILTER
 from src.orchestrator.targets import load_targets
 
 if TYPE_CHECKING:
+    from src.models.match_data import MatchData
+    from src.models.tournament import TournamentContext, TournamentMatch
     from src.orchestrator.settings import AgentSettings
+    from src.scraper.tournament.base import TournamentSource
 
 app = typer.Typer(name="match-scraper-agent", no_args_is_help=True)
 logger = structlog.get_logger()
@@ -675,6 +679,400 @@ def scrape(
                     error=str(exc),
                 )
         typer.echo(f"\nSubmitted {submitted} matches to queue ({errors} errors).")
+
+
+# Stands in for the tournament id on a dry run that was not given one, so
+# every message is still built and validated. It never reaches the queue:
+# the context built from it is flagged stand_in, and _publish_event refuses
+# a flagged context whatever the caller believes.
+_DRY_RUN_TOURNAMENT_ID = 1
+
+_EVENT_SOURCES = ("modular11", "assist")
+
+
+def _event_source(
+    source: str,
+    event: str,
+    *,
+    delay: float,
+    save_raw: Path | None,
+    timezone_name: str,
+) -> TournamentSource:
+    """The adapter for ``--source``. The one place a source is chosen."""
+    if source == "assist":
+        from src.scraper.tournament.assist_event import AssistEventSource
+
+        return AssistEventSource(event, timezone_name=timezone_name, save_raw=save_raw)
+    from src.scraper.tournament.modular11_event import Modular11EventSource
+
+    return Modular11EventSource(event, delay=delay, save_raw=save_raw)
+
+
+def _event_context(tournament_id: int | None, timezone_name: str) -> TournamentContext:
+    """The run's context: the real tournament, or a flagged stand-in.
+
+    Only ``None`` gets the stand-in. Any other value must be a real id — 0 or
+    a negative one is refused by the model rather than quietly replaced.
+    """
+    from src.models.tournament import TournamentContext
+
+    if tournament_id is None:
+        return TournamentContext(
+            tournament_id=_DRY_RUN_TOURNAMENT_ID,
+            timezone=timezone_name,
+            stand_in=True,
+        )
+    return TournamentContext(tournament_id=tournament_id, timezone=timezone_name)
+
+
+def _broker_target(settings: AgentSettings) -> str:
+    """Where a publish goes, for the operator: host and queue, no credentials."""
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(settings.rabbitmq_url)
+        host = parts.hostname or "(unknown host)"
+        if parts.port:
+            host = f"{host}:{parts.port}"
+    except ValueError:
+        host = "(unreadable broker URL)"
+    if settings.queue_name:
+        return f"broker {host}, queue '{settings.queue_name}'"
+    return f"broker {host}, exchange '{settings.exchange_name}'"
+
+
+def _publish_event(
+    queue_client: Any, context: TournamentContext, messages: list[MatchData]
+) -> tuple[int, int]:
+    """Publish the messages. Returns ``(submitted, errors)``.
+
+    Refuses a stand-in context: its tournament id is not a tournament, and a
+    message carrying it would be filed on whichever one has that id.
+    """
+    if context.stand_in:
+        raise RuntimeError(
+            "refusing to publish: the tournament id is a dry-run stand-in"
+        )
+    submitted = errors = 0
+    for message in messages:
+        if message.tournament_id != context.tournament_id:
+            raise RuntimeError("refusing to publish: message built for another id")
+        try:
+            queue_client.submit_match(message.model_dump(mode="json"))
+            submitted += 1
+        except Exception as exc:
+            errors += 1
+            typer.echo(
+                f"warning: match {message.external_match_id} not published: {exc}",
+                err=True,
+            )
+    return submitted, errors
+
+
+def _event_summary(
+    matches: list[TournamentMatch], messages: list[MatchData]
+) -> dict[str, Any]:
+    """What a scrape-event run found, as counts."""
+    from collections import Counter
+
+    unmapped: Counter[str] = Counter()
+    for match in matches:
+        unmapped.update(match.mapped().unmapped)
+    teams = {m.home_team for m in matches} | {m.away_team for m in matches}
+    return {
+        "matches": len(matches),
+        "by_age_group": dict(sorted(Counter(m.age_group for m in matches).items())),
+        "by_round": dict(
+            Counter(m.tournament_round or "(no round)" for m in messages).most_common()
+        ),
+        "by_status": dict(Counter(str(m.match_status) for m in messages).most_common()),
+        "penalties": sum(1 for m in messages if m.home_penalty_score is not None),
+        "teams": len(teams),
+        # missing-table resolves a team name with no league hint only when
+        # exactly one team has that name.
+        "no_league": dict(
+            Counter(
+                m.competition or "(no competition)" for m in messages if not m.league
+            ).most_common()
+        ),
+        "unmapped": dict(sorted(unmapped.items())),
+    }
+
+
+@app.command(name="scrape-event")
+def scrape_event(
+    source: Annotated[
+        str | None,
+        typer.Option(
+            "--source",
+            help="Where the event is published: modular11 or assist. "
+            "Defaults to AGENT_EVENT_SOURCE, else modular11.",
+        ),
+    ] = None,
+    event: Annotated[
+        str | None,
+        typer.Option(
+            "--event",
+            help="modular11 event id (75 = MLS NEXT Fest 2025) or assist feed "
+            "key. Defaults to AGENT_EVENT_ID.",
+        ),
+    ] = None,
+    tournament_id: Annotated[
+        int | None,
+        typer.Option(
+            "--tournament-id",
+            min=1,
+            help="missing-table tournament id. Defaults to "
+            "AGENT_EVENT_TOURNAMENT_ID; required with --submit.",
+        ),
+    ] = None,
+    age_groups: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--age-group", "-a", help="Age group; repeat for several. Default: all six."
+        ),
+    ] = None,
+    from_date: Annotated[
+        str | None,
+        typer.Option("--from", help="Start date (YYYY-MM-DD). Default: season start."),
+    ] = None,
+    to_date: Annotated[
+        str | None,
+        typer.Option("--to", help="End date (YYYY-MM-DD). Default: season end."),
+    ] = None,
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    submit: Annotated[
+        bool,
+        typer.Option(
+            "--submit", help="Publish to the queue. Without it this is a dry run."
+        ),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print the messages as JSON (summary to stderr)"),
+    ] = False,
+    delay: Annotated[
+        float,
+        typer.Option(
+            "--delay", help="Seconds between requests (modular11), plus jitter"
+        ),
+    ] = 1.0,
+    save_raw: Annotated[
+        Path | None,
+        typer.Option("--save-raw", help="Directory to keep every fetched page in"),
+    ] = None,
+) -> None:
+    """Scrape a tournament event for every age group and send it to missing-table.
+
+    One command, any source: the same messages come out whether the event is
+    a modular11 event page or an assist feed. Each match carries its
+    competition, group, round and penalty score, and an id that is stable
+    across runs, so re-running updates scores and creates nothing twice.
+
+    Without --submit nothing is published: it prints matches per age group and
+    per round, how many distinct team names the event uses, and every
+    competition, division or round label the mapping does not know.
+
+    Exit codes: 0 clean; 10 ran, with findings (an age group failed, a match
+    could not be built or published, rows could not be read, or the feed
+    carried values the mapping does not know); 1 could not run — bad
+    arguments, nothing could be fetched, the broker is unreachable, or
+    nothing could be published.
+    """
+    import asyncio
+    from datetime import date, datetime
+
+    from pydantic import ValidationError
+
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.settings import AgentSettings, env_file_path
+    from src.scraper.modular11 import AGE_GROUP_IDS, current_season_year, season_window
+
+    configure_logging(json_output=False)
+    settings = AgentSettings(_env_file=env_file_path(env))
+
+    source = source or settings.event_source or "modular11"
+    event = event or settings.event_id
+    # The setting is shared with every agent command and is deliberately
+    # lenient there; here is where a bad value matters. `is None`, not `or`.
+    setting_raw = settings.event_tournament_id
+    # warn=False: reported below on stderr, where it cannot land in the
+    # middle of --json output (the structured logger prints to stdout).
+    setting_id = settings.event_tournament_id_or_none(warn=False)
+    bad_setting = bool(setting_raw) and setting_id is None
+    if bad_setting and not submit:
+        typer.echo(
+            f"warning: AGENT_EVENT_TOURNAMENT_ID is {setting_raw!r}, not a "
+            "tournament id (1 or more); treated as unset.",
+            err=True,
+        )
+    if tournament_id is None:
+        tournament_id = setting_id
+    ages = list(age_groups or AGE_GROUP_IDS)
+
+    if source not in _EVENT_SOURCES:
+        typer.echo(
+            f"Unknown source '{source}'. Valid sources: {', '.join(_EVENT_SOURCES)}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if not event:
+        typer.echo("No event: pass --event or set AGENT_EVENT_ID.", err=True)
+        raise typer.Exit(code=1)
+    if submit and (not isinstance(tournament_id, int) or tournament_id < 1):
+        if bad_setting:
+            typer.echo(
+                f"--submit needs a tournament id of 1 or more, and "
+                f"AGENT_EVENT_TOURNAMENT_ID is {setting_raw!r}. Nothing fetched "
+                "or published. Fix the setting or pass --tournament-id.",
+                err=True,
+            )
+        else:
+            typer.echo(
+                "--submit needs a tournament: pass --tournament-id or set "
+                "AGENT_EVENT_TOURNAMENT_ID.",
+                err=True,
+            )
+        raise typer.Exit(code=1)
+    unknown_ages = [age for age in ages if age not in AGE_GROUP_IDS]
+    if unknown_ages:
+        typer.echo(
+            f"Unknown age group(s) {', '.join(unknown_ages)}. "
+            f"Valid: {', '.join(AGE_GROUP_IDS)}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    season_start, season_end = season_window(current_season_year())
+    try:
+        start = date.fromisoformat(from_date) if from_date else season_start
+        end = date.fromisoformat(to_date) if to_date else season_end
+        context = _event_context(tournament_id, settings.event_timezone)
+    except ValueError as exc:
+        typer.echo(f"Invalid date, timezone or tournament id: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    if start > end:
+        typer.echo(f"--from {start} is later than --to {end}.", err=True)
+        raise typer.Exit(code=1)
+
+    # The summary goes to stderr under --json so stdout stays parseable.
+    def say(text: str = "") -> None:
+        typer.echo(text, err=json_output)
+
+    mode = "SUBMIT" if submit else "DRY RUN, nothing is published"
+    say(f"Event {event} via {source}, {start} to {end} — {mode}")
+
+    queue_client = None
+    if submit:
+        from src.celery.queue_client import MatchQueueClient
+
+        # Where the messages are going, before any goes. --env only picks an
+        # env file; the queue is whatever the settings resolve to.
+        say(
+            f"Publishing to {_broker_target(settings)}, "
+            f"tournament id {context.tournament_id}"
+        )
+        queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
+        # Once, up front: a broker that is down fails here rather than on
+        # every one of a few thousand messages, and before the feed is asked
+        # for anything.
+        if not queue_client.check_connection():
+            typer.echo("Broker unreachable: nothing fetched or published.", err=True)
+            raise typer.Exit(code=1)
+
+    event_source = _event_source(
+        source,
+        event,
+        delay=delay,
+        save_raw=save_raw,
+        timezone_name=settings.event_timezone,
+    )
+    matches = asyncio.run(event_source.fetch(ages, start, end))
+    fetched = len(matches)
+    # Both sources are asked for the window; a source that ignores it must not
+    # widen what is sent.
+    matches = [m for m in matches if start <= m.kickoff_local.date() <= end]
+    # A fixture listed before its teams are decided names a team "TBD", and
+    # missing-table has a real team row called TBD: sent, it would be filed
+    # on that row. It is skipped, and sent once the feed names the teams.
+    placeholders = sum(1 for m in matches if not m.teams_known())
+    matches = [m for m in matches if m.teams_known()]
+    context = context.model_copy(update={"id_prefix": event_source.id_prefix})
+
+    now = datetime.now(UTC)
+    messages: list[MatchData] = []
+    invalid = 0
+    for match in matches:
+        try:
+            messages.append(match.to_message(context, now=now))
+        except ValidationError as exc:
+            invalid += 1
+            # stderr, not the structured logger: that prints to stdout, into
+            # the middle of --json.
+            typer.echo(
+                f"warning: match {match.source_match_id} could not be built: "
+                f"{exc.errors()[0]['msg']}",
+                err=True,
+            )
+
+    summary = _event_summary(matches, messages)
+    for what, count in event_source.unmapped.items():
+        summary["unmapped"][what] = summary["unmapped"].get(what, 0) + count
+
+    if json_output:
+        import json
+
+        dumped = [message.model_dump(mode="json") for message in messages]
+        if tournament_id is None:
+            for item in dumped:
+                item["tournament_id"] = None
+        print(json.dumps(dumped, indent=2))
+
+    say(f"\nMatches: {summary['matches']}")
+    for age, count in summary["by_age_group"].items():
+        say(f"  {age:<5}{count:>6}")
+    say("Rounds:")
+    for round_key, count in summary["by_round"].items():
+        say(f"  {round_key:<18}{count:>6}")
+    say("Status:")
+    for status, count in summary["by_status"].items():
+        say(f"  {status:<18}{count:>6}")
+    say(f"Decided on penalties: {summary['penalties']}")
+    say(f"Distinct team names: {summary['teams']}")
+    if summary["no_league"]:
+        say(f"Sent with no league hint: {sum(summary['no_league'].values())}")
+        for competition, count in summary["no_league"].items():
+            say(f"  {count:>5}  {competition}")
+    if summary["unmapped"]:
+        say("Unmapped values (matches carrying each):")
+        for what, count in summary["unmapped"].items():
+            say(f"  {count:>5}  {what}")
+    else:
+        say("Unmapped values: none")
+    if placeholders:
+        say(f"skipped: opponent not decided: {placeholders}")
+    if invalid:
+        say(f"Matches that could not be built: {invalid}")
+    for age, reason in event_source.failures.items():
+        say(f"FAILED {age}: {reason}")
+    if tournament_id is None:
+        say("No tournament id set: messages cannot be submitted yet.")
+
+    submitted = errors = 0
+    if queue_client is not None:
+        submitted, errors = _publish_event(queue_client, context, messages)
+        say(f"\nSubmitted {submitted} matches to queue ({errors} errors).")
+
+    # An outage is not a finding: nothing read, or nothing published, is
+    # "could not run", so a scheduled job that shrugs at 10 still fails.
+    if event_source.failures and not fetched:
+        raise typer.Exit(code=1)
+    if errors and not submitted:
+        raise typer.Exit(code=1)
+    if event_source.failures or invalid or errors or summary["unmapped"]:
+        raise typer.Exit(code=10)
 
 
 def _send_telegram_processor_report(

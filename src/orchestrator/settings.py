@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
+import structlog
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 from src.celery.queue_client import DEFAULT_QUEUE
 
 ENVS_DIR = Path(__file__).resolve().parents[2] / "envs"
+
+_POSITIVE_INT = re.compile(r"[0-9]+")
 
 
 def env_file_path(env: str) -> Path | None:
@@ -63,6 +68,51 @@ class AgentSettings(BaseSettings):
     league: str = "Homegrown"
     age_group: str = "U14"
     division: str = "Northeast"
+    # Tournament event scrape (scrape-event, SB-1746). The source is swappable
+    # because where MLS NEXT publishes a tournament is not known in advance:
+    # "modular11" reads an event page, "assist" the Kitman feeds. event_id is
+    # the modular11 event id or the assist feed key. The tournament id is
+    # missing-table's and differs per environment, so it is configuration.
+    event_source: str = "modular11"
+    event_id: str = ""
+    # Kept raw, as text. Every agent CronJob loads these settings from one
+    # ConfigMap, so a bad value here (blank, 0, -3, "abc") must never fail
+    # validation for the commands that do not look at it — league scraping
+    # among them. Only scrape-event reads it, through
+    # event_tournament_id_or_none(), and it is scrape-event that refuses to
+    # publish without a real id.
+    event_tournament_id: str = ""
+    # Venue zone: modular11 prints wall-clock times with no zone.
+    event_timezone: str = "America/Phoenix"
+
+    @field_validator("event_tournament_id", mode="before")
+    @classmethod
+    def tournament_id_is_kept_as_text(cls, value: object) -> str:
+        """Accept anything; never raise."""
+        return "" if value is None else str(value).strip()
+
+    def event_tournament_id_or_none(self, *, warn: bool = True) -> int | None:
+        """The tournament id when it is a positive whole number, else None.
+
+        Blank is simply unset. Anything else that is not a positive whole
+        number is discarded with a warning that names the variable — unless
+        the caller says it will report the value itself (``warn=False``).
+        """
+        raw = self.event_tournament_id
+        if not raw:
+            return None
+        if _POSITIVE_INT.fullmatch(raw) and int(raw) >= 1:
+            return int(raw)
+        if not warn:
+            return None
+        structlog.get_logger().warning(
+            "settings.event_tournament_id_ignored",
+            variable="AGENT_EVENT_TOURNAMENT_ID",
+            value=raw,
+            reason="not a positive whole number; treated as unset",
+        )
+        return None
+
     missing_table_api_url: str = "http://localhost:8000"
     missing_table_api_key: str = ""
     dry_run: bool = False

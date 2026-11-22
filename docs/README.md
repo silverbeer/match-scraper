@@ -34,6 +34,7 @@ Welcome to the documentation for the MLS Match Scraper library. This library pro
 
 ### 📘 Guides
 - [CLI Usage Guide](guides/cli-usage.md) - Complete guide to using the command-line interface
+- [Tournament Events](guides/tournament-events.md) - **NEW** `scrape-event`: MLS NEXT Fest matches for all six age groups, the round mapping, the modular11 and assist sources, and how to turn the Fest CronJobs on (SB-1746)
 - [Database Fix Guide](guides/database-fix.md) - Troubleshooting database issues
 - [RabbitMQ Password Change](guides/rabbitmq-password-change.md) - How to change RabbitMQ password in k3s deployment
 
@@ -44,6 +45,7 @@ docs/
 ├── README.md                    # This file - documentation hub
 ├── guides/                      # How-to guides and tutorials
 │   ├── cli-usage.md            # CLI usage and examples
+│   ├── tournament-events.md    # scrape-event: tournaments (MLS NEXT Fest)
 │   ├── database-fix.md         # Database troubleshooting
 │   └── rabbitmq-password-change.md  # RabbitMQ password change guide
 ├── development/                 # Development guides
