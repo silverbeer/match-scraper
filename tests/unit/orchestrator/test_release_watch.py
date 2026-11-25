@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 from src.models.schedule_release import DivisionRelease, ReleaseProbe, ReleaseState
 from src.orchestrator.cli import app
 from src.orchestrator.release_watch import ReleaseWatchState, read_state, write_state
+from src.scraper.fest_watch import FestPageResult, FestPageState, FestProbe
 
 BUCKET = "missingtable-match-scraper"
 KEY = "release-watch/state.json"
@@ -219,13 +220,45 @@ class TestLocalFileState:
 
 @pytest.fixture
 def sent():
-    """Capture Telegram messages instead of sending them."""
+    """Capture Telegram messages instead of sending them (reported delivered)."""
     messages: list[str] = []
-    with patch(
-        "src.orchestrator.cli._send_telegram_message",
-        side_effect=lambda settings, message, *, subject: messages.append(message),
-    ):
+
+    def _capture(settings, message, *, subject):
+        messages.append(message)
+        return True
+
+    with patch("src.orchestrator.cli._send_telegram_message", side_effect=_capture):
         yield messages
+
+
+def _fest_probe(*states: FestPageState, link: str = "https://example.com/fest"):
+    names = ["matchcenter", "mlssoccer", "fest-temp"]
+    return FestProbe(
+        checked_at=datetime(2026, 11, 25, 12, 0, tzinfo=UTC),
+        results=[
+            FestPageResult(
+                name=names[i],
+                url=f"https://pages/{names[i]}",
+                state=state,
+                detail=link if state is FestPageState.RELEASED else "",
+            )
+            for i, state in enumerate(states)
+        ],
+    )
+
+
+FEST_WAITING = (FestPageState.WAITING,) * 3
+
+
+@pytest.fixture(autouse=True)
+def fest_probe():
+    """
+    Keep every command test off the real Fest pages. Defaults to "still
+    waiting"; a test sets ``fest_probe.return_value`` / ``side_effect``.
+    """
+    mock = MagicMock(side_effect=lambda: _async(_fest_probe(*FEST_WAITING)))
+    with patch("src.scraper.fest_watch.FestWatcher.probe", new=mock):
+        yield mock
 
 
 def _run(probe, state, sent_bucket="bucket", extra_args=()):
@@ -424,3 +457,227 @@ class TestWatchReleaseCommand:
     def test_unknown_division_exits_one(self):
         result = runner.invoke(app, ["watch-release", "-d", "Atlantis"])
         assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# MLS NEXT Fest (SB-1774)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def loud():
+    """Capture the Slack and email legs of the Fest announcement."""
+    calls: dict[str, list] = {"slack": [], "email": []}
+
+    def _slack(settings, text):
+        calls["slack"].append(text)
+        return True
+
+    def _email(settings, subject, body):
+        calls["email"].append((subject, body))
+        return True
+
+    with (
+        patch("src.orchestrator.cli._send_slack_message", side_effect=_slack),
+        patch("src.orchestrator.cli._send_email_alert", side_effect=_email),
+    ):
+        yield calls
+
+
+def _released_fest(link="https://www.modular11.com/events/event/80"):
+    return lambda: _async(
+        _fest_probe(
+            FestPageState.RELEASED,
+            FestPageState.WAITING,
+            FestPageState.WAITING,
+            link=link,
+        )
+    )
+
+
+class TestWatchFest:
+    def test_quiet_while_fest_is_waiting(self, sent, loud):
+        result, state = _run(_probe([_result()]), ReleaseWatchState())
+
+        assert result.exit_code == 0
+        assert sent == [] and loud == {"slack": [], "email": []}
+        assert state.fest_announced is False
+
+    def test_release_is_announced_on_every_channel(self, sent, loud, fest_probe):
+        link = "https://www.modular11.com/events/event/80"
+        fest_probe.side_effect = _released_fest(link)
+
+        result, state = _run(_probe([_result()]), ReleaseWatchState())
+
+        assert result.exit_code == 10
+        assert len(sent) == 1 and "Fest schedule is published" in sent[0]
+        assert len(loud["slack"]) == 1
+        assert loud["slack"][0].startswith("<!channel>")
+        assert link in loud["slack"][0]
+        assert len(loud["email"]) == 1 and link in loud["email"][0][1]
+        assert state.fest_announced is True
+        assert state.fest_link == link
+
+    def test_announced_fest_is_not_probed_again(self, sent, loud, fest_probe):
+        state_in = ReleaseWatchState(
+            fest_announced=True, fest_link="x", last_season="2026-2027"
+        )
+
+        result, _ = _run(_probe([_result()]), state_in)
+
+        assert result.exit_code == 0
+        fest_probe.assert_not_called()
+        assert sent == [] and loud["slack"] == []
+
+    def test_undelivered_release_is_retried_next_run(self, loud, fest_probe):
+        fest_probe.side_effect = _released_fest()
+        with (
+            patch("src.orchestrator.cli._send_telegram_message", return_value=False),
+            patch("src.orchestrator.cli._send_slack_message", return_value=False),
+            patch("src.orchestrator.cli._send_email_alert", return_value=False),
+        ):
+            result, state = _run(_probe([_result()]), ReleaseWatchState())
+
+        assert result.exit_code == 10
+        assert state.fest_announced is False, "nothing got through, so try again"
+
+    def test_one_channel_is_enough_to_count_as_announced(self, fest_probe):
+        fest_probe.side_effect = _released_fest()
+        with (
+            patch("src.orchestrator.cli._send_telegram_message", return_value=False),
+            patch("src.orchestrator.cli._send_slack_message", return_value=True),
+            patch("src.orchestrator.cli._send_email_alert", return_value=False),
+        ):
+            _, state = _run(_probe([_result()]), ReleaseWatchState())
+
+        assert state.fest_announced is True
+
+    def test_single_fest_outage_is_silent(self, sent, loud, fest_probe):
+        fest_probe.side_effect = lambda: _async(
+            _fest_probe(*(FestPageState.ERROR,) * 3)
+        )
+
+        result, state = _run(_probe([_result()]), ReleaseWatchState())
+
+        assert result.exit_code == 0, "a Fest outage does not fail the league watch"
+        assert sent == []
+        assert state.fest_consecutive_failures == 1
+
+    def test_sustained_fest_outage_alerts_once(self, sent, loud, fest_probe):
+        fest_probe.side_effect = lambda: _async(
+            _fest_probe(*(FestPageState.ERROR,) * 3)
+        )
+        state_in = ReleaseWatchState(
+            fest_consecutive_failures=2, last_season="2026-2027"
+        )
+
+        _, state = _run(_probe([_result()]), state_in)
+        assert len(sent) == 1 and "fest schedule watch failing" in sent[0].lower()
+        assert state.fest_failure_alert_sent is True
+
+        sent.clear()
+        _run(_probe([_result()]), state)
+        assert sent == [], "already alerted for this streak"
+
+    def test_one_page_failing_is_not_an_outage(self, sent, fest_probe):
+        fest_probe.side_effect = lambda: _async(
+            _fest_probe(
+                FestPageState.ERROR, FestPageState.WAITING, FestPageState.WAITING
+            )
+        )
+        state_in = ReleaseWatchState(
+            fest_consecutive_failures=2, last_season="2026-2027"
+        )
+
+        _, state = _run(_probe([_result()]), state_in)
+
+        assert state.fest_consecutive_failures == 0
+        assert sent == []
+
+    def test_a_crashing_fest_probe_does_not_break_the_league_watch(
+        self, sent, fest_probe
+    ):
+        fest_probe.side_effect = RuntimeError("boom")
+        probe = _probe([_result(state=ReleaseState.LIVE, count=25)])
+
+        result, state = _run(probe, ReleaseWatchState())
+
+        assert result.exit_code == 10
+        assert "schedule published" in sent[0].lower()
+        assert state.fest_consecutive_failures == 1
+
+    def test_no_fest_flag_skips_the_probe(self, fest_probe):
+        result, _ = _run(
+            _probe([_result()]), ReleaseWatchState(), extra_args=["--no-fest"]
+        )
+
+        assert result.exit_code == 0
+        fest_probe.assert_not_called()
+
+    def test_dry_run_sends_nothing(self, sent, loud, fest_probe, tmp_path):
+        fest_probe.side_effect = _released_fest()
+        env = {
+            "AGENT_JOURNAL_S3_BUCKET": "",
+            "AGENT_RELEASE_WATCH_STATE_PATH": str(tmp_path / "rw.json"),
+        }
+        with (
+            patch(
+                "src.scraper.release_detector.ScheduleReleaseDetector.probe",
+                new=MagicMock(return_value=_async(_probe([_result()]))),
+            ),
+            patch.dict("os.environ", env),
+        ):
+            result = runner.invoke(app, ["watch-release", "--dry-run"])
+
+        assert result.exit_code == 10
+        assert sent == [] and loud == {"slack": [], "email": []}
+
+    def test_season_change_clears_fest_memory(self):
+        state = ReleaseWatchState(
+            fest_announced=True,
+            fest_link="x",
+            fest_consecutive_failures=3,
+            fest_failure_alert_sent=True,
+            last_season="2025-2026",
+        )
+        state.reset_for_season("2026-2027")
+
+        assert state.fest_announced is False
+        assert state.fest_link == ""
+        assert state.fest_consecutive_failures == 0
+        assert state.fest_failure_alert_sent is False
+
+
+class TestSlackSender:
+    def _settings(self, token="xoxb-test"):
+        from src.orchestrator.settings import AgentSettings
+
+        with patch.dict("os.environ", {"AGENT_SLACK_BOT_TOKEN": token}):
+            return AgentSettings(_env_file=None)
+
+    def test_no_token_is_a_no_op(self):
+        from src.orchestrator.cli import _send_slack_message
+
+        with patch("httpx.post") as post:
+            assert _send_slack_message(self._settings(token=""), "hi") is False
+        post.assert_not_called()
+
+    def test_posts_to_the_alert_channel(self):
+        from src.orchestrator.cli import _send_slack_message
+
+        response = MagicMock()
+        response.json.return_value = {"ok": True}
+        with patch("httpx.post", return_value=response) as post:
+            assert _send_slack_message(self._settings(), "hi") is True
+
+        kwargs = post.call_args.kwargs
+        assert kwargs["json"] == {"channel": "C0CDUDR6N6N", "text": "hi"}
+        assert kwargs["headers"]["Authorization"] == "Bearer xoxb-test"
+
+    def test_slack_error_is_reported_not_raised(self):
+        from src.orchestrator.cli import _send_slack_message
+
+        response = MagicMock()
+        response.json.return_value = {"ok": False, "error": "not_in_channel"}
+        with patch("httpx.post", return_value=response):
+            assert _send_slack_message(self._settings(), "hi") is False

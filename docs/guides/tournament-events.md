@@ -10,6 +10,33 @@ published when this was built, and neither was where it will be published, so
 the source is swappable and the modular11 one is proven on the 2025 event
 (modular11 event `75`, 2,458 matches).
 
+## Knowing when the schedule is out
+
+`watch-release` (the `schedule-release-watch` CronJob, every 30 minutes) also
+watches the Fest pages and announces the release once, on Telegram, Slack
+`#sb-alerts` (`@channel`) and email at the same time (SB-1774). Plain HTTP, no
+browser. While waiting, the pages look like this:
+
+| Page | Waiting | Released |
+|---|---|---|
+| `matchcenter.mlsnextpro.com/mlsnext/tournaments/fest/` | "Fest Schedule & Standings" (`#mlsnext-fest-schedule-standings`) links to `/fest/temp` | the link points anywhere else, and the message carries that link |
+| `www.mlssoccer.com/mlsnext/tournaments/fest/` | same page, same promo | same |
+| `www.mlssoccer.com/mlsnext/tournaments/fest/temp` | the body says "Coming Soon" | the text is gone |
+
+A non-200, a redirect, a page without the Fest title or without the promo is
+an error, never a release. One page failing is fine; all three failing for
+three runs in a row alerts once. Check by hand without sending or saving:
+
+```bash
+uv run match-scraper-agent watch-release --dry-run
+# ...
+# fest: matchcenter=waiting, mlssoccer=waiting, fest-temp=waiting
+```
+
+`--no-fest` (or `AGENT_RELEASE_WATCH_FEST=false`) turns it off. After the
+announcement the state file remembers it (`fest_announced`) and the pages are
+not probed again this season.
+
 ## The command
 
 ```bash

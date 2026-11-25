@@ -124,6 +124,7 @@ and the alerts that mattered were ignored along with it.
 | Watchdog | no successful run in 8h |
 | Score canary | Monday: games played and none scored, or a feed is missing |
 | Release watch | a new season's schedule is published |
+| Fest schedule watch | the MLS NEXT Fest schedule is published (SB-1774). The one alert sent **everywhere at once**: Telegram, Slack `#sb-alerts` with `@channel` (when `AGENT_SLACK_BOT_TOKEN` is set) and email (when `AGENT_RESEND_API_KEY` is set). Once, then the probe stops. A sustained outage of all three Fest pages alerts once on Telegram |
 | Audit processor | a match is in MT but no longer in the feed (manual review). Per-team audit findings are not sent |
 
 A quiet run sends nothing. Silence is safe to read as healthy because the

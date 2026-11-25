@@ -140,6 +140,16 @@ class AgentSettings(BaseSettings):
     # against someone else's server is noise, not news.
     release_watch_failure_threshold: int = 3
 
+    # Also watch the MLS NEXT Fest pages for the schedule (SB-1774). Probing
+    # stops by itself once the release is announced.
+    release_watch_fest: bool = True
+
+    # Slack, for the one alert loud enough to go everywhere: the Fest schedule
+    # release. Optional — blank token means Telegram and email only. The
+    # channel is #sb-alerts, where the sbagent bot already posts.
+    slack_bot_token: str = ""
+    slack_alert_channel: str = "C0CDUDR6N6N"
+
     # Telegram notifications (run alerts and the daily digest)
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
