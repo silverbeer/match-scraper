@@ -51,6 +51,20 @@ class ReleaseWatchState(BaseModel):
     last_season: str = Field(
         default="", description="Season the remembered targets belong to"
     )
+    # MLS NEXT Fest (SB-1774). Separate from the league fields: a different
+    # source, its own failure streak, and announced once rather than per target.
+    fest_announced: bool = Field(
+        default=False, description="Whether the Fest schedule release was announced"
+    )
+    fest_link: str = Field(
+        default="", description="Schedule link reported when Fest was announced"
+    )
+    fest_consecutive_failures: int = Field(
+        default=0, ge=0, description="Runs in a row where every Fest page failed"
+    )
+    fest_failure_alert_sent: bool = Field(
+        default=False, description="Whether the Fest failure streak was alerted"
+    )
 
     def newly_live(self, live_labels: list[str]) -> list[str]:
         """Return the labels that are live now and were not live before."""
@@ -77,6 +91,10 @@ class ReleaseWatchState(BaseModel):
             self.seen_live = []
             self.consecutive_failures = 0
             self.failure_alert_sent = False
+            self.fest_announced = False
+            self.fest_link = ""
+            self.fest_consecutive_failures = 0
+            self.fest_failure_alert_sent = False
         self.last_season = season
 
     def touch(self, now: datetime | None = None) -> None:

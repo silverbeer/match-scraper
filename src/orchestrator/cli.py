@@ -16,6 +16,7 @@ from src.orchestrator.targets import load_targets
 if TYPE_CHECKING:
     from src.models.match_data import MatchData
     from src.models.tournament import TournamentContext, TournamentMatch
+    from src.orchestrator.release_watch import ReleaseWatchState
     from src.orchestrator.settings import AgentSettings
     from src.scraper.tournament.base import TournamentSource
 
@@ -64,11 +65,14 @@ def _queue_client_kwargs(settings: AgentSettings) -> dict[str, str]:
     return kwargs
 
 
-def _send_email_alert(settings: AgentSettings, subject: str, body: str) -> None:
-    """Send a plain-text email via Resend. No-op if not configured."""
+def _send_email_alert(settings: AgentSettings, subject: str, body: str) -> bool:
+    """Send a plain-text email via Resend. No-op if not configured.
+
+    Returns whether the email was handed to Resend.
+    """
     if not settings.resend_api_key:
         logger.debug("email_alert.skipped", reason="resend_api_key not configured")
-        return
+        return False
 
     import resend
 
@@ -83,8 +87,10 @@ def _send_email_alert(settings: AgentSettings, subject: str, body: str) -> None:
             }
         )
         logger.info("email_alert.sent", to=settings.alert_email_to)
+        return True
     except Exception as exc:
         logger.error("email_alert.failed", error=str(exc))
+        return False
 
 
 def _send_telegram_failure(
@@ -1365,16 +1371,17 @@ def audit_report(
 
 def _send_telegram_message(
     settings: AgentSettings, message: str, *, subject: str
-) -> None:
+) -> bool:
     """
     Send one MarkdownV2 message, falling back to email if Telegram fails.
 
     Mirrors _send_telegram_report but takes a prebuilt message, since the
-    release watcher has nothing to do with run summaries.
+    release watcher has nothing to do with run summaries. Returns whether
+    Telegram itself accepted the message.
     """
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
         logger.debug("telegram.skipped", reason="not configured")
-        return
+        return False
 
     from telegram_notify import TelegramClient
 
@@ -1385,6 +1392,7 @@ def _send_telegram_message(
         )
         client.send(message)
         logger.info("telegram.sent", chat_id=settings.telegram_chat_id)
+        return True
     except Exception as exc:
         logger.warning("telegram.failed", error=str(exc))
         _send_email_alert(
@@ -1392,6 +1400,39 @@ def _send_telegram_message(
             subject=subject,
             body=f"Telegram notification failed: {exc}\n\n{message}",
         )
+        return False
+
+
+def _send_slack_message(settings: AgentSettings, text: str) -> bool:
+    """
+    Post one message to the Slack alert channel. No-op without a bot token.
+
+    Only the Fest release uses this (SB-1774): routine alerts stay on Telegram,
+    and ops alerts reach #sb-alerts through Grafana. Never raises — a Slack
+    outage must not cost the Telegram message or the saved state.
+    """
+    if not settings.slack_bot_token:
+        logger.debug("slack.skipped", reason="slack_bot_token not configured")
+        return False
+
+    import httpx
+
+    try:
+        response = httpx.post(
+            "https://slack.com/api/chat.postMessage",
+            headers={"Authorization": f"Bearer {settings.slack_bot_token}"},
+            json={"channel": settings.slack_alert_channel, "text": text},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not body.get("ok"):
+            raise RuntimeError(f"slack error: {body.get('error', 'unknown')}")
+        logger.info("slack.sent", channel=settings.slack_alert_channel)
+        return True
+    except Exception as exc:
+        logger.warning("slack.failed", error=str(exc))
+        return False
 
 
 @app.command()
@@ -1617,9 +1658,19 @@ def watch_release(
         bool,
         typer.Option("--dry-run", help="Probe and report, but send and save nothing."),
     ] = False,
+    fest: Annotated[
+        bool | None,
+        typer.Option(
+            "--fest/--no-fest",
+            help="Also watch the MLS NEXT Fest pages (default: AGENT_RELEASE_WATCH_FEST).",
+        ),
+    ] = None,
 ) -> None:
     """
     Watch for the MLS Next schedule being published, and announce it once.
+
+    Also watches the MLS NEXT Fest pages, and announces the Fest schedule on
+    Telegram, Slack and email at once (SB-1774).
 
     Designed to run unattended on a CronJob. Sends Telegram on the first
     detection of each target and on a sustained probe outage; stays silent
@@ -1720,6 +1771,10 @@ def watch_release(
             )
         state.record_live(newly_live)
 
+    fest_released = False
+    if settings.release_watch_fest if fest is None else fest:
+        fest_released = _watch_fest(settings, state, dry_run=dry_run)
+
     state.touch()
 
     if persist:
@@ -1727,5 +1782,94 @@ def watch_release(
 
     if probe.all_failed:
         raise typer.Exit(code=20)
-    if newly_live:
+    if newly_live or fest_released:
         raise typer.Exit(code=10)
+
+
+def _watch_fest(
+    settings: AgentSettings, state: ReleaseWatchState, *, dry_run: bool
+) -> bool:
+    """
+    Probe the Fest pages and announce a release once, loudly (SB-1774).
+
+    Returns whether a release was seen on this run. Mutates ``state``; the
+    caller saves it. Stops probing once announced: after Fest the pages will
+    change or vanish, and that must not turn into failure alerts.
+    """
+    import asyncio
+
+    from src.orchestrator.report import build_fest_failure_report
+    from src.scraper.fest_watch import FestWatcher
+
+    if state.fest_announced:
+        typer.echo(f"fest: already announced ({state.fest_link})")
+        return False
+
+    try:
+        probe = asyncio.run(FestWatcher().probe())
+    except Exception as exc:  # never let Fest break the league watch
+        logger.warning("fest_watch.crashed", error=str(exc))
+        probe = None
+
+    if probe is None or probe.all_failed:
+        typer.echo(probe.summary() if probe else "fest: probe crashed")
+        state.fest_consecutive_failures += 1
+        threshold = settings.release_watch_failure_threshold
+        if (
+            state.fest_consecutive_failures >= threshold
+            and not state.fest_failure_alert_sent
+        ):
+            sample = probe.errors[0].detail if probe else "probe crashed"
+            if not dry_run:
+                _send_telegram_message(
+                    settings,
+                    build_fest_failure_report(
+                        consecutive_failures=state.fest_consecutive_failures,
+                        total_pages=len(probe.results) if probe else 0,
+                        sample_error=sample,
+                    ),
+                    subject="[match-scraper-agent] Fest schedule watch failing",
+                )
+            state.fest_failure_alert_sent = True
+        return False
+
+    typer.echo(probe.summary())
+    state.fest_consecutive_failures = 0
+    state.fest_failure_alert_sent = False
+
+    if not probe.released:
+        return False
+
+    released = [(r.name, r.detail) for r in probe.released]
+    logger.info("fest_watch.released", pages=released)
+    if dry_run:
+        return True
+
+    if _announce_fest_release(settings, released):
+        state.fest_announced = True
+        state.fest_link = released[0][1]
+    else:
+        # Nothing got through: leave it unannounced so the next run retries.
+        logger.error("fest_watch.announce_undelivered", pages=released)
+    return True
+
+
+def _announce_fest_release(
+    settings: AgentSettings, released: list[tuple[str, str]]
+) -> bool:
+    """Send the Fest release everywhere at once. True if any channel took it."""
+    from src.orchestrator.report import (
+        build_fest_release_report,
+        build_fest_release_text,
+    )
+
+    text = build_fest_release_text(released)
+    subject = "🚨 MLS NEXT Fest schedule is published"
+    delivered = [
+        _send_telegram_message(
+            settings, build_fest_release_report(released), subject=subject
+        ),
+        _send_slack_message(settings, f"<!channel> :rotating_light: {text}"),
+        _send_email_alert(settings, subject=subject, body=text),
+    ]
+    return any(delivered)

@@ -526,3 +526,58 @@ def build_release_failure_report(
             ),
         ]
     )
+
+
+# What to do once the Fest schedule is out: k3s/fest/cronjob.yaml has the
+# full procedure, and docs/guides/tournament-events.md the dry run.
+_FEST_NEXT_STEPS = (
+    "Next: find the event id behind the new link, set AGENT_EVENT_ID and "
+    "AGENT_EVENT_TOURNAMENT_ID, dry-run scrape-event "
+    "(docs/guides/tournament-events.md), then un-suspend the k3s/fest CronJobs. "
+    "Fest starts 2 December."
+)
+
+
+def build_fest_release_text(released: list[tuple[str, str]]) -> str:
+    """Plain-text Fest release announcement, for Slack and email.
+
+    ``released`` is ``(page name, link)`` for each page that changed.
+    """
+    lines = ["MLS NEXT Fest schedule is published!", ""]
+    lines += [f"- {name}: {link}" for name, link in released]
+    lines += ["", _FEST_NEXT_STEPS]
+    return "\n".join(lines)
+
+
+def build_fest_release_report(released: list[tuple[str, str]]) -> str:
+    """MarkdownV2 Fest release announcement for Telegram (SB-1774).
+
+    The one message this watcher is meant to be loud about: it fires once,
+    and Fest's own CronJobs cannot run until someone acts on it.
+    """
+    lines = ["🚨🚨🚨 *MLS NEXT Fest schedule is published* 🚨🚨🚨", ""]
+    lines += [f"• {escape(name)}: {escape(link)}" for name, link in released]
+    lines += ["", escape(_FEST_NEXT_STEPS)]
+    return "\n".join(lines)
+
+
+def build_fest_failure_report(
+    *, consecutive_failures: int, total_pages: int, sample_error: str
+) -> str:
+    """MarkdownV2 message for a sustained Fest probe outage. Sent once per streak."""
+    return "\n".join(
+        [
+            "⚠️ *Fest schedule watch failing*",
+            "",
+            escape(
+                f"All {total_pages} Fest pages have failed {consecutive_failures} runs in a row."
+            ),
+            "",
+            f"Latest error: {escape(_clamp_detail(sample_error))}",
+            "",
+            escape(
+                "The watcher cannot tell whether the Fest schedule has dropped "
+                "while this persists. Check the pages by hand."
+            ),
+        ]
+    )
