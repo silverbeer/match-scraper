@@ -407,6 +407,17 @@ class TestRepeats:
         _submit()
         assert "after a backfill" not in World.alerts[1]
 
+    def test_naming_every_league_is_full_scope(self, tmp_path):
+        # The nightly CronJob passes --league for each league; it must still
+        # write state, or the repeat alert and the digest line never fire.
+        World.events = [_event("26329")]
+        World.land_on_submit = False
+
+        _submit("--league", "Homegrown", "--league", "Flex")
+
+        state = json.loads((tmp_path / "gaps.json").read_text())
+        assert state["found"] == ["26329"]
+
     def test_a_narrowed_run_writes_no_state(self, tmp_path):
         World.events = [_event("26329")]
         World.land_on_submit = False

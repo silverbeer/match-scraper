@@ -774,7 +774,9 @@ def backfill(
     # Only a run over everything may speak for everything: a narrowed run
     # writing state would tell the digest, and the next nightly run, that the
     # leagues and weeks it never looked at are complete.
-    full_scope = leagues is None and from_date is None and to_date is None
+    # Naming every league is the same scope as naming none; the CronJob
+    # spells them out (SB-1786).
+    full_scope = set(chosen) == set(LEAGUES) and from_date is None and to_date is None
     state_path = settings.completeness_state_path
 
     # Where this reads and where it would write, before anything happens.
