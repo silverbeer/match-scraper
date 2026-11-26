@@ -1,0 +1,95 @@
+# Completeness backfill (SB-1786): official results that never reached MT.
+#
+# The agent only scrapes a bracket when missing-table says something there is
+# due, so a fixture the feed published after the bracket's one FULL_SYNC never
+# got an MT row and could never become due. 121 completed Flex results from
+# 2026-09-06 to 2026-10-04 went missing that way, silently (SB-1779).
+#
+# This asks the other way round, once a day: every completed League and Flex
+# result in the official feed, season start to two days ago, whose game key
+# is not an MT match_id. It sends those through the normal queue, re-reads MT
+# to confirm they landed, and tells Telegram what it found:
+#
+#   * any gap: counts per league/division/age group and the game keys
+#   * a game key missing on two runs in a row: the louder alert, because
+#     sending it did not land
+#   * the 23:30 digest carries one line, "N official results not in MT"
+#
+# Nothing is deleted. An MT result the feed does not know is listed in the
+# job log, never removed.
+#
+# It refuses to publish when MT API and queue disagree (prod API with a
+# non-prod queue, or the reverse) and when more than --max-changes results
+# are missing — a number that large is an outage, not a gap, and wants a
+# person. Both exit 1 and fail the Job.
+#
+# 22:40 ET: after the 20:00 agent run and the Saturday 22:00 one, and done
+# (feed read, ~18 MT pages, up to 10 min waiting on the workers) before the
+# 23:30 digest reads its state.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-completeness
+  namespace: match-scraper
+spec:
+  schedule: "40 22 * * *"
+  # Named, not inherited — see k3s/agent/cronjob.yaml (SB-1060).
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # No retry: a retry would publish the same batch twice. The next run is
+      # a day away and repeats anything still missing.
+      backoffLimit: 0
+      activeDeadlineSeconds: 1500
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: completeness
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  code=0
+                  uv run match-scraper-agent backfill --env prod --submit \
+                    --league Homegrown --league Flex || code=$?
+                  # 10 is "ran, with findings" — gaps were found and sent, and
+                  # Telegram has already been told. An outcome, not a crash;
+                  # the same convention as the score canary and Fest.
+                  case "$code" in
+                    0)  echo "completeness: nothing missing" ;;
+                    10) echo "completeness: ran with findings (see above)" ;;
+                    *)  echo "completeness: exit $code"; exit "$code" ;;
+                  esac
+              env:
+                # Shares the agent's feed cache, so an unchanged standings
+                # document costs a 304 (SB-884).
+                - name: ASSIST_FEED_CACHE_DIR
+                  value: /data/agent-state/assist-feeds
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              volumeMounts:
+                # completeness.json lives here: the last run's gaps, read by
+                # the next run and by the digest.
+                - name: agent-state
+                  mountPath: /data/agent-state
+              resources:
+                # One 5 MB JSON document and ~18 MT pages. No browser.
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                limits:
+                  cpu: "500m"
+                  memory: 512Mi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state

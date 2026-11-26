@@ -302,6 +302,83 @@ creates nothing twice.
 Full reference — options, the round mapping, the two sources, deployment:
 [Tournament Events](tournament-events.md).
 
+### `backfill` - Official results missing from missing-table
+
+Part of the `match-scraper-agent` CLI (SB-1786). Lists every **completed**
+League or Flex result in the official feed whose game key is not an MT
+`match_id`, and with `--submit` sends them through the normal queue. Without
+`--submit` it is a dry run: nothing is published and nothing is alerted.
+
+```bash
+# Dry run: both leagues, season start to two days ago
+uv run match-scraper-agent backfill
+
+# One league, one window
+uv run match-scraper-agent backfill --league Flex --from 2026-09-06 --to 2026-10-04
+
+# Publish (what k3s/completeness/cronjob.yaml runs nightly)
+uv run match-scraper-agent backfill --env prod --submit
+```
+
+Expected output (dry run, abridged; against the 2026-11-26 prod export from
+SB-1779 the diff finds 121 Flex results: 120 to send, and one on the
+placeholder date for a person):
+
+```
+Backfill Homegrown, Flex, 2026-08-01 to 2026-11-24 — DRY RUN, nothing is published
+MT API: api.missingtable.com
+Publish target: broker messaging-rabbitmq.match-scraper.svc.cluster.local:5672, queue 'matches.prod'
+
+Feed fixtures: 10917, MT rows read: ... (18 pages)
+Official results not in MT: 121
+     10  Flex Southeast U15
+     ...
+  26365  2026-09-06  Flex Southwest (North) U17  Los Angeles Bulls Soccer Club v Ventura County Fusion  3-3 (p 3-4)  action=create
+  ...
+
+Needs a person: result on placeholder date: 1
+  ...
+
+Dry run: 120 would be sent with --submit.
+```
+
+- **Division** is the fixture's own bracket in the feed, falling back to the
+  home squad's bracket for the few bracketless fixtures — so a cross-bracket
+  Flex fixture is filed where the feed puts it, not where it was scraped from.
+- **MT is read a week at a time** from season start to today, plus the
+  postponement placeholder date. `/api/matches` takes no limit or offset, so a
+  page cannot be continued, only made smaller: a page of 500 rows or more is
+  split in half and re-read, and a page of 1000 (PostgREST's cap) stops the
+  run. A truncated read would look like missing results.
+- **An empty page is an outage**, not a gap, when the feed has results played
+  in it: `/api/matches` answers `200 []` when its database query fails. The run
+  exits 1, alerts, and sends nothing. The confirming re-read after a send
+  retries on the same error rather than reading everything as missing.
+- **Some results need a person and are never sent:** a result dated on the
+  postponement placeholder (it would land dated months ahead, where no run
+  looks) and one with no bracket. Both are listed in the output and the alert.
+- **Nothing is deleted.** MT results the feed does not have are listed as
+  `action=report`.
+- **Publish guard.** Before anything else it prints the MT API host, broker and
+  queue, and `--submit` refuses when they disagree: queue `matches.prod` with an
+  API other than `api.missingtable.com`, or the reverse, or a fan-out exchange.
+- **`--max-changes`** (default 200): with more results missing than this,
+  `--submit` publishes none of them, alerts and exits 1 — that many is an
+  outage, not a gap.
+- With `--submit` it re-reads MT for up to `--confirm-wait` seconds (default
+  600) to confirm what it sent landed, and sends a Telegram alert. A game key
+  it **sent** on the previous run that is missing again gets the louder one;
+  a send that failed, or a result it never sent, is reported but cannot
+  repeat. Only the default full-scope run (no `--league`, `--from` or `--to`)
+  records state in `AGENT_COMPLETENESS_STATE_PATH`, which the daily digest
+  shows as "N official results not in MT".
+
+Exit `0` nothing missing, `10` ran with findings, `1` could not run (feed or MT
+unreadable, broker unreachable, publish guard, `--max-changes`). Re-running is
+safe: match ids are stable, so missing-table creates nothing twice.
+
+Why the gap happened: [Midweek Fixtures, Reschedules and Missing Results](../architecture/midweek-reconcile.md).
+
 ## 🎯 Available Options
 
 ### Age Groups

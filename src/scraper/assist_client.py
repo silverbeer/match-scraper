@@ -211,6 +211,11 @@ class AssistEvent(BaseModel):
         None, description="Platform division — 'MLS Next' for every league event"
     )
     round_number: int | None = Field(None)
+    competition_bracket_id: int | None = Field(
+        None,
+        description="v2 bracket the fixture belongs to; null for the few "
+        "bracketless (often cross-bracket) fixtures",
+    )
 
     @property
     def local_datetime(self) -> datetime:
@@ -436,6 +441,11 @@ class AssistIndex(BaseModel):
         default_factory=dict,
         description="(division, age_group) -> squad IDs",
     )
+    bracket_ids: dict[int, tuple[str, str]] = Field(
+        default_factory=dict,
+        description="Bracket ID -> (division, age_group), for reading an "
+        "event's own competition_bracket_id",
+    )
 
     @classmethod
     def from_standings(
@@ -464,6 +474,7 @@ class AssistIndex(BaseModel):
         }
 
         brackets: dict[tuple[str, str], frozenset[int]] = {}
+        bracket_ids: dict[int, tuple[str, str]] = {}
         for bracket in raw:
             name = bracket.get("name")
             age_group = (bracket.get("age_group") or {}).get("name") or age_names.get(
@@ -476,10 +487,12 @@ class AssistIndex(BaseModel):
                 for row in bracket.get("standings") or []
             }
             brackets[(name, age_group)] = frozenset(s for s in squads if s is not None)
+            if isinstance(bracket.get("id"), int):
+                bracket_ids[bracket["id"]] = (name, age_group)
         if not brackets:
             where = f" (stage {stage!r})" if stage else ""
             raise AssistFeedError(f"Standings feed {key}{where} declared no brackets")
-        return cls(key=key, brackets=brackets)
+        return cls(key=key, brackets=brackets, bracket_ids=bracket_ids)
 
     def squads(self, division: str, age_group: str) -> frozenset[int]:
         """Squad IDs in one bracket, or an empty set if it does not exist."""

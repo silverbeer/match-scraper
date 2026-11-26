@@ -1,8 +1,9 @@
 """The two submit paths must produce the same payload (SB-846).
 
-match-scraper can send a fixture to missing-table two ways: the CLI
-(`build_match_dict`, used for manual and backfill loads) and the orchestrator
-(`scrape_matches`, used by the agent CronJob). Both normalise the same feed
+match-scraper can send a fixture to missing-table two ways: the standalone CLI
+(`src/cli/main.py build_match_dict`) and the orchestrator
+(`src/orchestrator/tools.py build_match_dict`, used by the pipeline,
+`scrape --submit`, the audit and `backfill`). Both normalise the same feed
 into the same contract, and they have now drifted apart three times in two
 days:
 
@@ -23,6 +24,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.cli.main import mt_match_type, normalize_team_name_for_display
+from src.orchestrator import tools
 from src.orchestrator.tools import _normalize_team_name
 
 FEED_NAME = "Intercontinental Football Academy of New England"
@@ -34,8 +36,8 @@ def _cli_match_type(league: str, competition: str | None = None) -> str:
 
 
 def _agent_match_type(league: str) -> str:
-    """Mirror of the expression in orchestrator/tools.py."""
-    return "Flex" if league == "Flex" else "League"
+    """The orchestrator's real mapping, not a copy of it."""
+    return tools.mt_match_type(league)
 
 
 @pytest.mark.parametrize("league", ["Homegrown", "Academy", "Flex"])
@@ -111,27 +113,148 @@ def test_an_unmapped_team_name_passes_through_both_paths_unchanged():
     )
 
 
+# The modules that build a queue payload. The CLI is the standalone scraper;
+# every orchestrator sender — the pipeline, `scrape --submit`, the audit and
+# `backfill` — uses tools.build_match_dict (SB-1786).
+BUILDERS = ["src.cli.main", "src.orchestrator.tools"]
+
+# Orchestrator modules that send fixtures but must not build the payload.
+SENDERS = ["src.orchestrator.cli", "src.orchestrator.audit.runner"]
+
+
+def _payload_dicts(module_name: str, marker: str) -> list[ast.Dict]:
+    module = importlib.import_module(module_name)
+    tree = ast.parse(inspect.getsource(module))
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        and any(isinstance(k, ast.Constant) and k.value == marker for k in node.keys)
+    ]
+
+
 def _payload_keys(module_name: str, marker: str) -> set[str]:
     """Keys of the queue payload a builder constructs, read from its source.
 
-    Parsed rather than called: two of the three builders are inline inside a
-    scrape routine that wants a live feed and a queue client.
+    Parsed rather than called, so the check covers the source as written.
     """
-    module = importlib.import_module(module_name)
-    tree = ast.parse(inspect.getsource(module))
-    for node in ast.walk(tree):
-        keys = getattr(node, "keys", None)
-        if isinstance(node, ast.Dict) and any(
-            isinstance(k, ast.Constant) and k.value == marker for k in keys
-        ):
-            return {k.value for k in keys if isinstance(k, ast.Constant)}
+    for node in _payload_dicts(module_name, marker):
+        return {k.value for k in node.keys if isinstance(k, ast.Constant)}
     raise AssertionError(f"no payload dict containing {marker!r} in {module_name}")
 
 
+@pytest.mark.parametrize("module_name", SENDERS)
+def test_orchestrator_senders_use_the_one_builder(module_name):
+    """Three copies of the payload drifted three times (SB-844, SB-846, and
+    SB-1786: `scrape --submit` and the audit kept match_type "League" after
+    the pipeline learned Flex). A sender that builds its own dict is how the
+    next drift starts, so none may.
+    """
+    assert not _payload_dicts(module_name, "external_match_id"), (
+        f"{module_name} builds its own queue payload; use tools.build_match_dict"
+    )
+    source = inspect.getsource(importlib.import_module(module_name))
+    assert "build_match_dict(" in source
+
+
+def _match(**overrides):
+    from datetime import datetime
+
+    from src.scraper.models import Match
+
+    fields = {
+        "match_id": "28630",
+        "match_datetime": datetime(2026, 10, 14, 19, 0),
+        "home_team": "New York Red Bulls",
+        "away_team": "TSF Academy",
+        "home_score": 1,
+        "away_score": 1,
+        "home_penalty_score": 4,
+        "away_penalty_score": 3,
+    }
+    fields.update(overrides)
+    return Match(**fields)
+
+
 @pytest.mark.parametrize(
-    "module_name",
-    ["src.cli.main", "src.orchestrator.tools", "src.orchestrator.cli"],
+    ("league", "expected"),
+    [("Flex", "Flex"), ("Homegrown", "League"), ("Academy", "League")],
 )
+def test_the_shared_builder_files_the_competition(league, expected):
+    payload = tools.build_match_dict(
+        _match(), {"league": league, "division": "Turnpike", "age_group": "U15"}
+    )
+    assert payload["match_type"] == expected
+    assert payload["division"] == "Turnpike"
+    # The shootout travels with the score.
+    assert (payload["home_penalty_score"], payload["away_penalty_score"]) == (4, 3)
+
+
+def test_the_shared_builder_files_an_academy_bracket_as_the_division():
+    payload = tools.build_match_dict(
+        _match(),
+        {"league": "Academy", "conference": "New England", "age_group": "U14"},
+    )
+    assert payload["division"] == "New England"
+
+
+def test_scrape_submit_sends_flex_as_flex(monkeypatch):
+    """`scrape --target <flex> --submit` hardcoded "League" (SB-1786)."""
+    from typer.testing import CliRunner
+
+    from src.orchestrator import cli
+
+    sent: list[dict] = []
+
+    class FakeQueue:
+        def __init__(self, **kwargs):
+            pass
+
+        def submit_match(self, match_data):
+            sent.append(match_data)
+
+    class FakeScraper:
+        def __init__(self, config, headless=True):
+            pass
+
+        async def scrape_matches(self):
+            return [_match()]
+
+    monkeypatch.setattr(
+        cli,
+        "_target_config",
+        lambda settings: {
+            "u15-flex-turnpike": {
+                "age_group": "U15",
+                "league": "Flex",
+                "division": "Turnpike",
+            }
+        },
+    )
+    monkeypatch.setattr("src.scraper.mls_scraper.MLSScraper", FakeScraper)
+    monkeypatch.setattr("src.celery.queue_client.MatchQueueClient", FakeQueue)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "scrape",
+            "--target",
+            "u15-flex-turnpike",
+            "--from",
+            "2026-10-01",
+            "--to",
+            "2026-10-31",
+            "--submit",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert [m["match_type"] for m in sent] == ["Flex"]
+    assert sent[0]["league"] == "Flex"
+    assert sent[0]["division"] == "Turnpike"
+
+
+@pytest.mark.parametrize("module_name", BUILDERS)
 def test_every_submit_path_sends_the_shootout(module_name):
     """A Flex draw is decided on penalties, and every sender must say so.
 
@@ -143,10 +266,7 @@ def test_every_submit_path_sends_the_shootout(module_name):
     assert {"home_penalty_score", "away_penalty_score"} <= keys
 
 
-@pytest.mark.parametrize(
-    "module_name",
-    ["src.cli.main", "src.orchestrator.tools", "src.orchestrator.cli"],
-)
+@pytest.mark.parametrize("module_name", BUILDERS)
 def test_every_payload_key_survives_the_wire_contract(module_name):
     """MatchData is what gets published, not the dict a builder returns.
 
@@ -164,15 +284,7 @@ def test_every_payload_key_survives_the_wire_contract(module_name):
     )
 
 
-@pytest.mark.parametrize(
-    "module_name",
-    [
-        "src.cli.main",
-        "src.orchestrator.tools",
-        "src.orchestrator.cli",
-        "src.orchestrator.audit.runner",
-    ],
-)
+@pytest.mark.parametrize("module_name", BUILDERS)
 def test_every_submit_path_sends_the_utc_kickoff(module_name):
     """match_time is the venue's wall clock with no zone; missing-table read it
     as Eastern and stored Pacific kickoffs 3 h early (SB-1202). Every sender

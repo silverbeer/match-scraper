@@ -152,3 +152,59 @@ class TestDigestCommand:
         assert code == 1
         assert len(sent) == 1
         assert "digest failed" in sent[0]
+
+
+class TestNotInMtLine:
+    """The completeness backfill's count, one line in the digest (SB-1786)."""
+
+    DAY = date(2026, 11, 26)
+
+    def test_left_out_when_the_backfill_has_never_run(self) -> None:
+        msg = build_digest_report(DigestSummary(day=self.DAY))
+        assert "not in MT" not in msg
+
+    def test_reports_the_count(self) -> None:
+        msg = build_digest_report(
+            DigestSummary(day=self.DAY), not_in_mt=3, not_in_mt_as_of=self.DAY
+        )
+        assert "3 official results not in MT" in msg
+        assert "as of" not in msg
+
+    def test_zero_is_said_plainly(self) -> None:
+        msg = build_digest_report(
+            DigestSummary(day=self.DAY), not_in_mt=0, not_in_mt_as_of=self.DAY
+        )
+        assert "0 official results not in MT" in msg
+
+    def test_a_stale_count_says_when_it_is_from(self) -> None:
+        msg = build_digest_report(
+            DigestSummary(day=self.DAY),
+            not_in_mt=2,
+            not_in_mt_as_of=date(2026, 11, 20),
+        )
+        assert "as of Fri 20 Nov" in msg
+
+    def test_the_command_reads_the_backfill_state(self, tmp_path) -> None:
+        import json
+
+        state = tmp_path / "completeness.json"
+        state.write_text(
+            json.dumps(
+                {"day": "2026-11-26", "found": ["1", "2"], "still_missing": ["2"]}
+            )
+        )
+        settings = MagicMock(completeness_state_path=str(state))
+        sent: list[str] = []
+        with (
+            patch("src.orchestrator.digest.fetch_recent_matches", return_value=[]),
+            patch(
+                "src.orchestrator.cli._send_telegram_message",
+                side_effect=lambda _s, msg, **_k: sent.append(msg),
+            ),
+            patch(
+                "src.orchestrator.settings.AgentSettings",
+                MagicMock(return_value=settings),
+            ),
+        ):
+            digest(env="local")
+        assert "1 official results not in MT" in sent[0]

@@ -157,6 +157,10 @@ class AgentSettings(BaseSettings):
     # a day rather than on every run until someone fixes it (SB-1679). On the
     # agent-state PVC, which every agent CronJob mounts read-write.
     alert_state_path: str = "/data/agent-state/alerts-sent.json"
+    # The backfill's last findings: which official results were missing from
+    # missing-table, and which it could not close (SB-1786). Read by the next
+    # backfill, to escalate a gap that survived its own fix, and by the digest.
+    completeness_state_path: str = "/data/agent-state/completeness.json"
 
     # Resend email fallback (used when Telegram fails)
     resend_api_key: str = ""

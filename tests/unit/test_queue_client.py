@@ -78,6 +78,52 @@ class TestMatchQueueClientInit:
         worker = (repo / "k3s/workers/prod-deployment.yaml").read_text()
         assert f'--queues={DEFAULT_QUEUE}"' in worker
 
+    def test_the_completeness_cronjob_publishes_where_the_agent_does(self):
+        """The backfill CronJob (SB-1786) must take its queue and MT API from the
+        agent ConfigMap, not set its own — and that pair must be one the
+        backfill's publish guard accepts, or it refuses every night.
+        """
+        from pathlib import Path
+
+        import yaml
+
+        from src.celery.queue_client import DEFAULT_QUEUE
+        from src.orchestrator.completeness import publish_mismatch
+
+        repo = Path(__file__).resolve().parents[2]
+        cronjob = yaml.safe_load((repo / "k3s/completeness/cronjob.yaml").read_text())
+        container = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"][
+            "containers"
+        ][0]
+
+        refs = {
+            ref["configMapRef"]["name"]
+            for ref in container["envFrom"]
+            if "configMapRef" in ref
+        }
+        assert refs == {"match-scraper-agent-config"}
+        overridden = {e["name"] for e in container.get("env", [])}
+        assert not overridden & {
+            "AGENT_QUEUE_NAME",
+            "AGENT_EXCHANGE_NAME",
+            "AGENT_RABBITMQ_URL",
+            "AGENT_MISSING_TABLE_API_URL",
+        }
+        assert "backfill" in container["args"][0]
+        assert "--submit" in container["args"][0]
+
+        configmap = yaml.safe_load((repo / "k3s/agent/configmap.yaml").read_text())
+        data = configmap["data"]
+        assert data["AGENT_QUEUE_NAME"] == DEFAULT_QUEUE
+        assert (
+            publish_mismatch(
+                data["AGENT_MISSING_TABLE_API_URL"],
+                data["AGENT_QUEUE_NAME"],
+                data.get("AGENT_EXCHANGE_NAME", ""),
+            )
+            is None
+        )
+
     def test_init_with_custom_exchange(self, monkeypatch):
         """Test initialization with custom exchange name."""
         monkeypatch.setenv("RABBITMQ_URL", "amqp://user:pass@localhost:5672//")

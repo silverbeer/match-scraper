@@ -62,3 +62,64 @@ def mark_alerted(failures: list[dict[str, Any]], path: str, today: date) -> None
         )
     except OSError as exc:
         logger.warning("alert_state.write_failed", path=str(target), error=str(exc))
+
+
+# --- Completeness gaps (SB-1786) -------------------------------------------
+#
+# The backfill CronJob records which official results it found missing from
+# missing-table, which it sent, and which were still not in MT at the end:
+#
+#     {"day": "2026-11-26", "found": [...], "submitted": [...],
+#      "still_missing": [...]}
+#
+# The next run reads ``submitted`` to tell a new gap from one its own send did
+# not close — the second is the louder alert — and the digest reads
+# ``still_missing`` for its "N official results not in MT" line. Same failure
+# rule as above: unreadable state means "no previous run", which can only make
+# an alert fresher, never swallow one.
+
+
+def read_gap_state(path: str) -> dict[str, Any]:
+    """The last completeness run's record, or {} if there is none."""
+    try:
+        state = json.loads(Path(path).read_text())
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        logger.warning("alert_state.read_failed", path=path, error=str(exc))
+        return {}
+    return state if isinstance(state, dict) else {}
+
+
+def repeat_gaps(found: list[str], path: str) -> list[str]:
+    """The game keys in ``found`` the previous run sent, and that are missing
+    again. A key it only found — refused, no bracket, send failed — is not a
+    repeat: nothing was tried, so nothing failed to land."""
+    previous = set(read_gap_state(path).get("submitted") or [])
+    return sorted(key for key in found if key in previous)
+
+
+def write_gap_state(
+    path: str,
+    today: date,
+    found: list[str],
+    submitted: list[str],
+    still_missing: list[str],
+) -> None:
+    """Record this run's gaps for the next run and the digest."""
+    target = Path(path)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(
+                {
+                    "day": today.isoformat(),
+                    "found": sorted(found),
+                    "submitted": sorted(submitted),
+                    "still_missing": sorted(still_missing),
+                },
+                indent=2,
+            )
+        )
+    except OSError as exc:
+        logger.warning("alert_state.write_failed", path=str(target), error=str(exc))

@@ -14,6 +14,7 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 | `score-canary/cronjob.yaml` | `score-canary` | `0 12 * * 1` |
 | `watchdog/cronjob.yaml` | `match-scraper-watchdog` | `30 * * * *` (America/New_York) |
 | `digest/cronjob.yaml` | `match-scraper-digest` | `30 23 * * *` (America/New_York) |
+| `completeness/cronjob.yaml` | `match-scraper-completeness` | `40 22 * * *` (America/New_York) |
 | `fest/cronjob.yaml` | `fest-scores` | `15,45 8-22 2-13 12 *` (America/Phoenix) — **suspended** |
 | `fest/cronjob.yaml` | `fest-sweep` | `0 3 1-15 12 *` (America/Phoenix) — **suspended** |
 | `agent/configmap.yaml` | `match-scraper-agent-config` | — |
@@ -22,6 +23,13 @@ The canary answers a question fixture counts cannot: it probes the league, Flex
 and Academy feeds for the weekend just gone and exits 10 if fixtures were played
 and none came back scored. A feed that quietly stops carrying results looks
 exactly like a quiet week otherwise.
+
+The completeness backfill answers the question the planner cannot ask: which
+completed official results have no MT row at all (SB-1786). It sends them,
+confirms they landed, alerts Telegram, and leaves its count for the digest on
+the agent-state PVC — which is why the digest now mounts it read-only. It
+refuses to publish when the MT API and queue disagree, or when more than 200
+results are missing.
 
 ### MLS NEXT Fest
 
