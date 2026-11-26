@@ -15,6 +15,7 @@ These deploy the scraper pipeline to **`rancher-desktop`, namespace `match-scrap
 | `watchdog/cronjob.yaml` | `match-scraper-watchdog` | `30 * * * *` (America/New_York) |
 | `digest/cronjob.yaml` | `match-scraper-digest` | `30 23 * * *` (America/New_York) |
 | `completeness/cronjob.yaml` | `match-scraper-completeness` | `40 22 * * *` (America/New_York) |
+| `reconcile/cronjob.yaml` | `match-scraper-reconcile` | `0 5 * * 1` (America/New_York) |
 | `fest/cronjob.yaml` | `fest-scores` | `15,45 8-22 2-13 12 *` (America/Phoenix) — **suspended** |
 | `fest/cronjob.yaml` | `fest-sweep` | `0 3 1-15 12 *` (America/Phoenix) — **suspended** |
 | `agent/configmap.yaml` | `match-scraper-agent-config` | — |
@@ -30,6 +31,15 @@ confirms they landed, alerts Telegram, and leaves its count for the digest on
 the agent-state PVC — which is why the digest now mounts it read-only. It
 refuses to publish when the MT API and queue disagree, or when more than 200
 results are missing.
+
+The weekly reconcile asks the next question: of the matches MT does have,
+which disagree with the feed (SB-1787)? It sends the feed's fixture for a
+wrong score, a home/away reversal, a result MT still has as scheduled, or a
+new date, and only lists a locked score, a forfeit with a different score, a
+result on the placeholder and a match MT counts as played that the feed does
+not. Each submitting run writes a change log under
+`/data/agent-state/reconcile/` and a Telegram summary. It refuses more than
+100 corrections at once.
 
 ### MLS NEXT Fest
 

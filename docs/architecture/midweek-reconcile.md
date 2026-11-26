@@ -1,4 +1,4 @@
-# Midweek Fixtures, Reschedules and Missing Results (SB-1348, SB-1786)
+# Midweek Fixtures, Reschedules and Missing Results (SB-1348, SB-1786, SB-1787)
 
 ## What went wrong
 
@@ -110,3 +110,78 @@ reverse), and when more than `--max-changes` (200) results are missing — a gap
 that large is an outage and wants a person, not a bulk send.
 
 Usage: [CLI guide, `backfill`](../guides/cli-usage.md).
+
+## Past matches that disagree with the feed (SB-1787)
+
+### What went wrong
+
+Nothing re-checked a match after its first scrape. Once a row was scored, or
+dated in the past, no target counted it as due again, so a later change in the
+feed never reached MT. The SB-1779 audit (2026-11-26) found:
+
+| Finding | Count |
+|---------|-------|
+| Wrong score (18 League, 17 Flex; 7 the exact reverse of the feed's) | 35 |
+| Completed officially, still `scheduled` in MT | 14 |
+| Re-dated to 2027 officially, on the old date in MT | 42 |
+| Completed in MT, postponed officially (28249–28252) | 4 |
+
+Plus SB-1783: Academy 42362, postponed, kept its old date.
+
+### The reconcile
+
+`match-scraper-agent reconcile` (`classify` in
+`src/orchestrator/completeness.py`) reads the official feed and every MT match
+of the season from `/api/agent/season-matches`, and compares each past League
+or Flex row with its fixture, joined on `match_id` = `game_key`:
+
+| Class | Condition | Action |
+|-------|-----------|--------|
+| `score` | feed completed; score or shootout differs, same orientation | send the feed's fixture |
+| `swap` | feed completed; its home/away is MT's away/home | send the feed's fixture |
+| `status` | feed completed; MT `scheduled`/`tbd`/`postponed` | send (MT `cancelled`: report only) |
+| `redate` | feed not completed, not on the placeholder, new date in the future | send with status `scheduled` |
+| `voided` | MT completed/forfeit; feed not completed or on the placeholder | report only |
+
+Sending the feed's fixture is enough because the MT worker already does the
+rest: it handles a home/away reversal on the normal path (both names resolve
+to team ids), holds score, status and sides on a `score_locked` row and records
+the conflict, records `scraped_overrode_manual` when the feed replaces a
+person's score, and refuses completed → postponed. So the reconcile:
+
+- **never sends a locked row** — it lists it as "locked, differs";
+- **sends a person's row** (scraped data wins on results) and lists it under
+  "Overrides a person's score";
+- treats **forfeit as completed**: a forfeit with the feed's score is no
+  change, and one with a different score is for a person;
+- never sends a result dated on the **placeholder**, nor an **unscored
+  fixture for a date that is not in the future**;
+- lifts a **postponed** row the feed has played (the worker accepts a real
+  score over a held status, `_incoming_status`), but only reports a
+  **cancelled** one: a person cancelled it;
+- reports a past `scheduled`/`tbd` row the feed has moved to the placeholder:
+  postponed, with no real date to send;
+- never deletes; an MT result the feed does not have is listed only.
+
+Home and away are compared by name, punctuation and case ignored, after the
+same normalisation the payload uses. One side agreeing settles the
+orientation; when neither does the scores are compared as they stand and the
+change carries a `names differ` flag.
+
+MT is read in full before anything is sent: a correction that re-dates a match
+moves it between pages. Any failed page is an outage, not an empty season —
+exit 1, alert, nothing sent.
+
+`k3s/reconcile/cronjob.yaml` runs it with `--submit` every Monday at 05:00 ET.
+Each submitting run with a finding writes a JSON change log to the agent-state
+PVC (`/data/agent-state/reconcile/<run>.json`) and a Telegram summary. More
+than `--max-changes` (100) corrections refuses the whole batch.
+
+Against the live feed and the SB-1779 prod export (2026-11-26) it finds 35
+`score`, 14 `status` (2 of them results on the placeholder, report only), 64
+`redate` (the audit's 42 `scheduled` rows, and 22 `postponed` rows the feed has
+since given a real date), 4 `voided` and 1 `swap` (on the placeholder, report
+only). 42362 is not among them: the feed still has it on the placeholder, so
+there is no new date to send.
+
+Usage: [CLI guide, `reconcile`](../guides/cli-usage.md).

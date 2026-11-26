@@ -1,0 +1,91 @@
+# Weekly reconcile (SB-1787): past MT matches that disagree with the feed.
+#
+# Nothing re-checked a match after its first scrape. The SB-1779 audit found
+# 35 wrong scores, 14 matches completed officially but still scheduled in MT,
+# 42 re-dated to 2027 officially but on their old dates in MT, and 4 that MT
+# counts as played but the feed has postponed.
+#
+# This compares every past League and Flex match in MT (Homegrown, Flex, and
+# the Academy conferences in AGENT_ACADEMY_CONFERENCES) with its official
+# fixture, joined on match id, and sends the feed's fixture through the normal
+# queue for each score, home/away, status or date that differs. Some
+# differences are only reported, never sent: a locked score, a forfeit with
+# a different score, a result on the postponement placeholder, and a match
+# MT counts as played that the feed does not (the worker refuses
+# completed -> postponed). Nothing is deleted.
+#
+# Each submitting run writes a JSON change log to
+# /data/agent-state/reconcile/<run>.json and sends a Telegram summary.
+#
+# It refuses to publish when MT API and queue disagree, and when more than
+# --max-changes (100) corrections are due — a number that large wants a
+# person. Both exit 1 and fail the Job, and so does an MT read failure:
+# nothing is sent on a partial read.
+#
+# Monday 05:00 ET: after the weekend's last agent run has settled, and well
+# clear of the 02:00 and 08:00 runs.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: match-scraper-reconcile
+  namespace: match-scraper
+spec:
+  schedule: "0 5 * * 1"
+  # Named, not inherited — see k3s/agent/cronjob.yaml (SB-1060).
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # No retry: a retry would publish the same batch twice. The next run is
+      # a week away and repeats anything still different.
+      backoffLimit: 0
+      activeDeadlineSeconds: 1200
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: reconcile
+              image: ghcr.io/silverbeer/match-scraper:latest
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  code=0
+                  uv run match-scraper-agent reconcile --env prod --submit || code=$?
+                  # 10 is "ran, with findings" — corrections were sent or
+                  # listed, and Telegram has already been told. An outcome,
+                  # not a crash; the same convention as the completeness job.
+                  case "$code" in
+                    0)  echo "reconcile: nothing differs" ;;
+                    10) echo "reconcile: ran with findings (see above)" ;;
+                    *)  echo "reconcile: exit $code"; exit "$code" ;;
+                  esac
+              env:
+                # Shares the agent's feed cache, so an unchanged standings
+                # document costs a 304 (SB-884).
+                - name: ASSIST_FEED_CACHE_DIR
+                  value: /data/agent-state/assist-feeds
+              envFrom:
+                - configMapRef:
+                    name: match-scraper-agent-config
+                - secretRef:
+                    name: match-scraper-agent-secret
+              volumeMounts:
+                # The change logs live here, one per submitting run.
+                - name: agent-state
+                  mountPath: /data/agent-state
+              resources:
+                # Two standings documents and ~15 MT pages. No browser.
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                limits:
+                  cpu: "500m"
+                  memory: 512Mi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state

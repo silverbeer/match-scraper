@@ -642,3 +642,65 @@ def build_completeness_report(
         lines += ["", "*Game keys:*", escape(", ".join(game_keys))]
     footer = escape("Detail: the match-scraper-completeness job log.")
     return "\n".join(_clamp_to_telegram_limit(lines, footer))
+
+
+def build_reconcile_report(
+    *,
+    env: str,
+    totals: dict[str, dict[str, int]],
+    sent: list[str],
+    send_failed: list[str],
+    report_only: dict[str, list[str]],
+    overrides_person: list[str],
+    mt_only: list[str],
+    log_path: str = "",
+    refused: str = "",
+) -> str:
+    """MarkdownV2 summary of a reconcile run (SB-1787).
+
+    ``totals`` is per class: how many were sendable and how many only
+    reported. ``report_only`` groups the report-only game keys by why;
+    ``overrides_person`` are sent corrections that replace a person's score.
+    """
+    to_send = sum(t["send"] for t in totals.values())
+    reported = sum(t["report"] for t in totals.values())
+    header = escape(
+        f"MT disagrees with the official feed: {to_send} to send, "
+        f"{reported} report only"
+    )
+    lines = [f"🔁 *{header}*", "", f"Environment: {escape(env)}"]
+    if refused:
+        lines += ["", f"*Not sent:* {escape(refused)}"]
+    else:
+        lines.append(escape(f"Sent {len(sent)}, {len(send_failed)} failed."))
+    lines += ["", "*By class:*"]
+    lines += [
+        escape(f"  {klass}: {t['send']} to send, {t['report']} report only")
+        for klass, t in totals.items()
+        if t["send"] or t["report"]
+    ]
+    if send_failed:
+        lines += ["", "*Send failed:*", escape(", ".join(send_failed))]
+    if overrides_person:
+        # Nothing was sent on a refused run, so nothing overrode anyone.
+        title = "Would override" if refused else "Overrides"
+        title = escape(f"{title} a person's score:")
+        lines += [
+            "",
+            f"*{title}*",
+            escape(", ".join(overrides_person)),
+        ]
+    for reason, keys in report_only.items():
+        lines += ["", f"*{escape(f'Report only, {reason}:')}*", escape(", ".join(keys))]
+    if mt_only:
+        lines += [
+            "",
+            f"*{escape('MT results the feed does not have (never deleted):')}*",
+            escape(", ".join(mt_only)),
+        ]
+    if sent:
+        lines += ["", "*Sent:*", escape(", ".join(sent))]
+    footer = escape(
+        f"Change log: {log_path}" if log_path else "Detail: the reconcile job log."
+    )
+    return "\n".join(_clamp_to_telegram_limit(lines, footer))

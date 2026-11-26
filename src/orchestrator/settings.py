@@ -161,6 +161,9 @@ class AgentSettings(BaseSettings):
     # missing-table, and which it could not close (SB-1786). Read by the next
     # backfill, to escalate a gap that survived its own fix, and by the digest.
     completeness_state_path: str = "/data/agent-state/completeness.json"
+    # One JSON change log per submitting reconcile run, <run>.json, so every
+    # correction sent to MT can be traced afterwards (SB-1787).
+    reconcile_log_dir: str = "/data/agent-state/reconcile"
 
     # Resend email fallback (used when Telegram fails)
     resend_api_key: str = ""

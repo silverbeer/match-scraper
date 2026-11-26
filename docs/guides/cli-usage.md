@@ -379,6 +379,106 @@ safe: match ids are stable, so missing-table creates nothing twice.
 
 Why the gap happened: [Midweek Fixtures, Reschedules and Missing Results](../architecture/midweek-reconcile.md).
 
+### `reconcile` - Past MT matches that disagree with the feed
+
+Part of the `match-scraper-agent` CLI (SB-1787). Where `backfill` sends
+official results MT has no row for, `reconcile` compares the rows MT **does**
+have: every past League or Flex match in Homegrown, Flex and the Academy
+conferences MT scrapes, joined on match id with its official fixture. With
+`--submit` the feed's fixture is published through the normal queue for each
+one that differs. Without `--submit` it is a dry run: nothing is published,
+nothing is alerted, no change log is written.
+
+```bash
+# Dry run: every league scraped, season start to yesterday
+uv run match-scraper-agent reconcile
+
+# One league, one class, from a date
+uv run match-scraper-agent reconcile --league Flex --only score --since 2026-10-01
+
+# Publish (what k3s/reconcile/cronjob.yaml runs on Mondays)
+uv run match-scraper-agent reconcile --env prod --submit
+```
+
+| Class | MT row (dated before today) | Feed | Action |
+|-------|-----------------------------|------|--------|
+| `score` | completed/forfeit | completed, score or shootout differs | send |
+| `swap` | any but postponed/cancelled | completed, home and away the other way round | send (the feed's sides) |
+| `status` | scheduled/tbd/postponed | completed | send (cancelled: report only) |
+| `redate` | scheduled/tbd/postponed | not completed, a real new date in the future | send, status `scheduled` |
+| `voided` | completed/forfeit | not completed, or on the placeholder | **report only** |
+
+Never sent, only listed with the reason:
+
+- a **`score_locked`** row (`locked, differs`) — the worker would hold it anyway;
+- a **forfeit** whose score differs — a forfeit with the feed's score is no change;
+- a result dated on the **postponement placeholder** — it would land months ahead;
+- an **unscored fixture** whose new date is today or earlier;
+- a past **scheduled/tbd** row whose fixture the feed has parked on the
+  placeholder ("postponed to the placeholder: no real date yet");
+- a **cancelled** row the feed has played ("cancelled in MT, played per feed");
+- an MT result the feed does not have at all — nothing is deleted.
+
+A row a person entered (`entered_by_person`) is sent — scraped data wins on
+results — and is listed again under "Overrides a person's score". MT records
+each one as `scraped_overrode_manual`.
+
+Expected output (dry run, abridged; the totals are what the classifier finds
+for the live feed against the SB-1779 prod export of 2026-11-26):
+
+```
+Reconcile Homegrown, Flex, Academy, 2026-08-01 to 2026-11-25 — DRY RUN, nothing is published
+MT API: api.missingtable.com
+Publish target: broker messaging-rabbitmq.match-scraper.svc.cluster.local:5672, queue 'matches.prod'
+Academy conferences: New England
+
+Feed fixtures: ..., MT rows read: ...
+  26044 | score | score: 1-1 -> 1-2 | -
+  26839 | status | status: scheduled -> completed 0-1 | -
+  30664 | redate | date: 2026-11-21 -> 2027-02-21 | -
+  28249 | voided | status: completed 1-0 -> not completed (postponed, 2027-06-08) | placeholder | report only: MT counts it as played and the feed does not; never voided here
+
+Totals:
+  score     35 to send     0 report only
+  swap       0 to send     1 report only
+  status    12 to send     2 report only
+  redate    64 to send     0 report only
+  voided     0 to send     4 report only
+
+Dry run: warning: --submit would refuse: 111 corrections to send, more than --max-changes 100; nothing published.
+```
+
+- **MT is read from `/api/agent/season-matches`**, 500 rows a page, every page
+  until the first empty one, before anything is sent. The season and league
+  ids are looked up by name. Any failed page stops the run: exit 1, a Telegram
+  alert on `--submit`, nothing sent.
+- **Academy** is reconciled only when `AGENT_ACADEMY_CONFERENCES` (or
+  `AGENT_ACADEMY_TARGETS`) turns it on, and only for those conferences.
+- **`--only`** (`score,swap,status,redate,voided,mt-only`) restricts what is
+  considered *and* reported: a narrowed run lists only what was asked.
+- **`--max-changes`** (default 100): with more corrections due, `--submit`
+  publishes none, writes the change log, alerts and exits 1. A dry run warns
+  and exits 10.
+- **The first prod run is a one-off.** The backlog SB-1779 found is more than
+  100 corrections, so the weekly job would refuse it. Run it once by hand with
+  a higher cap after checking the dry run; the CronJob keeps the default 100:
+
+  ```bash
+  uv run match-scraper-agent reconcile --env prod              # check the list
+  uv run match-scraper-agent reconcile --env prod --submit --max-changes 150
+  ```
+- **Publish guard**, as for `backfill`: the MT API host, broker and queue are
+  printed first, and `--submit` refuses when they disagree.
+- With `--submit` every run with a finding writes a JSON change log to
+  `AGENT_RECONCILE_LOG_DIR/<run>.json` (default `/data/agent-state/reconcile`)
+  and sends a Telegram summary. No change is sent silently.
+
+Exit `0` nothing differs, `10` ran with findings, `1` could not run (feed or MT
+unreadable, broker unreachable, publish guard, `--max-changes` with `--submit`,
+every send failed).
+
+Design: [Midweek Fixtures, Reschedules and Missing Results](../architecture/midweek-reconcile.md#past-matches-that-disagree-with-the-feed-sb-1787).
+
 ## 🎯 Available Options
 
 ### Age Groups
