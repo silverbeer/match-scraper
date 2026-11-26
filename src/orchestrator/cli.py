@@ -973,6 +973,337 @@ def backfill(
     raise typer.Exit(code=10)
 
 
+@app.command()
+def reconcile(
+    leagues: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--league",
+            help="Homegrown, Flex or Academy; repeat for more. Default: every "
+            "league scraped (Academy only when AGENT_ACADEMY_CONFERENCES or "
+            "AGENT_ACADEMY_TARGETS turns it on).",
+        ),
+    ] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(
+            "--since", help="Only MT matches on or after this date (YYYY-MM-DD)."
+        ),
+    ] = None,
+    only: Annotated[
+        str | None,
+        typer.Option(
+            "--only",
+            help="Comma-separated: score,swap,status,redate,voided,mt-only. "
+            "A narrowed run reports only what was asked. Default: all.",
+        ),
+    ] = None,
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    submit: Annotated[
+        bool,
+        typer.Option(
+            "--submit", help="Publish to the queue. Without it this is a dry run."
+        ),
+    ] = False,
+    max_changes: Annotated[
+        int,
+        typer.Option(
+            "--max-changes",
+            min=0,
+            help="Refuse to publish anything when more corrections than this are due.",
+        ),
+    ] = 100,
+) -> None:
+    """Correct past MT matches that disagree with the official feed (SB-1787).
+
+    Reads the official feed and every past MT match of the season, joined on
+    match id, and lists each one whose score, home/away, status or date
+    differs. With --submit the feed's fixture is published through the
+    normal ingest path for each, a JSON change log is written and Telegram
+    hears about it. Nothing is ever deleted, and some differences are only
+    reported: a locked score, a forfeit with a different score, a result on
+    the placeholder date, and a match MT counts as played that the feed does
+    not.
+
+    Without --submit nothing is published and nothing is alerted.
+
+    Exit codes: 0 nothing differs; 10 ran, with findings; 1 could not run —
+    a feed or MT could not be read, the broker is unreachable, the publish
+    target does not match the MT that was read, every send failed, or (with
+    --submit only) more than --max-changes corrections are due. A dry run
+    over --max-changes warns and exits 10.
+    """
+    import asyncio
+    import json
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from telegram_notify import escape
+
+    from src.orchestrator import completeness
+    from src.orchestrator.completeness import (
+        CLASSES,
+        FEEDS,
+        api_host,
+        classify,
+        mt_only,
+        publish_mismatch,
+        totals,
+    )
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.report import build_reconcile_report
+    from src.orchestrator.settings import AgentSettings, env_file_path
+    from src.orchestrator.tools import SEASON_START, _current_season
+    from src.scraper.assist_client import AssistClient
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(json_output=settings.json_logs)
+
+    # Academy is opt-in, exactly as it is for the scrape (_target_config): a
+    # conference MT does not scrape has no rows worth correcting.
+    conferences = settings.academy_conference_set()
+    academy_on = settings.academy_targets or bool(conferences)
+    default = [league for league in FEEDS if league != "Academy" or academy_on]
+    chosen = list(dict.fromkeys(leagues or default))
+    unknown = [league for league in chosen if league not in FEEDS]
+    if unknown:
+        typer.echo(
+            f"Unknown league(s) {', '.join(unknown)}. Valid: {', '.join(FEEDS)}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if "Academy" in chosen and not academy_on:
+        typer.echo(
+            "Academy is not scraped here: set AGENT_ACADEMY_CONFERENCES "
+            "(or AGENT_ACADEMY_TARGETS) to reconcile it.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    valid = [*CLASSES, "mt-only"]
+    classes = [c.strip() for c in (only or "").split(",") if c.strip()] or valid
+    bad = [c for c in classes if c not in valid]
+    if bad:
+        typer.echo(
+            f"Unknown class(es) {', '.join(bad)}. Valid: {', '.join(valid)}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # The day MT means, not the pod's: the pod runs in UTC.
+    today = datetime.now(ZoneInfo("America/New_York")).date()
+    try:
+        start = date.fromisoformat(since) if since else SEASON_START
+    except ValueError as exc:
+        typer.echo(f"Invalid date: {exc}. Use YYYY-MM-DD.", err=True)
+        raise typer.Exit(code=1) from None
+    end = today - timedelta(days=1)
+    if start > end:
+        typer.echo(f"--since {start} is not before today ({today}).", err=True)
+        raise typer.Exit(code=1)
+
+    # Where this reads and where it would write, before anything happens.
+    mode = "SUBMIT" if submit else "DRY RUN, nothing is published"
+    typer.echo(f"Reconcile {', '.join(chosen)}, {start} to {end} — {mode}")
+    typer.echo(f"MT API: {api_host(settings.missing_table_api_url)}")
+    typer.echo(f"Publish target: {_broker_target(settings)}")
+    if "Academy" in chosen:
+        scope = (
+            "every conference"
+            if settings.academy_targets
+            else (", ".join(sorted(conferences)))
+        )
+        typer.echo(f"Academy conferences: {scope}")
+
+    def fail(reason: str) -> NoReturn:
+        typer.echo(reason, err=True)
+        if submit:
+            _send_telegram_message(
+                settings,
+                escape(f"⚠️ Reconcile could not run: {reason}"),
+                subject="[match-scraper-agent] Reconcile failed",
+            )
+        raise typer.Exit(code=1)
+
+    queue_client = None
+    if submit:
+        mismatch = publish_mismatch(
+            settings.missing_table_api_url, settings.queue_name, settings.exchange_name
+        )
+        if mismatch:
+            # Not alerted: a misconfigured manual run is the operator's to fix,
+            # and the operator is reading this.
+            typer.echo(f"Refusing to publish: {mismatch}. Nothing fetched.", err=True)
+            raise typer.Exit(code=1)
+        from src.celery.queue_client import MatchQueueClient
+
+        queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
+        if not queue_client.check_connection():
+            fail("broker unreachable: nothing fetched or published")
+
+    async def _feed():
+        async with AssistClient() as client:
+            return await completeness.read_feed(client, chosen)
+
+    try:
+        feed = asyncio.run(_feed())
+    except Exception as exc:
+        fail(f"could not read the official feed: {exc}")
+
+    events = [
+        e
+        for e in feed.events
+        if e.league != "Academy"
+        or settings.academy_targets
+        or e.division in conferences
+    ]
+
+    # Every page before anything is sent: a re-dated match moves between them.
+    try:
+        rows = completeness.read_season(
+            settings.missing_table_api_url,
+            settings.missing_table_api_key,
+            season=_current_season(),
+            leagues=chosen,
+            start=start,
+            end=end,
+        )
+    except Exception as exc:
+        fail(f"could not read missing-table, nothing sent: {exc}")
+
+    changes = [
+        c
+        for c in classify(events, rows, today=today, leagues=chosen, since=start)
+        if c.klass in classes
+    ]
+    unknown_to_feed = (
+        mt_only(rows, feed.game_keys, today=today, leagues=chosen, since=start)
+        if "mt-only" in classes
+        else []
+    )
+    to_send = [c for c in changes if c.action == "send"]
+    reports = [c for c in changes if c.action == "report"]
+    tally = totals(changes)
+
+    typer.echo(f"\nFeed fixtures: {len(events)}, MT rows read: {len(rows)}")
+    for change in changes:
+        typer.echo(f"  {change.line()}")
+    person = [c for c in to_send if c.overrides_person]
+    if person:
+        typer.echo(
+            f"Overrides a person's score (scraped wins on results): {len(person)}"
+        )
+        for change in person:
+            typer.echo(f"  {change.line()}")
+    if unknown_to_feed:
+        typer.echo(
+            f"MT results the feed does not have (never deleted): {len(unknown_to_feed)}"
+        )
+        for row in unknown_to_feed:
+            typer.echo(
+                f"  {row.match_id} | mt {row.id} | {row.match_date} "
+                f"{row.home_team_name} v {row.away_team_name} {row.score()}"
+            )
+    typer.echo("\nTotals:")
+    for klass, counts_ in tally.items():
+        typer.echo(
+            f"  {klass:<7} {counts_['send']:>4} to send  {counts_['report']:>4} report only"
+        )
+
+    if not changes and not unknown_to_feed:
+        typer.echo("\nNothing differs.")
+        raise typer.Exit(code=0)
+
+    report_only: dict[str, list[str]] = {}
+    for change in reports:
+        report_only.setdefault(change.reason, []).append(change.game_key)
+
+    run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
+    log_path = Path(settings.reconcile_log_dir) / f"{run_id}.json"
+
+    def write_log(outcome: dict[str, Any]) -> str:
+        """The change log, on the agent-state PVC. Returns its path, or ''."""
+        record = {
+            "run_id": run_id,
+            "env": env,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "mt_api": api_host(settings.missing_table_api_url),
+            "publish_target": _broker_target(settings),
+            "leagues": chosen,
+            "since": start.isoformat(),
+            "classes": classes,
+            "totals": tally,
+            **outcome,
+            "changes": [
+                c.model_dump(mode="json")
+                | {"sent": c.game_key in outcome.get("sent", [])}
+                for c in changes
+            ],
+            "mt_only": [r.model_dump(mode="json") for r in unknown_to_feed],
+        }
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(json.dumps(record, indent=2, sort_keys=True))
+        except OSError as exc:
+            typer.echo(f"warning: could not write the change log: {exc}", err=True)
+            return ""
+        typer.echo(f"Change log: {log_path}")
+        return str(log_path)
+
+    def alert(**fields: Any) -> None:
+        _send_telegram_message(
+            settings,
+            build_reconcile_report(
+                env=env,
+                totals=tally,
+                report_only=report_only,
+                overrides_person=[c.game_key for c in person],
+                mt_only=[r.match_id or str(r.id) for r in unknown_to_feed],
+                **fields,
+            ),
+            subject="[match-scraper-agent] MT matches disagree with the feed",
+        )
+
+    if len(to_send) > max_changes:
+        refused = (
+            f"{len(to_send)} corrections to send, more than --max-changes "
+            f"{max_changes}; nothing published"
+        )
+        if not submit:
+            typer.echo(f"\nDry run: warning: --submit would refuse: {refused}.")
+            raise typer.Exit(code=10)
+        typer.echo(f"\nRefusing: {refused}.", err=True)
+        path = write_log({"refused": refused, "sent": [], "send_failed": []})
+        alert(sent=[], send_failed=[], refused=refused, log_path=path)
+        raise typer.Exit(code=1)
+
+    if queue_client is None:
+        typer.echo(f"\nDry run: {len(to_send)} would be sent with --submit.")
+        raise typer.Exit(code=10)
+
+    sent: list[str] = []
+    send_failed: list[str] = []
+    for change in to_send:
+        try:
+            queue_client.submit_match(change.payload())
+            sent.append(change.game_key)
+        except Exception as exc:
+            send_failed.append(change.game_key)
+            typer.echo(f"  {change.game_key}  send failed: {exc}", err=True)
+    typer.echo(
+        f"\nSubmitted {len(sent)} corrections to queue ({len(send_failed)} failed)."
+    )
+
+    path = write_log({"refused": "", "sent": sent, "send_failed": send_failed})
+    alert(sent=sent, send_failed=send_failed, log_path=path)
+
+    if send_failed and not sent:
+        raise typer.Exit(code=1)
+    raise typer.Exit(code=10)
+
+
 # Stands in for the tournament id on a dry run that was not given one, so
 # every message is still built and validated. It never reaches the queue:
 # the context built from it is flagged stand_in, and _publish_event refuses

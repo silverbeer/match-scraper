@@ -78,10 +78,20 @@ class TestMatchQueueClientInit:
         worker = (repo / "k3s/workers/prod-deployment.yaml").read_text()
         assert f'--queues={DEFAULT_QUEUE}"' in worker
 
-    def test_the_completeness_cronjob_publishes_where_the_agent_does(self):
-        """The backfill CronJob (SB-1786) must take its queue and MT API from the
-        agent ConfigMap, not set its own — and that pair must be one the
-        backfill's publish guard accepts, or it refuses every night.
+    @pytest.mark.parametrize(
+        ("manifest", "command"),
+        [
+            ("k3s/completeness/cronjob.yaml", "backfill"),
+            ("k3s/reconcile/cronjob.yaml", "reconcile"),
+        ],
+    )
+    def test_the_publishing_cronjobs_publish_where_the_agent_does(
+        self, manifest, command
+    ):
+        """The backfill (SB-1786) and reconcile (SB-1787) CronJobs must take
+        their queue and MT API from the agent ConfigMap, not set their own —
+        and that pair must be one the publish guard accepts, or they refuse on
+        every run.
         """
         from pathlib import Path
 
@@ -91,7 +101,7 @@ class TestMatchQueueClientInit:
         from src.orchestrator.completeness import publish_mismatch
 
         repo = Path(__file__).resolve().parents[2]
-        cronjob = yaml.safe_load((repo / "k3s/completeness/cronjob.yaml").read_text())
+        cronjob = yaml.safe_load((repo / manifest).read_text())
         container = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"][
             "containers"
         ][0]
@@ -109,8 +119,11 @@ class TestMatchQueueClientInit:
             "AGENT_RABBITMQ_URL",
             "AGENT_MISSING_TABLE_API_URL",
         }
-        assert "backfill" in container["args"][0]
+        assert command in container["args"][0]
         assert "--submit" in container["args"][0]
+        # Their state and change logs default to paths on the agent-state PVC.
+        mounts = {m["mountPath"] for m in container["volumeMounts"]}
+        assert "/data/agent-state" in mounts
 
         configmap = yaml.safe_load((repo / "k3s/agent/configmap.yaml").read_text())
         data = configmap["data"]

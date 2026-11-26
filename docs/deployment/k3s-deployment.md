@@ -136,6 +136,32 @@ nothing). Exit 10 means "ran, with findings" and the manifest treats it as
 success; exit 1 (feed or MT unreadable, publish guard, more than
 `--max-changes` results) fails the Job, and the Job is not retried.
 
+### Reconcile CronJob (SB-1787)
+
+`k3s/reconcile/cronjob.yaml` runs `match-scraper-agent reconcile --env prod
+--submit` every Monday at 05:00 America/New_York. It compares past MT League
+and Flex matches (Homegrown, Flex, and the Academy conferences in
+`AGENT_ACADEMY_CONFERENCES`) with the official feed and sends the feed's
+fixture for each score, home/away, status or date that differs. Like the
+completeness job it takes its queue and MT API from
+`match-scraper-agent-config` and refuses to publish if that pair disagrees.
+
+It needs the MT API key to be an admin or a service account with
+`manage_matches`: `/api/agent/season-matches` refuses anything less.
+
+It mounts the `agent-state` PVC at `/data/agent-state` and writes one change
+log per submitting run to `/data/agent-state/reconcile/<run>.json`
+(`AGENT_RECONCILE_LOG_DIR`).
+
+```bash
+kubectl apply -f k3s/reconcile/cronjob.yaml
+```
+
+Dry-run it first: `uv run match-scraper-agent reconcile --env prod`. Exit 10
+is "ran, with findings" and counts as success; exit 1 (feed or MT unreadable,
+publish guard, more than `--max-changes` (100) corrections) fails the Job,
+which is not retried.
+
 ### RabbitMQ Configuration
 
 Edit `k3s/rabbitmq/secret.yaml` to change credentials:
