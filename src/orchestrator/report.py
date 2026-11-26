@@ -581,3 +581,64 @@ def build_fest_failure_report(
             ),
         ]
     )
+
+
+def build_completeness_report(
+    *,
+    env: str,
+    found: dict[tuple[str, str, str], int],
+    game_keys: list[str],
+    repeats: list[str],
+    still_missing: list[str],
+    submitted: int,
+    send_failed: list[str],
+    no_bracket: list[str],
+    placeholder: list[str],
+    confirmed: bool = True,
+    refused: str = "",
+) -> str:
+    """MarkdownV2 message for official results found missing from MT (SB-1786).
+
+    ``found`` counts every missing result per (league, division, age group);
+    ``game_keys`` are the sendable ones. A gap is normal news once — the
+    backfill sends it — but ``repeats`` were sent on the previous run and are
+    missing again, so sending did not land: those get the louder header.
+    ``no_bracket`` and ``placeholder`` were never sent and need a person.
+    """
+    total = sum(found.values())
+    if repeats:
+        header = f"🔴 *{escape(f'{len(repeats)} official result(s) still not in MT after a backfill')}*"
+    else:
+        header = f"⚠️ *{escape(f'{total} official result(s) were not in MT')}*"
+    lines = [header, "", f"Environment: {escape(env)}"]
+    if refused:
+        lines += ["", f"*Not sent:* {escape(refused)}"]
+    else:
+        lines.append(escape(f"Sent {submitted}, {len(send_failed)} failed."))
+        if not confirmed:
+            lines.append(escape("Could not re-read MT to confirm what was sent."))
+        elif still_missing:
+            lines.append(escape(f"Sent but still not in MT: {len(still_missing)}"))
+        elif submitted:
+            lines.append(escape("Everything sent is in MT now."))
+    lines += ["", "*By bracket:*"]
+    lines += [
+        escape(f"  {league} {division} {age}: {n}")
+        for (league, division, age), n in found.items()
+    ]
+    if repeats:
+        lines += ["", "*Sent last run, missing again:*", escape(", ".join(repeats))]
+    if send_failed:
+        lines += ["", "*Send failed:*", escape(", ".join(send_failed))]
+    if no_bracket:
+        lines += ["", "*Not sendable, no bracket:*", escape(", ".join(no_bracket))]
+    if placeholder:
+        lines += [
+            "",
+            "*Needs a person, result on placeholder date:*",
+            escape(", ".join(placeholder)),
+        ]
+    if game_keys:
+        lines += ["", "*Game keys:*", escape(", ".join(game_keys))]
+    footer = escape("Detail: the match-scraper-completeness job log.")
+    return "\n".join(_clamp_to_telegram_limit(lines, footer))

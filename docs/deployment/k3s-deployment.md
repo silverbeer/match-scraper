@@ -108,6 +108,34 @@ Apply changes:
 kubectl apply -f k3s/match-scraper/cronjob.yaml
 ```
 
+### Completeness backfill CronJob (SB-1786)
+
+`k3s/completeness/cronjob.yaml` runs `match-scraper-agent backfill --env prod
+--submit` daily at 22:40 America/New_York. It sends completed official League
+and Flex results that have no MT row, confirms they landed, and alerts
+Telegram. It reads its queue and MT API from `match-scraper-agent-config`
+(`AGENT_QUEUE_NAME`, `AGENT_MISSING_TABLE_API_URL`) and refuses to publish if
+that pair is not prod/prod or non-prod/non-prod.
+
+It mounts the `agent-state` PVC at `/data/agent-state` and writes
+`completeness.json` there (`AGENT_COMPLETENESS_STATE_PATH`). The **digest**
+CronJob (`k3s/digest/cronjob.yaml`) now mounts the same PVC **read-only** to
+read that file for its "N official results not in MT" line. Without the mount
+the digest still runs; it just leaves that line out.
+
+Nothing applies `k3s/` on merge. Apply both by hand:
+
+```bash
+kubectl apply -f k3s/completeness/cronjob.yaml
+kubectl apply -f k3s/digest/cronjob.yaml
+```
+
+Dry-run it first from a shell with the prod settings:
+`uv run match-scraper-agent backfill --env prod` (publishes nothing, alerts
+nothing). Exit 10 means "ran, with findings" and the manifest treats it as
+success; exit 1 (feed or MT unreadable, publish guard, more than
+`--max-changes` results) fails the Job, and the Job is not retried.
+
 ### RabbitMQ Configuration
 
 Edit `k3s/rabbitmq/secret.yaml` to change credentials:

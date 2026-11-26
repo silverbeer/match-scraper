@@ -162,8 +162,17 @@ def summarize(matches: list[dict[str, Any]], now: datetime) -> DigestSummary:
     )
 
 
-def build_digest_report(summary: DigestSummary) -> str:
-    """Build the MarkdownV2 digest message."""
+def build_digest_report(
+    summary: DigestSummary,
+    not_in_mt: int | None = None,
+    not_in_mt_as_of: date | None = None,
+) -> str:
+    """Build the MarkdownV2 digest message.
+
+    ``not_in_mt`` is the completeness backfill's last count of official
+    results still absent from missing-table (SB-1786); None leaves the line
+    out, which is what a cluster that has never run the backfill gets.
+    """
     day_label = escape(summary.day.strftime("%a %-d %b"))
     lines = [f"*Scores digest* · _{day_label}_", ""]
 
@@ -193,5 +202,14 @@ def build_digest_report(summary: DigestSummary) -> str:
         lines.append(escape(f"  {breakdown}"))
     else:
         lines.append(escape("✓ Every played match has a score."))
+
+    if not_in_mt is not None:
+        icon = "⚠️" if not_in_mt else "✓"
+        stale = (
+            f" (as of {not_in_mt_as_of.strftime('%a %-d %b')})"
+            if not_in_mt_as_of and not_in_mt_as_of < summary.day - timedelta(days=1)
+            else ""
+        )
+        lines.append(escape(f"{icon} {not_in_mt} official results not in MT{stale}"))
 
     return "\n".join(lines)

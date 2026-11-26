@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, NoReturn
 
 import structlog
 import typer
@@ -548,8 +548,7 @@ def scrape(
     from src.orchestrator.logger import configure_logging
     from src.orchestrator.settings import AgentSettings, env_file_path
     from src.orchestrator.tools import (
-        _current_season,
-        _normalize_team_name,
+        build_match_dict,
         clamp_scrape_range,
         current_segment_window,
     )
@@ -613,41 +612,18 @@ def scrape(
         typer.echo("No matches found.")
         raise typer.Exit(code=0)
 
-    # Build match dicts (same logic as the engine tool)
-    mt_division = config.conference if config.conference else config.division
-    built = [
-        {
-            "home_team": _normalize_team_name(m.home_team, league=config.league),
-            "away_team": _normalize_team_name(m.away_team, league=config.league),
-            "match_date": m.match_datetime.date().isoformat(),
-            # Omit match_time when unknown — prevents overwriting an existing
-            # MT kick-off time with null (MLS Next drops time on completed matches)
-            **(
-                {"match_time": m.match_datetime.strftime("%H:%M")}
-                if m.match_datetime.hour or m.match_datetime.minute
-                else {}
-            ),
-            # The feed's exact instant; missing-table prefers it to
-            # match_time, which carries no zone (SB-1203).
-            "scheduled_kickoff": m.scheduled_kickoff(),
-            "season": _current_season(),
-            "age_group": config.age_group,
-            "match_type": "League",
-            "division": mt_division,
-            "league": config.league,
-            "home_score": m.home_score if isinstance(m.home_score, int) else None,
-            "away_score": m.away_score if isinstance(m.away_score, int) else None,
-            # A Flex draw is decided on penalties (SB-1019). Sent as a pair or
-            # not at all — missing-table rejects one without the other.
-            "home_penalty_score": m.home_penalty_score,
-            "away_penalty_score": m.away_penalty_score,
-            "match_status": m.match_status,
-            "external_match_id": m.match_id,
-            "location": m.location,
-            "source": "match-scraper-agent",
-        }
-        for m in matches
-    ]
+    # The engine's own builder, so this path cannot drift from it. It used to
+    # carry a copy with match_type hardcoded to "League", which filed every
+    # Flex fixture sent from here as League (SB-1786).
+    # From the resolved config, settings fallbacks included, so what is sent
+    # is what was scraped.
+    resolved = {
+        "age_group": config.age_group,
+        "league": config.league,
+        "division": config.division,
+        "conference": config.conference,
+    }
+    built = [build_match_dict(m, resolved) for m in matches]
 
     # Apply team filter
     if team_filter:
@@ -685,6 +661,314 @@ def scrape(
                     error=str(exc),
                 )
         typer.echo(f"\nSubmitted {submitted} matches to queue ({errors} errors).")
+
+
+@app.command()
+def backfill(
+    leagues: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--league", help="Homegrown or Flex; repeat for both. Default: both."
+        ),
+    ] = None,
+    from_date: Annotated[
+        str | None,
+        typer.Option("--from", help="Start date (YYYY-MM-DD). Default: season start."),
+    ] = None,
+    to_date: Annotated[
+        str | None,
+        typer.Option("--to", help="End date (YYYY-MM-DD). Default: two days ago."),
+    ] = None,
+    env: Annotated[
+        str, typer.Option("--env", help="Environment name (local, prod)")
+    ] = "local",
+    submit: Annotated[
+        bool,
+        typer.Option(
+            "--submit", help="Publish to the queue. Without it this is a dry run."
+        ),
+    ] = False,
+    max_changes: Annotated[
+        int,
+        typer.Option(
+            "--max-changes",
+            min=0,
+            help="Refuse to publish anything when more results than this are missing.",
+        ),
+    ] = 200,
+    confirm_wait: Annotated[
+        float,
+        typer.Option(
+            "--confirm-wait",
+            min=0,
+            help="With --submit, seconds to wait for MT to show what was sent.",
+        ),
+    ] = 600.0,
+) -> None:
+    """Send completed official results that missing-table never received (SB-1786).
+
+    Reads the official feed and every MT match of the season, and lists each
+    completed League or Flex result whose match id is not in MT. With --submit
+    those are published through the normal ingest path, MT is re-read to
+    confirm they landed, and Telegram hears about it; one missing on two runs
+    in a row gets the louder alert. Nothing is ever deleted: an MT result the
+    feed does not know is listed, not removed.
+
+    Without --submit nothing is published and nothing is alerted.
+
+    Exit codes: 0 nothing missing; 10 ran, with findings; 1 could not run —
+    a feed or MT could not be read, the broker is unreachable, the publish
+    target does not match the MT that was read, or more than --max-changes
+    results are missing.
+    """
+    import asyncio
+    import time
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from telegram_notify import escape
+
+    from src.orchestrator.alert_state import repeat_gaps, write_gap_state
+    from src.orchestrator.completeness import (
+        LEAGUES,
+        api_host,
+        counts,
+        diff,
+        fetch_mt_rows,
+        in_window,
+        mt_pages,
+        publish_mismatch,
+        read_feed,
+        triage,
+    )
+    from src.orchestrator.logger import configure_logging
+    from src.orchestrator.report import build_completeness_report
+    from src.orchestrator.settings import AgentSettings, env_file_path
+    from src.orchestrator.tools import SEASON_START, build_match_dict
+    from src.scraper.assist_client import AssistClient
+
+    settings = AgentSettings(_env_file=env_file_path(env))
+    configure_logging(json_output=settings.json_logs)
+
+    chosen = list(dict.fromkeys(leagues or LEAGUES))
+    unknown = [league for league in chosen if league not in LEAGUES]
+    if unknown:
+        typer.echo(
+            f"Unknown league(s) {', '.join(unknown)}. Valid: {', '.join(LEAGUES)}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # The day MT and the digest mean, not the pod's: the pod runs in UTC, and
+    # at 22:40 ET that is already tomorrow for half the year.
+    today = datetime.now(ZoneInfo("America/New_York")).date()
+    try:
+        start = date.fromisoformat(from_date) if from_date else SEASON_START
+        end = date.fromisoformat(to_date) if to_date else today - timedelta(days=2)
+    except ValueError as exc:
+        typer.echo(f"Invalid date: {exc}. Use YYYY-MM-DD.", err=True)
+        raise typer.Exit(code=1) from None
+    if start > end:
+        typer.echo(f"--from {start} is later than --to {end}.", err=True)
+        raise typer.Exit(code=1)
+    # Only a run over everything may speak for everything: a narrowed run
+    # writing state would tell the digest, and the next nightly run, that the
+    # leagues and weeks it never looked at are complete.
+    full_scope = leagues is None and from_date is None and to_date is None
+    state_path = settings.completeness_state_path
+
+    # Where this reads and where it would write, before anything happens.
+    mode = "SUBMIT" if submit else "DRY RUN, nothing is published"
+    typer.echo(f"Backfill {', '.join(chosen)}, {start} to {end} — {mode}")
+    typer.echo(f"MT API: {api_host(settings.missing_table_api_url)}")
+    typer.echo(f"Publish target: {_broker_target(settings)}")
+
+    def fail(reason: str) -> NoReturn:
+        typer.echo(reason, err=True)
+        if submit:
+            _send_telegram_message(
+                settings,
+                escape(f"⚠️ Completeness backfill could not run: {reason}"),
+                subject="[match-scraper-agent] Completeness backfill failed",
+            )
+        raise typer.Exit(code=1)
+
+    queue_client = None
+    if submit:
+        mismatch = publish_mismatch(
+            settings.missing_table_api_url, settings.queue_name, settings.exchange_name
+        )
+        if mismatch:
+            # Not alerted: a misconfigured manual run is the operator's to fix,
+            # and the operator is reading this.
+            typer.echo(f"Refusing to publish: {mismatch}. Nothing fetched.", err=True)
+            raise typer.Exit(code=1)
+        from src.celery.queue_client import MatchQueueClient
+
+        queue_client = MatchQueueClient(**_queue_client_kwargs(settings))
+        if not queue_client.check_connection():
+            fail("broker unreachable: nothing fetched or published")
+
+    async def _feed():
+        async with AssistClient() as client:
+            return await read_feed(client, chosen)
+
+    try:
+        feed = asyncio.run(_feed())
+    except Exception as exc:
+        fail(f"could not read the official feed: {exc}")
+
+    # MT from season start, whatever the window: a row whose date has moved
+    # out of the window still exists, and missing it would read as a gap.
+    pages = mt_pages(SEASON_START, today, feed.placeholders)
+
+    def read_mt():
+        return fetch_mt_rows(
+            settings.missing_table_api_url,
+            settings.missing_table_api_key,
+            pages,
+            expect_days=feed.result_days(),
+        )
+
+    try:
+        rows = read_mt()
+    except Exception as exc:
+        fail(f"could not read missing-table, nothing sent: {exc}")
+
+    gaps = diff(feed.events, rows, feed.game_keys)
+    creates = [
+        g for g in gaps if g.action == "create" and in_window(g.event, start, end)
+    ]
+    reports = [
+        g
+        for g in gaps
+        if g.action == "report" and g.match_date and start <= g.match_date <= end
+    ]
+    plan = triage(creates)
+
+    typer.echo(
+        f"\nFeed fixtures: {len(feed.events)}, MT rows read: {len(rows)} "
+        f"({len(pages)} pages)"
+    )
+    typer.echo(f"Official results not in MT: {len(creates)}")
+    for (league, division, age), n in counts(creates).items():
+        typer.echo(f"  {n:>5}  {league} {division} {age}")
+    for gap in plan.send:
+        typer.echo(f"  {gap.line()}")
+    if plan.no_bracket:
+        typer.echo(f"Not sendable: no bracket: {len(plan.no_bracket)}")
+        for gap in plan.no_bracket:
+            typer.echo(f"  {gap.line()}  not sendable: no bracket")
+    if plan.placeholder:
+        typer.echo(
+            f"Needs a person: result on placeholder date: {len(plan.placeholder)}"
+        )
+        for gap in plan.placeholder:
+            typer.echo(f"  {gap.line()}  needs a person: result on placeholder date")
+    if reports:
+        typer.echo(f"MT results the feed does not have (never deleted): {len(reports)}")
+        for gap in reports:
+            typer.echo(f"  {gap.line()}")
+
+    found = [g.game_key for g in creates]
+    unsent = [g.game_key for g in plan.no_bracket + plan.placeholder]
+
+    def record(submitted_keys: list[str], still_missing: list[str]) -> None:
+        if submit and full_scope:
+            write_gap_state(state_path, today, found, submitted_keys, still_missing)
+
+    def alert(**fields: Any) -> None:
+        _send_telegram_message(
+            settings,
+            build_completeness_report(
+                env=env,
+                found=counts(creates),
+                game_keys=[g.game_key for g in plan.send],
+                no_bracket=[g.game_key for g in plan.no_bracket],
+                placeholder=[g.game_key for g in plan.placeholder],
+                **fields,
+            ),
+            subject="[match-scraper-agent] Official results not in MT",
+        )
+
+    if not creates:
+        record([], [])
+        typer.echo("\nNothing missing.")
+        raise typer.Exit(code=10 if reports else 0)
+
+    if len(plan.send) > max_changes:
+        refused = (
+            f"{len(plan.send)} results to send, more than --max-changes "
+            f"{max_changes}; nothing published"
+        )
+        if not submit:
+            typer.echo(f"\nDry run: --submit would refuse: {refused}.")
+            raise typer.Exit(code=10)
+        typer.echo(f"\nRefusing: {refused}.", err=True)
+        record([], found)
+        alert(
+            repeats=[],
+            still_missing=[],
+            submitted=0,
+            send_failed=[],
+            refused=refused,
+        )
+        raise typer.Exit(code=1)
+
+    if queue_client is None:
+        typer.echo(f"\nDry run: {len(plan.send)} would be sent with --submit.")
+        raise typer.Exit(code=10)
+
+    sent: list[str] = []
+    send_failed: list[str] = []
+    for gap in plan.send:
+        event = gap.event
+        if event is None:  # triage only sends gaps with an event
+            continue
+        try:
+            queue_client.submit_match(build_match_dict(event.match, event.target()))
+            sent.append(gap.game_key)
+        except Exception as exc:
+            send_failed.append(gap.game_key)
+            typer.echo(f"  {gap.game_key}  send failed: {exc}", err=True)
+    typer.echo(f"\nSubmitted {len(sent)} matches to queue ({len(send_failed)} failed).")
+
+    # The workers are asynchronous: give MT time to show what was sent. Only
+    # what was sent is waited for, and a failed re-read is retried, never read
+    # as "everything is missing".
+    deadline = time.monotonic() + confirm_wait
+    confirmed = False
+    unlanded = list(sent)
+    while sent:
+        try:
+            present = {row.match_id for row in read_mt()}
+            confirmed = True
+            unlanded = [key for key in sent if key not in present]
+        except Exception as exc:
+            typer.echo(f"warning: could not re-read missing-table: {exc}", err=True)
+        if (confirmed and not unlanded) or time.monotonic() >= deadline:
+            break
+        time.sleep(min(30.0, max(0.0, deadline - time.monotonic())))
+    if not sent:
+        confirmed = True
+    if confirmed:
+        typer.echo(f"Sent but still not in MT: {len(unlanded)}")
+    else:
+        typer.echo("Could not re-read missing-table to confirm what was sent.")
+
+    repeats = repeat_gaps([g.game_key for g in plan.send], state_path)
+    record(sent, unlanded + send_failed + unsent)
+    alert(
+        repeats=repeats,
+        still_missing=unlanded if confirmed else [],
+        submitted=len(sent),
+        send_failed=send_failed,
+        confirmed=confirmed,
+    )
+
+    if send_failed and not sent:
+        raise typer.Exit(code=1)
+    raise typer.Exit(code=10)
 
 
 # Stands in for the tournament id on a dry run that was not given one, so
@@ -1555,7 +1839,7 @@ def digest(
     The one scheduled message left. Run reports only go out when something
     needs a person, so this is where "are the scores coming in" gets answered.
     """
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, date, datetime, timedelta
     from zoneinfo import ZoneInfo
 
     from telegram_notify import escape
@@ -1593,7 +1877,19 @@ def digest(
 
     summary = summarize(matches, now)
     logger.info("digest.summary", **summary.model_dump(mode="json"))
-    message = build_digest_report(summary)
+    # The completeness backfill's last word on results absent from MT
+    # (SB-1786). No record — the job has never run here — leaves the line out.
+    from src.orchestrator.alert_state import read_gap_state
+
+    gap_state = read_gap_state(settings.completeness_state_path)
+    not_in_mt = as_of = None
+    if "still_missing" in gap_state:
+        not_in_mt = len(gap_state["still_missing"])
+        try:
+            as_of = date.fromisoformat(gap_state.get("day", ""))
+        except ValueError:
+            as_of = None
+    message = build_digest_report(summary, not_in_mt=not_in_mt, not_in_mt_as_of=as_of)
     typer.echo(message)
 
     if not dry_run:

@@ -7,7 +7,9 @@
 #   * how many matches were played but still have no score (today, and
 #     earlier in the last 7 days)
 #
-# Counts come from missing-table, scraped matches only.
+# Counts come from missing-table, scraped matches only. The "official results
+# not in MT" line comes from the completeness backfill's state on the
+# agent-state PVC (k3s/completeness, SB-1786), which is why it is mounted.
 #
 # 23:30 ET: after the last agent run of every day, including the hourly
 # Saturday window that ends at 23:00.
@@ -40,6 +42,10 @@ spec:
                     name: match-scraper-agent-config
                 - secretRef:
                     name: match-scraper-agent-secret
+              volumeMounts:
+                - name: agent-state
+                  mountPath: /data/agent-state
+                  readOnly: true
               resources:
                 # One HTTP read of a week of matches. No browser.
                 requests:
@@ -48,3 +54,7 @@ spec:
                 limits:
                   cpu: "250m"
                   memory: 256Mi
+          volumes:
+            - name: agent-state
+              persistentVolumeClaim:
+                claimName: agent-state

@@ -15,7 +15,7 @@ from src.orchestrator.audit.client import (
 from src.orchestrator.audit.comparator import compare_matches
 from src.orchestrator.audit.models import AuditEvent, AuditRunResult
 from src.orchestrator.settings import AgentSettings
-from src.orchestrator.tools import TEAM_NAME_MAP, _current_season, _normalize_team_name
+from src.orchestrator.tools import TEAM_NAME_MAP, _current_season, build_match_dict
 
 logger = structlog.get_logger()
 
@@ -110,37 +110,11 @@ async def run_one_team_audit(
     raw_matches = await scraper.scrape_matches()
     logger.info("audit.runner.scraped_raw", count=len(raw_matches))
 
-    # Step 4: Normalize into match dicts (same logic as tools.py / scrape command)
-    mt_division = config.conference if config.conference else config.division
-    scraped = [
-        {
-            "home_team": _normalize_team_name(m.home_team, league=league),
-            "away_team": _normalize_team_name(m.away_team, league=league),
-            "match_date": m.match_datetime.date().isoformat(),
-            # Omit match_time when unknown — prevents overwriting an existing
-            # MT kick-off time with null (MLS Next drops time on completed matches)
-            **(
-                {"match_time": m.match_datetime.strftime("%H:%M")}
-                if m.match_datetime.hour or m.match_datetime.minute
-                else {}
-            ),
-            # The feed's exact instant; missing-table prefers it to
-            # match_time, which carries no zone (SB-1203).
-            "scheduled_kickoff": m.scheduled_kickoff(),
-            "season": season,
-            "age_group": age_group,
-            "match_type": "League",
-            "division": mt_division,
-            "league": league,
-            "home_score": m.home_score if isinstance(m.home_score, int) else None,
-            "away_score": m.away_score if isinstance(m.away_score, int) else None,
-            "match_status": m.match_status,
-            "external_match_id": m.match_id,
-            "location": m.location,
-            "source": "match-scraper-agent",
-        }
-        for m in raw_matches
-    ]
+    # Step 4: Normalize into match dicts — the engine's own builder, which
+    # files a Flex fixture as Flex rather than the "League" this copy used to
+    # hardcode (SB-1786).
+    target = {"age_group": age_group, "league": league, "division": division}
+    scraped = [build_match_dict(m, target) for m in raw_matches]
 
     # Step 5: Fetch MT matches for this team — scoped to same window as scrape
     mt_matches = await fetch_mt_matches(

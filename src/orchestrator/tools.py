@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -14,6 +16,9 @@ from src.scraper.modular11 import (
     season_label,
     season_window,
 )
+
+if TYPE_CHECKING:
+    from src.scraper.models import Match
 
 logger = structlog.get_logger()
 
@@ -122,6 +127,70 @@ def clamp_scrape_range(start: date, end: date) -> tuple[date, date]:
     return clamped_start, clamped_end
 
 
+def mt_match_type(league: str) -> str:
+    """The competition, as a missing-table match_type.
+
+    This was hardcoded to "League" while every scraped fixture was a League
+    fixture; Flex is a genuinely different competition played by the same
+    teams (SB-836).
+
+    Getting it wrong is not cosmetic. `mt team stats -c` and the Golden Boot
+    both resolve a competition name to a match_type, so Flex fixtures posted
+    as League would inflate every League scorer and make GP read 25 instead
+    of 19. Pro Player Pathway is deliberately NOT here: those are League
+    fixtures in a different bracket, and moving them out of League would
+    empty ~29 pro academies' League records.
+    """
+    return "Flex" if league == "Flex" else "League"
+
+
+def build_match_dict(match: Match, cfg: Mapping[str, str]) -> dict[str, Any]:
+    """The queue payload for one scraped fixture.
+
+    The one builder every orchestrator sender uses — the pipeline, ``scrape
+    --submit``, the audit and ``backfill``. Each used to carry its own copy,
+    and the copies drifted: ``scrape`` and the audit kept a hardcoded
+    "League" after the pipeline learned Flex (SB-1786), which is SB-846 again.
+
+    ``cfg`` is a target config: ``age_group``, ``league``, and the bracket as
+    ``division`` or, for Academy, ``conference``.
+    """
+    league = cfg.get("league", "")
+    return {
+        "home_team": _normalize_team_name(match.home_team, league=league),
+        "away_team": _normalize_team_name(match.away_team, league=league),
+        "match_date": match.match_datetime.date().isoformat(),
+        # Omit match_time when unknown — prevents overwriting an existing
+        # MT kick-off time with null (MLS Next drops time on completed matches)
+        **(
+            {"match_time": match.match_datetime.strftime("%H:%M")}
+            if match.match_datetime.hour or match.match_datetime.minute
+            else {}
+        ),
+        # The feed's exact instant; missing-table prefers it to
+        # match_time, which carries no zone (SB-1203).
+        "scheduled_kickoff": match.scheduled_kickoff(),
+        "season": _current_season(),
+        "age_group": cfg.get("age_group", ""),
+        "match_type": mt_match_type(league),
+        # For MT backend: division field stores the conference name for
+        # Academy league (MT has no separate conference field — "New England"
+        # is a division in Academy).
+        "division": cfg.get("conference") or cfg.get("division", ""),
+        "league": league,
+        "home_score": match.home_score if isinstance(match.home_score, int) else None,
+        "away_score": match.away_score if isinstance(match.away_score, int) else None,
+        # A Flex draw is decided on penalties (SB-1019). Sent as a pair or
+        # not at all — missing-table rejects one without the other.
+        "home_penalty_score": match.home_penalty_score,
+        "away_penalty_score": match.away_penalty_score,
+        "match_status": match.match_status,
+        "external_match_id": match.match_id,
+        "location": match.location,
+        "source": "match-scraper-agent",
+    }
+
+
 async def scrape_matches(
     ctx: RunContext,
     start_date: str,
@@ -184,56 +253,14 @@ async def scrape_matches(
         scraper = MLSScraper(config, headless=ctx.headless)
         matches = await scraper.scrape_matches()
 
-    # For MT backend: division field stores the conference name for Academy league
-    # (MT has no separate conference field — "New England" is a division in Academy)
-    mt_division = config.conference if config.conference else config.division
-
-    # The competition, as a missing-table match_type. This was hardcoded to
-    # "League" while every scraped fixture was a League fixture; Flex is a
-    # genuinely different competition played by the same teams (SB-836).
-    #
-    # Getting it wrong is not cosmetic. `mt team stats -c` and the Golden Boot
-    # both resolve a competition name to a match_type, so Flex fixtures posted
-    # as League would inflate every League scorer and make GP read 25 instead
-    # of 19. Pro Player Pathway is deliberately NOT here: those are League
-    # fixtures in a different bracket, and moving them out of League would
-    # empty ~29 pro academies' League records.
-    mt_match_type = "Flex" if config.league == "Flex" else "League"
-
     # Accumulate matches for submit_matches to pick up
-    built = [
-        {
-            "home_team": _normalize_team_name(m.home_team, league=config.league),
-            "away_team": _normalize_team_name(m.away_team, league=config.league),
-            "match_date": m.match_datetime.date().isoformat(),
-            # Omit match_time when unknown — prevents overwriting an existing
-            # MT kick-off time with null (MLS Next drops time on completed matches)
-            **(
-                {"match_time": m.match_datetime.strftime("%H:%M")}
-                if m.match_datetime.hour or m.match_datetime.minute
-                else {}
-            ),
-            # The feed's exact instant; missing-table prefers it to
-            # match_time, which carries no zone (SB-1203).
-            "scheduled_kickoff": m.scheduled_kickoff(),
-            "season": _current_season(),
-            "age_group": config.age_group,
-            "match_type": mt_match_type,
-            "division": mt_division,
-            "league": config.league,
-            "home_score": m.home_score if isinstance(m.home_score, int) else None,
-            "away_score": m.away_score if isinstance(m.away_score, int) else None,
-            # A Flex draw is decided on penalties (SB-1019). Sent as a pair or
-            # not at all — missing-table rejects one without the other.
-            "home_penalty_score": m.home_penalty_score,
-            "away_penalty_score": m.away_penalty_score,
-            "match_status": m.match_status,
-            "external_match_id": m.match_id,
-            "location": m.location,
-            "source": "match-scraper-agent",
-        }
-        for m in matches
-    ]
+    target = {
+        "age_group": config.age_group,
+        "league": config.league,
+        "division": config.division,
+        "conference": config.conference,
+    }
+    built = [build_match_dict(m, target) for m in matches]
 
     # Apply team filter if set (e.g. --target u14-hg-ifa)
     team_filter = ctx.team_filter
