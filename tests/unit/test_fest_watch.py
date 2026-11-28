@@ -11,12 +11,16 @@ What matters most is that an unreadable page is never mistaken for a release.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import httpx
 import pytest
 
 from src.scraper.fest_watch import (
+    FEST_END,
     FEST_PAGES,
+    FEST_START,
+    M11_EVENT_IDS,
     FestPage,
     FestPageResult,
     FestPageState,
@@ -61,6 +65,15 @@ def _temp(body: str = "<p>Coming Soon</p>") -> str:
         "<html><head><title>MLS NEXT Fest Tournament</title></head>"
         f"<body><nav>Schedule Standings</nav>{body}</body></html>"
     )
+
+
+M11_FIXTURES = Path(__file__).parent / "fixtures/modular11_event_75"
+M11_NO_DATA = (M11_FIXTURES / "no_data.html").read_text()
+M11_MATCHES = (M11_FIXTURES / "u15_ga_cup.html").read_text()
+
+
+async def _no_sleep(_: float) -> None:
+    return None
 
 
 class TestSchedulePromo:
@@ -181,7 +194,7 @@ class TestFestWatcher:
                 return httpx.Response(503)
             return httpx.Response(200, text=_landing())
 
-        watcher = FestWatcher(transport=httpx.MockTransport(handler))
+        watcher = FestWatcher(transport=httpx.MockTransport(handler), m11_events=())
         probe = asyncio.run(watcher.probe())
 
         states = {r.name: r.state for r in probe.results}
@@ -196,6 +209,81 @@ class TestFestWatcher:
         def handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("boom", request=request)
 
-        probe = asyncio.run(FestWatcher(transport=httpx.MockTransport(handler)).probe())
+        watcher = FestWatcher(
+            transport=httpx.MockTransport(handler), m11_events=(76,), sleep=_no_sleep
+        )
+        probe = asyncio.run(watcher.probe())
         assert probe.all_failed
         assert all("ConnectError" in r.detail for r in probe.results)
+
+
+class TestModular11Events:
+    """The 2026 schedule may land on modular11 first (SB-1830)."""
+
+    def _probe(self, answers: dict[str, httpx.Response], events=(76, 77, 78)):
+        asked: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host != "www.modular11.com":
+                return httpx.Response(200, text=_landing())
+            asked.append(request)
+            event = request.url.params["tournament"]
+            return answers.get(event, httpx.Response(200, text=M11_NO_DATA))
+
+        watcher = FestWatcher(
+            pages=(),
+            transport=httpx.MockTransport(handler),
+            m11_events=events,
+            sleep=_no_sleep,
+        )
+        return asyncio.run(watcher.probe()), asked
+
+    def test_candidates_start_after_the_2025_event(self):
+        assert min(M11_EVENT_IDS) == 76
+        assert 75 not in M11_EVENT_IDS
+
+    def test_no_data_everywhere_is_waiting(self):
+        probe, _ = self._probe({})
+        assert {r.state for r in probe.results} == {FestPageState.WAITING}
+        assert not probe.released
+
+    def test_an_event_with_matches_is_a_release_with_its_schedule_page(self):
+        probe, _ = self._probe({"77": httpx.Response(200, text=M11_MATCHES)})
+        assert [(r.name, r.detail) for r in probe.released] == [
+            (
+                "modular11-77",
+                "https://www.modular11.com/events/event/iframe/schedule/77",
+            )
+        ]
+
+    def test_asks_for_u15_inside_the_fest_dates(self):
+        _, asked = self._probe({}, events=(80,))
+        params = asked[0].url.params
+        assert params["tournament"] == "80"
+        assert params["start_date"] == f"{FEST_START.isoformat()} 00:00:00"
+        assert params["end_date"] == f"{FEST_END.isoformat()} 23:59:59"
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            httpx.Response(404),
+            httpx.Response(503),
+            httpx.Response(302, headers={"Location": "https://example.com/login"}),
+            httpx.Response(200, text="<html><title>Login</title></html>"),
+        ],
+    )
+    def test_an_unreadable_answer_is_an_error_not_a_release(self, response):
+        probe, _ = self._probe({"76": response}, events=(76,))
+        assert probe.results[0].state is FestPageState.ERROR
+        assert probe.all_failed
+
+    def test_one_failed_event_does_not_hide_the_others(self):
+        probe, _ = self._probe(
+            {"76": httpx.Response(500), "78": httpx.Response(200, text=M11_MATCHES)}
+        )
+        states = {r.name: r.state for r in probe.results}
+        assert states == {
+            "modular11-76": FestPageState.ERROR,
+            "modular11-77": FestPageState.WAITING,
+            "modular11-78": FestPageState.RELEASED,
+        }

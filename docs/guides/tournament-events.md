@@ -23,14 +23,22 @@ browser. While waiting, the pages look like this:
 | `www.mlssoccer.com/mlsnext/tournaments/fest/` | same page, same promo | same |
 | `www.mlssoccer.com/mlsnext/tournaments/fest/temp` | the body says "Coming Soon" | the text is gone |
 
+It also asks modular11 whether any of events `76`-`90` holds U15 matches on
+2026-12-02..13 (SB-1830), because the schedule may land there before the MLS
+pages link to it. Fest 2025 was event `75`; the 2026 id is unknown. An event
+with matches is a release, and the message names it (`modular11-<id>`) with
+its schedule page, `https://www.modular11.com/events/event/iframe/schedule/<id>`.
+modular11's "No data available." is waiting. The ids and dates are constants
+in `src/scraper/fest_watch.py` (`M11_EVENT_IDS`, `FEST_START`, `FEST_END`).
+
 A non-200, a redirect, a page without the Fest title or without the promo is
-an error, never a release. One page failing is fine; all three failing for
+an error, never a release. One page failing is fine; every check failing for
 three runs in a row alerts once. Check by hand without sending or saving:
 
 ```bash
 uv run match-scraper-agent watch-release --dry-run
 # ...
-# fest: matchcenter=waiting, mlssoccer=waiting, fest-temp=waiting
+# fest: matchcenter=waiting, mlssoccer=waiting, fest-temp=waiting, modular11-76=waiting, ...
 ```
 
 `--no-fest` (or `AGENT_RELEASE_WATCH_FEST=false`) turns it off. After the
